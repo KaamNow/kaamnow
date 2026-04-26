@@ -1,0 +1,81 @@
+# Backend Secret + ConfigMap + Deployment + Service
+apiVersion: v1
+kind: Secret
+metadata:
+  name: backend-secrets
+  namespace: kaamnow
+type: Opaque
+stringData:
+  # IMPORTANT: change ADMIN_PASSWORD after first deploy via mongosh
+  JWT_SECRET: "REPLACE_ME_WITH_64_CHAR_HEX_FROM_DEPLOY_SCRIPT"
+  ADMIN_EMAIL: "admin@kaamnow.com"
+  ADMIN_PASSWORD: "ChangeMe-After-First-Deploy"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+  namespace: kaamnow
+data:
+  MONGO_URL: "mongodb://mongodb:27017"
+  DB_NAME: "kaamnow_db"
+  CORS_ORIGINS: "https://kaamnow.com,https://www.kaamnow.com"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: kaamnow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: backend
+          image: kaamnow/backend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8001
+          envFrom:
+            - configMapRef:
+                name: backend-config
+            - secretRef:
+                name: backend-secrets
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+          readinessProbe:
+            httpGet:
+              path: /api/stats
+              port: 8001
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/stats
+              port: 8001
+            initialDelaySeconds: 30
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: kaamnow
+spec:
+  selector:
+    app: backend
+  ports:
+    - port: 8001
+      targetPort: 8001
+      name: http
