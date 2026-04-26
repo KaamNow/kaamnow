@@ -1,0 +1,133 @@
+{
+  "project_name": "KaamNow.com",
+  "theme": "LIGHT",
+  "archetype": "Archetype 4 (Swiss & High-Contrast) + Saffron/Indigo Twist",
+  "design_philosophy": "Modern Indian fintech-meets-Bharat. Trustworthy, professional, and confident. Heavy reliance on structural clarity, solid colors, and strong typographic hierarchy instead of generic SaaS gradients or cliche ethnic motifs.",
+  "brand_colors": {
+    "primary_saffron": {
+      "hex": "#FF6B35",
+      "tailwind": "bg-[#FF6B35]",
+      "usage": "Primary action triggers, CTA buttons, active states, progress indicators. Used sparingly for high emotional energy."
+    },
+    "secondary_indigo": {
+      "hex": "#3F37C9",
+      "tailwind": "bg-[#3F37C9]",
+      "usage": "Trust elements, headers, primary typography emphasis, trust badges, structure."
+    },
+    "background_base": {
+      "hex": "#FCFBF9",
+      "tailwind": "bg-[#FCFBF9]",
+      "usage": "Main application background. Warm off-white to feel approachable but professional."
+    },
+    "surface_cards": {
+      "hex": "#FFFFFF",
+      "tailwind": "bg-white",
+      "usage": "Widgets, strategy bento grids, and marketplace cards."
+    },
+    "text_primary": {
+      "hex": "#111827",
+      "tailwind": "text-gray-900",
+      "usage": "Headlines and body copy. Tinted deep gray."
+    },
+    "text_secondary": {
+      "hex": "#4B5563",
+      "tailwind": "text-gray-600",
+      "usage": "Subtitles, meta data, placeholder text."
+    },
+    "borders": {
+      "hex": "#E5E7EB",
+      "tailwind": "border-gray-200",
+      "usage": "Subtle structure lines for bento grids and strategy layout."
+    }
+  },
+  "typography": {
+    "headings": {
+      "family": "'Cabinet Grotesk', 'Outfit', sans-serif",
+      "weights": ["font-bold", "font-black"],
+      "tracking": "tracking-tight",
+      "usage": "All H1-H4. Expressive, wide, authoritative. (Load Cabinet Grotesk via Fontshare CDN, fallback to Outfit)."
+    },
+    "body": {
+      "family": "'Manrope', sans-serif",
+      "weights": ["font-normal", "font-medium", "font-semibold"],
+      "tracking": "tracking-normal",
+      "usage": "All paragraph text, form labels, small text. (Load via Google Fonts)."
+    },
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl tracking-tighter font-black",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl tracking-tight font-bold",
+      "h3": "text-xl sm:text-2xl font-bold",
+      "h4": "text-lg sm:text-xl font-bold",
+      "body": "text-base leading-relaxed",
+      "overline": "text-xs font-bold uppercase tracking-[0.2em] text-[#3F37C9]"
+    }
+  },
+  "surfaces_and_layout": {
+    "marketing_page": {
+      "layout": "Custom HTML/Tailwind, Mode A (Tetris Grid) for features.",
+      "hero": "Asymmetrical layout. Massive Cabinet Grotesk typography. Left align text, overlapping rural images on the right.",
+      "components": "Do not use Shadcn for layout. Use pure HTML. High padding (p-12 to p-24)."
+    },
+    "strategy_showcase": {
+      "layout": "Sidebar navigation + Content Area. Mode B (Control Room Grid).",
+      "sidebar": "Sticky sidebar on desktop, sticky top nav on mobile. Active states indicated by #3F37C9 border-left.",
+      "content": "Bento-style grids for the 10 sections. 'Grid Borders' surface strategy: visible 1px borders (border-gray-200) to expose structure."
+    },
+    "marketplace_mvp": {
+      "layout": "Dashboard-style layout. High density.",
+      "components": "Use heavily customized Shadcn components (Cards, Tables, Forms). Remove shadow from cards, use flat 1px borders instead.",
+      "map": "Leaflet map integration. Use grayscale or muted map tiles to prevent color clashing. Map pins should be #FF6B35.",
+      "trust_badges": "Tier 1/2/3 verified badges. Solid #3F37C9 background with white Lucide React icons."
+    }
+  },
+  "interactions": {
+    "hover_states": "Always explicit. Button hover: hover:bg-[#3F37C9]/90 for indigo, hover:bg-[#FF6B35]/90 for saffron.",
+    "focus_states": "focus:ring-2 focus:ring-[#FF6B35] focus:ring-offset-2",
+    "animations": "Micro-interactions for trust elements. Staggered fade-ins for marketplace list items. No heavy 3D or parallax."
+  },
+  "tech_stack": {
+    "styling": "Tailwind CSS",
+    "icons": "lucide-react",
+    "map": "Leaflet / react-leaflet",
+    "components": "shadcn/ui (only for Dashboard/Marketplace forms and functional elements)"
+  },
+  "accessibility": {
+    "testing": "All interactive elements MUST have data-testid attributes (e.g., data-testid='job-post-submit', data-testid='worker-profile-card').",
+    "contrast": "Ensure white text on Saffron/Indigo meets minimum 4.5:1 ratio."
+  },
+  "image_urls": {
+    "hero_backgrounds": [
+      {
+        "url": "https://images.pexels.com/photos/32915125/pexels-photo-32915125.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Serene Indian village landscape, use for marketing hero or waitlist section."
+      }
+    ],
+    "workers_and_farmers": [
+      {
+        "url": "https://images.pexels.com/photos/16476333/pexels-photo-16476333.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Worker on scaffolding. Use for worker profile mockups or 'Masons' category card."
+      },
+      {
+        "url": "https://images.pexels.com/photos/29858623/pexels-photo-29858623.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Farmer with smartphone in wheat field. Ideal for 'Customers' or 'How it works' section."
+      },
+      {
+        "url": "https://images.pexels.com/photos/36998122/pexels-photo-36998122.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Close-up of Indian man at market. Use for testimonial avatar."
+      },
+      {
+        "url": "https://images.pexels.com/photos/12921278/pexels-photo-12921278.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "description": "Mason building a wall. Use for 'Job details' or worker discovery map preview."
+      }
+    ]
+  },
+  "instructions_to_main_agent": [
+    "NEVER use placeholder text for images. Only use the URLs provided in image_urls.",
+    "Do NOT use Inter, Roboto, or Space Grotesk. Explicitly load and use 'Cabinet Grotesk' (Fontshare) or 'Outfit' (Google Fonts) for headings and 'Manrope' for body copy.",
+    "Apply data-testid to every interactive element without exception.",
+    "Do not use generic Shadcn cards on the marketing landing page. Build custom overlapping layouts using raw Tailwind.",
+    "Strategy page must feature a sticky sidebar and bento-box style grids to make text-heavy content digestible.",
+    "Implement simulated WhatsApp bot chat using a flat container with Saffron and Indigo speech bubbles.",
+    "Render the Leaflet map with grayscale tiles (e.g., CartoDB Positron) so that #FF6B35 markers pop out visually."
+  ]
+}
