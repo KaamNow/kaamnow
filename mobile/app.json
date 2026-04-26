@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "KaamNow",
+    "slug": "kaamnow",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#fcfbf9"
+    },
+    "scheme": "kaamnow",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.kaamnow.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FF6B35"
+      },
+      "package": "com.kaamnow.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "apiUrl": "https://adb859de-82e2-4ac1-9d9b-f64456df6b58.preview.emergentagent.com"
+    }
+  }
+}
