@@ -52,9 +52,9 @@ export default function PostJob() {
     e.preventDefault();
     setLoading(true);
     try {
-      await api.post("/jobs", form);
+      const r = await api.post("/jobs", form);
       toast.success("Job posted!");
-      nav("/dashboard");
+      nav(`/marketplace?job=${r.data.id}`);
     } catch (err) {
       toast.error(formatApiError(err));
     } finally {

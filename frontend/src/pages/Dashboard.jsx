@@ -139,7 +139,7 @@ export default function Dashboard() {
                   <span>{j.workers_needed} worker(s) · ₹{j.daily_rate}/day</span>
                 </div>
               </div>
-              <Link to="/marketplace" className="btn-outline !py-2 !px-3 text-sm flex items-center gap-1">
+              <Link to={`/marketplace?job=${j.id}`} className="btn-outline !py-2 !px-3 text-sm flex items-center gap-1">
                 <Briefcase size={12} /> Find workers
               </Link>
             </div>

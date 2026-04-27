@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useParams, useNavigate } from "react-router-dom";
+import { Link, useLocation, useParams, useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import { useAuth, formatApiError } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -7,6 +7,8 @@ import { Star, MapPin, ShieldCheck, ArrowLeft, Briefcase, Check } from "lucide-r
 
 export default function WorkerProfile() {
   const { id } = useParams();
+  const location = useLocation();
+  const requestedJobId = new URLSearchParams(location.search).get("job") || "";
   const { user } = useAuth();
   const nav = useNavigate();
   const [worker, setWorker] = useState(null);
@@ -21,9 +23,17 @@ export default function WorkerProfile() {
 
   useEffect(() => {
     if (user?.role === "customer") {
-      api.get("/jobs/mine").then((r) => setMyJobs(r.data.filter((j) => j.status === "open")));
+      api.get("/jobs/mine").then((r) => {
+        const openJobs = r.data.filter((j) => j.status === "open");
+        setMyJobs(openJobs);
+        if (requestedJobId && openJobs.some((j) => j.id === requestedJobId)) {
+          setSelectedJob(requestedJobId);
+        } else if (openJobs.length > 0) {
+          setSelectedJob(openJobs[0].id);
+        }
+      });
     }
-  }, [user]);
+  }, [user, requestedJobId]);
 
   const book = async () => {
     if (!selectedJob) return toast.error("Pick a job to book this worker for.");

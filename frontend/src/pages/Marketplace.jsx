@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import api from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
 import L from "leaflet";
 import { Search, Star, MapPin, ShieldCheck, Filter } from "lucide-react";
@@ -36,11 +37,49 @@ function TrustBadge({ tier }) {
 }
 
 export default function Marketplace() {
+  const { user } = useAuth();
+  const location = useLocation();
   const [workers, setWorkers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [skill, setSkill] = useState("all");
   const [q, setQ] = useState("");
   const [availableOnly, setAvailableOnly] = useState(false);
+  const [jobs, setJobs] = useState([]);
+  const [selectedJobId, setSelectedJobId] = useState(new URLSearchParams(location.search).get("job") || "");
+  const [selectedJob, setSelectedJob] = useState(null);
+
+  useEffect(() => {
+    const queryJobId = new URLSearchParams(location.search).get("job") || "";
+    if (queryJobId && queryJobId !== selectedJobId) {
+      setSelectedJobId(queryJobId);
+    }
+  }, [location.search, selectedJobId]);
+
+  useEffect(() => {
+    if (user?.role !== "customer") {
+      setJobs([]);
+      setSelectedJob(null);
+      return;
+    }
+
+    api
+      .get("/jobs/mine")
+      .then((r) => {
+        const openJobs = r.data.filter((job) => job.status === "open");
+        setJobs(openJobs);
+        const selected = selectedJobId
+          ? openJobs.find((job) => job.id === selectedJobId)
+          : openJobs[0];
+        setSelectedJob(selected || null);
+        if (!selectedJobId && selected) {
+          setSelectedJobId(selected.id);
+        }
+      })
+      .catch(() => {
+        setJobs([]);
+        setSelectedJob(null);
+      });
+  }, [user, selectedJobId]);
 
   useEffect(() => {
     setLoading(true);
@@ -109,19 +148,69 @@ export default function Marketplace() {
         </div>
 
         <div className="mt-8 grid lg:grid-cols-3 gap-6">
+          {user?.role === "customer" && (
+            <div className="lg:col-span-3">
+              <div className="kn-card p-5 mb-6">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <div className="text-xs uppercase tracking-wider font-bold text-gray-600">Your open jobs</div>
+                    <div className="mt-2 text-sm text-gray-700">Choose a job and book workers who match it.</div>
+                  </div>
+                  {jobs.length > 0 && (
+                    <Link to="/post-job" className="text-[#3f37c9] font-bold text-sm">
+                      Post another job
+                    </Link>
+                  )}
+                </div>
+
+                <div className="mt-4">
+                  {jobs.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-gray-300 p-5 text-sm text-gray-500">
+                      You have no open jobs yet. <Link to="/post-job" className="text-[#3f37c9] font-semibold">Post one now</Link> to start matching.
+                    </div>
+                  ) : (
+                    <select
+                      value={selectedJobId}
+                      onChange={(e) => setSelectedJobId(e.target.value)}
+                      className="kn-input w-full"
+                      data-testid="job-filter-select"
+                    >
+                      {jobs.map((job) => (
+                        <option key={job.id} value={job.id}>
+                          {job.title} • {job.workers_needed} worker(s) • {job.job_date}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                {selectedJob && (
+                  <div className="mt-4 rounded-xl bg-[#f8f6ff] p-4 border border-[#d7d2ff]">
+                    <div className="font-semibold">{selectedJob.title}</div>
+                    <div className="text-sm text-gray-600 mt-1">{selectedJob.description}</div>
+                    <div className="mt-2 text-xs uppercase tracking-wider font-bold text-[#3f37c9]">
+                      Matching workers for this job
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
           <div className="lg:col-span-2 grid sm:grid-cols-2 gap-4" data-testid="workers-grid">
             {loading && <div className="col-span-2 p-12 text-center text-gray-500">Loading workers…</div>}
             {!loading && workers.length === 0 && (
               <div className="col-span-2 p-12 text-center text-gray-500">No workers match your filters.</div>
             )}
-            {workers.map((w, i) => (
-              <Link
-                key={w.id}
-                to={`/worker/${w.id}`}
-                data-testid={`worker-card-${w.id}`}
-                className="kn-card p-5 fade-up"
-                style={{ animationDelay: `${i * 0.04}s` }}
-              >
+            {workers.map((w, i) => {
+              const workerLink = selectedJobId ? `/worker/${w.id}?job=${selectedJobId}` : `/worker/${w.id}`;
+              return (
+                <Link
+                  key={w.id}
+                  to={workerLink}
+                  data-testid={`worker-card-${w.id}`}
+                  className="kn-card p-5 fade-up"
+                  style={{ animationDelay: `${i * 0.04}s` }}
+                >
                 <div className="flex gap-4">
                   <img
                     src={w.photo_url || "https://images.pexels.com/photos/16476333/pexels-photo-16476333.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=400&w=400"}
@@ -183,7 +272,12 @@ export default function Marketplace() {
                             <div className="font-bold">{w.name}</div>
                             <div className="text-gray-600">{w.village}, {w.state}</div>
                             <div className="mt-1">₹{w.daily_rate}/day · ⭐ {w.avg_rating.toFixed(1)}</div>
-                            <Link to={`/worker/${w.id}`} className="text-[#3f37c9] font-bold">View profile →</Link>
+                            <Link
+                              to={selectedJobId ? `/worker/${w.id}?job=${selectedJobId}` : `/worker/${w.id}`}
+                              className="text-[#3f37c9] font-bold"
+                            >
+                              View profile →
+                            </Link>
                           </div>
                         </Popup>
                       </Marker>

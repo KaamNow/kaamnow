@@ -10,6 +10,11 @@ stringData:
   JWT_SECRET: "REPLACE_ME_WITH_64_CHAR_HEX_FROM_DEPLOY_SCRIPT"
   ADMIN_EMAIL: "admin@kaamnow.com"
   ADMIN_PASSWORD: "ChangeMe-After-First-Deploy"
+  GUPSHUP_API_URL: "https://api.gupshup.io/wa/api/v1/msg"
+  GUPSHUP_API_KEY: "abcd1234xyz"
+  GUPSHUP_SOURCE: "917834811114"
+  GUPSHUP_APP_ID: "KaamNow"
+  GUPSHUP_VERIFY_TOKEN: "my_secure_token_123"
 ---
 apiVersion: v1
 kind: ConfigMap

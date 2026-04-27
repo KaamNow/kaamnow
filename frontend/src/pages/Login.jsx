@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import api from "@/lib/api";
 import { useAuth, formatApiError } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
@@ -16,7 +17,12 @@ export default function Login() {
     try {
       const u = await login(email, password);
       toast.success(`Welcome back, ${u.name}`);
-      nav("/dashboard");
+      if (u.role === "worker") {
+        const profile = await api.get("/workers/me/profile").then((r) => r.data).catch(() => null);
+        nav(profile ? "/dashboard" : "/worker/setup");
+      } else {
+        nav("/dashboard");
+      }
     } catch (err) {
       toast.error(formatApiError(err));
     } finally {

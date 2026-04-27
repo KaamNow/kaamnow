@@ -15,7 +15,7 @@ COPY backend/requirements.prod.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy app source (AFTER deps for better layer caching)
-COPY backend/server.py ./server.py
+COPY backend backend
 
 # Non-root user
 RUN useradd -m -u 1000 app && chown -R app:app /app
@@ -27,4 +27,4 @@ EXPOSE 8001
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
     CMD curl -fsS http://localhost:8001/api/stats || exit 1
 
-CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8001", "--workers", "1"]
+CMD ["uvicorn", "backend.server:app", "--host", "0.0.0.0", "--port", "8001", "--workers", "1"]

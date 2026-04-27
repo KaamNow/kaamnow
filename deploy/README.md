@@ -289,3 +289,19 @@ docker system prune -a    # removes unused images
 - Add monitoring: `kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml`
 - Scale up: when you outgrow 1 replica, just change `replicas: 1` → `replicas: 2` in the manifests
 - Real WhatsApp: integrate Gupshup once you have the keys
+
+### WhatsApp sandbox setup
+
+1. Create a Gupshup sandbox account and get your sandbox WhatsApp number.
+2. Configure these env vars in `backend/.env` or your deployment secret:
+   - `GUPSHUP_API_URL` e.g. `https://api.gupshup.io/wa/api/v1/msg`
+   - `GUPSHUP_API_KEY` from your Gupshup account
+   - `GUPSHUP_SOURCE` your Gupshup sandbox source number
+   - `GUPSHUP_APP_ID` optional, if your provider requires it
+   - `GUPSHUP_VERIFY_TOKEN` a webhook verification token you set in Gupshup
+   - if deploying to Kubernetes, set the same values in the `backend-secrets` secret in `deploy/k8s/20-backend.yaml`
+3. Point your public webhook to:
+   - `https://<your-domain>/api/whatsapp/gupshup`
+4. Confirm incoming messages are delivered and back-end replies with bot text.
+
+The existing demo route `/api/whatsapp/message` remains available for local UI testing.
