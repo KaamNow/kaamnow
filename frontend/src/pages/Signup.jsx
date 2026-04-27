@@ -24,7 +24,7 @@ export default function Signup() {
     try {
       const u = await register(form);
       toast.success(`Welcome to KaamNow, ${u.name}!`);
-      nav(u.role === "worker" ? "/dashboard" : "/marketplace");
+      nav(u.role === "worker" ? "/worker/setup" : "/marketplace");
     } catch (err) {
       toast.error(formatApiError(err));
     } finally {

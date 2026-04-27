@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import api from "@/lib/api";
 import { useAuth, formatApiError } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { Plus, Briefcase, Star, Calendar } from "lucide-react";
+import { Plus, Briefcase, Star, Calendar, ShieldCheck } from "lucide-react";
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -63,6 +63,11 @@ export default function Dashboard() {
         {user.role === "customer" && (
           <Link to="/post-job" data-testid="post-job-cta" className="btn-saffron flex items-center gap-2">
             <Plus size={16} /> Post a job
+          </Link>
+        )}
+        {user.role === "worker" && (
+          <Link to="/worker/setup" data-testid="worker-setup-cta" className="btn-outline flex items-center gap-2">
+            <ShieldCheck size={16} /> Worker profile
           </Link>
         )}
       </div>

@@ -8,6 +8,7 @@ import Login from "@/pages/Login";
 import Signup from "@/pages/Signup";
 import Marketplace from "@/pages/Marketplace";
 import WorkerProfile from "@/pages/WorkerProfile";
+import WorkerSetup from "@/pages/WorkerSetup";
 import Dashboard from "@/pages/Dashboard";
 import PostJob from "@/pages/PostJob";
 import WhatsAppDemo from "@/pages/WhatsAppDemo";
@@ -67,6 +68,14 @@ function App() {
             element={
               <Layout>
                 <WorkerProfile />
+              </Layout>
+            }
+          />
+          <Route
+            path="/worker/setup"
+            element={
+              <Layout>
+                <WorkerSetup />
               </Layout>
             }
           />

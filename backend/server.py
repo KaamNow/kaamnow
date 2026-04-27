@@ -72,13 +72,15 @@ async def get_current_user(request: Request) -> dict:
     return user
 
 
+COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "false").lower() == "true"
+
 def set_auth_cookie(response: Response, token: str):
     response.set_cookie(
         key="access_token",
         value=token,
         httponly=True,
-        secure=False,
-        samesite="lax",
+        secure=COOKIE_SECURE,
+        samesite="none" if COOKIE_SECURE else "lax",
         max_age=JWT_EXPIRY_DAYS * 24 * 3600,
         path="/",
     )
@@ -340,10 +342,20 @@ async def get_job(job_id: str):
 # --- Bookings ---
 @api_router.post("/bookings")
 async def create_booking(body: BookingIn, user: dict = Depends(get_current_user)):
+    if user["role"] != "customer":
+        raise HTTPException(403, "Only customers can create bookings")
+
     job = await db.jobs.find_one({"id": body.job_id})
     worker = await db.workers.find_one({"id": body.worker_id})
     if not job or not worker:
         raise HTTPException(404, "Job or worker not found")
+    if job["customer_id"] != user["id"]:
+        raise HTTPException(403, "You can only book workers for your own jobs")
+    if job["status"] != "open":
+        raise HTTPException(400, "Job is not open for booking")
+    if not worker.get("available", True):
+        raise HTTPException(400, "Worker is not available")
+
     booking_id = str(uuid.uuid4())
     doc = {
         "id": booking_id,
@@ -379,29 +391,51 @@ async def my_bookings(user: dict = Depends(get_current_user)):
 
 @api_router.post("/bookings/{booking_id}/accept")
 async def accept_booking(booking_id: str, user: dict = Depends(get_current_user)):
+    if user["role"] != "worker":
+        raise HTTPException(403, "Only workers can accept bookings")
     booking = await db.bookings.find_one({"id": booking_id})
     if not booking:
         raise HTTPException(404, "Booking not found")
+    worker = await db.workers.find_one({"user_id": user["id"]})
+    if not worker or worker["id"] != booking["worker_id"]:
+        raise HTTPException(403, "You can only accept bookings assigned to you")
+    if booking["status"] != "pending":
+        raise HTTPException(400, "Only pending bookings can be accepted")
     await db.bookings.update_one({"id": booking_id}, {"$set": {"status": "confirmed"}})
     return {"ok": True}
 
 
 @api_router.post("/bookings/{booking_id}/complete")
 async def complete_booking(booking_id: str, user: dict = Depends(get_current_user)):
+    if user["role"] != "customer":
+        raise HTTPException(403, "Only customers can mark bookings as completed")
+    booking = await db.bookings.find_one({"id": booking_id})
+    if not booking:
+        raise HTTPException(404, "Booking not found")
+    if booking["customer_id"] != user["id"]:
+        raise HTTPException(403, "You can only complete your own bookings")
+    if booking["status"] != "confirmed":
+        raise HTTPException(400, "Only confirmed bookings can be completed")
     await db.bookings.update_one({"id": booking_id}, {"$set": {"status": "completed"}})
     return {"ok": True}
 
 
 @api_router.post("/bookings/rate")
 async def rate_booking(body: RatingIn, user: dict = Depends(get_current_user)):
+    if user["role"] != "customer":
+        raise HTTPException(403, "Only customers can rate bookings")
     booking = await db.bookings.find_one({"id": body.booking_id})
     if not booking:
         raise HTTPException(404, "Booking not found")
+    if booking["customer_id"] != user["id"]:
+        raise HTTPException(403, "You can only rate your own bookings")
+    if booking["status"] != "completed":
+        raise HTTPException(400, "Only completed bookings can be rated")
     await db.bookings.update_one(
         {"id": body.booking_id},
-        {"$set": {"rating": body.rating, "comment": body.comment, "status": "completed"}},
+        {"$set": {"rating": body.rating, "comment": body.comment}},
     )
-    # Recalculate worker average rating
+    # Recalculate worker average rating and completed jobs
     pipeline = [
         {"$match": {"worker_id": booking["worker_id"], "rating": {"$ne": None}}},
         {"$group": {"_id": "$worker_id", "avg": {"$avg": "$rating"}, "count": {"$sum": 1}}},
@@ -594,39 +628,22 @@ async def seed_data():
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
 
-    # Demo customer
-    cust_email = "customer@kaamnow.com"
-    cust = await db.users.find_one({"email": cust_email})
-    if not cust:
-        cust_id = str(uuid.uuid4())
+    # Sample customer used for seeded jobs
+    cust_id = str(uuid.uuid4())
+    if await db.users.count_documents({"role": "customer"}) == 0:
         await db.users.insert_one({
             "id": cust_id,
-            "email": cust_email,
-            "password_hash": hash_password("customer123"),
-            "name": "Mahesh Patel",
+            "email": f"demo-customer-{cust_id[:8]}@kaamnow.local",
+            "password_hash": hash_password(str(uuid.uuid4())),
+            "name": "Demo customer",
             "role": "customer",
             "village": "Hoshangabad",
-            "phone": "9876543210",
+            "phone": None,
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
     else:
-        cust_id = cust["id"]
-
-    # Demo worker user
-    worker_email = "worker@kaamnow.com"
-    w_user = await db.users.find_one({"email": worker_email})
-    if not w_user:
-        w_user_id = str(uuid.uuid4())
-        await db.users.insert_one({
-            "id": w_user_id,
-            "email": worker_email,
-            "password_hash": hash_password("worker123"),
-            "name": "Ramesh Kumar",
-            "role": "worker",
-            "village": "Pratapgarh",
-            "phone": "9876501234",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        })
+        existing_customer = await db.users.find_one({"role": "customer"})
+        cust_id = existing_customer["id"]
 
     # Seed worker profiles
     if await db.workers.count_documents({}) == 0:
