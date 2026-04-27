@@ -1,28 +1,33 @@
-# Frontend Dockerfile - multi-stage build, React → static files served by nginx
+# Frontend Dockerfile — multi-stage. React build → tiny nginx image.
 FROM node:20-alpine AS builder
 
-WORKDIR /app
+WORKDIR /build
 
-# Copy package files first for caching
-COPY frontend/package.json frontend/yarn.lock* ./
+# Copy lockfile if present (handles both fresh + existing repos)
+COPY frontend/package.json ./
+COPY frontend/yarn.lock ./yarn.lock
+
+# Install deps. Use --network-timeout for slow CI / ARM environments.
 RUN yarn install --frozen-lockfile --network-timeout 600000
 
-# Copy source and build
+# Copy the rest of the frontend
 COPY frontend/ ./
 
 # REACT_APP_BACKEND_URL is set at build time. Empty string makes API calls relative
-# (e.g. /api/...) which routes via the same-origin ingress to the backend.
+# (e.g. /api/...) — same-origin via the ingress to the backend service.
 ARG REACT_APP_BACKEND_URL=""
 ENV REACT_APP_BACKEND_URL=$REACT_APP_BACKEND_URL
 ENV ENABLE_HEALTH_CHECK=false
+ENV CI=true
+ENV GENERATE_SOURCEMAP=false
 
 RUN yarn build
 
-# --- Runtime stage: tiny nginx image
+# --- Runtime: tiny nginx image
 FROM nginx:1.27-alpine
 
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=builder /app/build /usr/share/nginx/html
+COPY --from=builder /build/build /usr/share/nginx/html
 
 EXPOSE 80
 
