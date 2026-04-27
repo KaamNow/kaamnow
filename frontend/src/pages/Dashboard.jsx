@@ -22,6 +22,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (user) reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   const accept = async (id) => {
