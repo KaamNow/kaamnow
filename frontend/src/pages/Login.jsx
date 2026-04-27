@@ -62,11 +62,6 @@ export default function Login() {
               Create account
             </Link>
           </div>
-          <div className="mt-6 p-3 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-600">
-            <div className="font-bold text-gray-800 mb-1">Demo logins</div>
-            customer@kaamnow.com / customer123<br />
-            worker@kaamnow.com / worker123
-          </div>
         </div>
       </div>
     </div>

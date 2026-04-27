@@ -30,6 +30,9 @@ next-env.d.ts
 dist/
 dist
 
+# Emergent local metadata
+.emergent/
+
 # Environment files (comprehensive coverage)
 
 *token.json*

@@ -11,7 +11,6 @@ export default function Navbar() {
     { to: "/", label: "Home" },
     { to: "/marketplace", label: "Find Workers" },
     { to: "/whatsapp-demo", label: "WhatsApp Demo" },
-    { to: "/strategy", label: "Strategy" },
   ];
 
   return (

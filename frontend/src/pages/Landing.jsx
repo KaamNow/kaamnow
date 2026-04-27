@@ -256,7 +256,6 @@ export default function Landing() {
           </div>
           <div>© {new Date().getFullYear()} KaamNow. Built for Bharat.</div>
           <div className="flex gap-5">
-            <Link to="/strategy" className="hover:text-[#3f37c9]">Strategy</Link>
             <Link to="/marketplace" className="hover:text-[#3f37c9]">Marketplace</Link>
             <Link to="/whatsapp-demo" className="hover:text-[#3f37c9]">WhatsApp</Link>
           </div>
