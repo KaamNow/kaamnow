@@ -196,11 +196,13 @@ export default function Marketplace() {
               </div>
             </div>
           )}
+
           <div className="lg:col-span-2 grid sm:grid-cols-2 gap-4" data-testid="workers-grid">
             {loading && <div className="col-span-2 p-12 text-center text-gray-500">Loading workers…</div>}
             {!loading && workers.length === 0 && (
               <div className="col-span-2 p-12 text-center text-gray-500">No workers match your filters.</div>
             )}
+
             {workers.map((w, i) => {
               const workerLink = selectedJobId ? `/worker/${w.id}?job=${selectedJobId}` : `/worker/${w.id}`;
               return (
@@ -211,41 +213,42 @@ export default function Marketplace() {
                   className="kn-card p-5 fade-up"
                   style={{ animationDelay: `${i * 0.04}s` }}
                 >
-                <div className="flex gap-4">
-                  <img
-                    src={w.photo_url || "https://images.pexels.com/photos/16476333/pexels-photo-16476333.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=400&w=400"}
-                    alt={w.name}
-                    className="w-16 h-16 rounded-lg object-cover border border-gray-200"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="font-display text-lg leading-tight">{w.name}</div>
-                        <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
-                          <MapPin size={11} /> {w.village}, {w.state}
+                  <div className="flex gap-4">
+                    <img
+                      src={w.photo_url || "https://images.pexels.com/photos/16476333/pexels-photo-16476333.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=400&w=400"}
+                      alt={w.name}
+                      className="w-16 h-16 rounded-lg object-cover border border-gray-200"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <div className="font-display text-lg leading-tight">{w.name}</div>
+                          <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                            <MapPin size={11} /> {w.village}, {w.state}
+                          </div>
                         </div>
+                        <div className="font-display text-lg text-[#3f37c9]">₹{w.daily_rate}</div>
                       </div>
-                      <div className="font-display text-lg text-[#3f37c9]">₹{w.daily_rate}</div>
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {w.skills.slice(0, 3).map((s) => (
-                        <span key={s} className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 bg-gray-100 rounded">
-                          {s}
-                        </span>
-                      ))}
-                    </div>
-                    <div className="mt-3 flex items-center justify-between">
-                      <TrustBadge tier={w.trust_tier} />
-                      <div className="flex items-center gap-1 text-xs">
-                        <Star size={12} className="fill-[#ff6b35] text-[#ff6b35]" />
-                        <span className="font-bold">{w.avg_rating.toFixed(1)}</span>
-                        <span className="text-gray-500">· {w.total_jobs} jobs</span>
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {w.skills.slice(0, 3).map((s) => (
+                          <span key={s} className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 bg-gray-100 rounded">
+                            {s}
+                          </span>
+                        ))}
+                      </div>
+                      <div className="mt-3 flex items-center justify-between">
+                        <TrustBadge tier={w.trust_tier} />
+                        <div className="flex items-center gap-1 text-xs">
+                          <Star size={12} className="fill-[#ff6b35] text-[#ff6b35]" />
+                          <span className="font-bold">{w.avg_rating.toFixed(1)}</span>
+                          <span className="text-gray-500">· {w.total_jobs} jobs</span>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              </Link>
-            ))}
+                </Link>
+              );
+            })}
           </div>
 
           <div className="lg:col-span-1">
