@@ -205,6 +205,10 @@ apply_manifests() {
   step "Applying ingress..."
   kubectl apply -f "${SCRIPT_DIR}/k8s/50-ingress.yaml"
 
+  step "Restarting backend/frontend deployments to pick up newly built images..."
+  kubectl -n kaamnow rollout restart deployment/backend || true
+  kubectl -n kaamnow rollout restart deployment/frontend || true
+
   echo
   green "================ DEPLOY DONE ================"
   green "Admin login:"
