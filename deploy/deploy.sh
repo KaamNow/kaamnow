@@ -138,22 +138,25 @@ fix_kubeconfig_ownership() {
 
 # --- Build and load images ------------------------------------------------
 build_and_load_images() {
-  step "Building backend image (kaamnow/backend:latest)..."
+  IMAGE_TAG=$(date +%s)
+  export IMAGE_TAG
+  
+  step "Building backend image (kaamnow/backend:${IMAGE_TAG})..."
   docker build \
-    -t kaamnow/backend:latest \
+    -t "kaamnow/backend:${IMAGE_TAG}" \
     -f "${SCRIPT_DIR}/Dockerfile.backend" \
     "${PROJECT_ROOT}"
 
-  step "Building frontend image (kaamnow/frontend:latest) — slow on first run..."
+  step "Building frontend image (kaamnow/frontend:${IMAGE_TAG}) — slow on first run..."
   docker build \
     --build-arg REACT_APP_BACKEND_URL="" \
-    -t kaamnow/frontend:latest \
+    -t "kaamnow/frontend:${IMAGE_TAG}" \
     -f "${SCRIPT_DIR}/Dockerfile.frontend" \
     "${PROJECT_ROOT}"
 
   step "Loading images into kind cluster..."
-  kind load docker-image kaamnow/backend:latest  --name "${CLUSTER_NAME}"
-  kind load docker-image kaamnow/frontend:latest --name "${CLUSTER_NAME}"
+  kind load docker-image "kaamnow/backend:${IMAGE_TAG}"  --name "${CLUSTER_NAME}"
+  kind load docker-image "kaamnow/frontend:${IMAGE_TAG}" --name "${CLUSTER_NAME}"
 }
 
 # --- Install NGINX Ingress + cert-manager ---------------------------------
@@ -205,9 +208,9 @@ apply_manifests() {
   step "Applying ingress..."
   kubectl apply -f "${SCRIPT_DIR}/k8s/50-ingress.yaml"
 
-  step "Restarting backend/frontend deployments to pick up newly built images..."
-  kubectl -n kaamnow rollout restart deployment/backend || true
-  kubectl -n kaamnow rollout restart deployment/frontend || true
+  step "Updating deployments to use newly built images (Tag: ${IMAGE_TAG})..."
+  kubectl -n kaamnow set image deployment/backend backend="kaamnow/backend:${IMAGE_TAG}"
+  kubectl -n kaamnow set image deployment/frontend frontend="kaamnow/frontend:${IMAGE_TAG}"
 
   echo
   green "================ DEPLOY DONE ================"
