@@ -1,17 +1,26 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { LogOut, User } from "lucide-react";
+import { LogOut, User, Briefcase } from "lucide-react";
 
 export default function Navbar() {
   const { user, logout } = useAuth();
   const nav = useNavigate();
   const loc = useLocation();
 
-  const links = [
-    { to: "/", label: "Home" },
-    { to: "/marketplace", label: "Find Workers" },
-    { to: "/whatsapp-demo", label: "WhatsApp Demo" },
-  ];
+  // Role-aware nav links
+  const links = user?.role === "worker"
+    ? [
+        { to: "/worker/dashboard", label: "Dashboard" },
+        { to: "/worker/job-feed", label: "Job Feed" },
+        { to: "/whatsapp-demo", label: "WhatsApp Demo" },
+      ]
+    : [
+        { to: "/", label: "Home" },
+        { to: "/marketplace", label: "Find Workers" },
+        { to: "/whatsapp-demo", label: "WhatsApp Demo" },
+      ];
+
+  const dashboardLink = user?.role === "worker" ? "/worker/dashboard" : "/dashboard";
 
   return (
     <nav
@@ -48,8 +57,17 @@ export default function Navbar() {
         <div className="flex items-center gap-3">
           {user ? (
             <>
+              {user.role === "worker" && (
+                <Link
+                  to="/worker/job-feed"
+                  data-testid="nav-job-feed"
+                  className="hidden sm:flex items-center gap-1.5 text-sm font-semibold btn-saffron !py-2 !px-3"
+                >
+                  <Briefcase size={14} /> Jobs
+                </Link>
+              )}
               <Link
-                to="/dashboard"
+                to={dashboardLink}
                 data-testid="dashboard-link"
                 className="hidden sm:flex items-center gap-2 text-sm font-semibold text-gray-800 hover:text-[#3f37c9]"
               >
@@ -82,3 +100,4 @@ export default function Navbar() {
     </nav>
   );
 }
+

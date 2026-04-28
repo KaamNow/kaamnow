@@ -18,7 +18,20 @@ export default function WorkerProfile() {
   const [booking, setBooking] = useState(false);
 
   useEffect(() => {
-    api.get(`/workers/${id}`).then((r) => setWorker(r.data)).finally(() => setLoading(false));
+    api.get(`/workers/${id}`).then((r) => {
+      setWorker(r.data);
+      // Save to recently viewed
+      const workerData = {
+        id: r.data.id,
+        name: r.data.name,
+        photo_url: r.data.photo_url,
+        skills: r.data.skills
+      };
+      const saved = JSON.parse(localStorage.getItem("recently_viewed_workers") || "[]");
+      const filtered = saved.filter(w => w.id !== r.data.id);
+      const updated = [workerData, ...filtered].slice(0, 5);
+      localStorage.setItem("recently_viewed_workers", JSON.stringify(updated));
+    }).finally(() => setLoading(false));
   }, [id]);
 
   useEffect(() => {

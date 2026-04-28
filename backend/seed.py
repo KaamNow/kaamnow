@@ -12,11 +12,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 SEED_VILLAGES = [
-    {"name": "Pratapgarh", "lat": 25.8920, "lng": 81.9440, "district": "Pratapgarh", "state": "UP"},
-    {"name": "Wardha", "lat": 20.7453, "lng": 78.6022, "district": "Wardha", "state": "Maharashtra"},
-    {"name": "Muzaffarpur", "lat": 26.1209, "lng": 85.3647, "district": "Muzaffarpur", "state": "Bihar"},
-    {"name": "Hoshangabad", "lat": 22.7440, "lng": 77.7242, "district": "Hoshangabad", "state": "MP"},
-    {"name": "Jodhpur", "lat": 26.2389, "lng": 73.0242, "district": "Jodhpur", "state": "Rajasthan"},
+    {"name": "Pratapgarh", "lat": 25.8920, "lng": 81.9440, "district": "Pratapgarh", "state": "UP", "post": "Pratapgarh", "block": "Sadar", "pincode": "230001"},
+    {"name": "Wardha", "lat": 20.7453, "lng": 78.6022, "district": "Wardha", "state": "Maharashtra", "post": "Wardha", "block": "Wardha", "pincode": "442001"},
+    {"name": "Muzaffarpur", "lat": 26.1209, "lng": 85.3647, "district": "Muzaffarpur", "state": "Bihar", "post": "Muzaffarpur", "block": "Mushahari", "pincode": "842001"},
+    {"name": "Hoshangabad", "lat": 22.7440, "lng": 77.7242, "district": "Hoshangabad", "state": "MP", "post": "Hoshangabad", "block": "Hoshangabad", "pincode": "461001"},
+    {"name": "Jodhpur", "lat": 26.2389, "lng": 73.0242, "district": "Jodhpur", "state": "Rajasthan", "post": "Jodhpur", "block": "Jodhpur", "pincode": "342001"},
 ]
 
 SEED_WORKERS = [
@@ -52,11 +52,27 @@ SEED_JOBS = [
 async def ensure_indexes() -> None:
     try:
         await db.users.create_index("email", unique=True)
+        await db.users.create_index("phone", unique=True, sparse=True)
         await db.workers.create_index("user_id")
         await db.workers.create_index("skills")
+        await db.workers.create_index("structured_skills.skill")
+        await db.workers.create_index("address.pincode")
         await db.jobs.create_index("customer_id")
+        await db.jobs.create_index("status")
+        await db.jobs.create_index("address.pincode")
+        await db.jobs.create_index("required_skills.skill")
         await db.bookings.create_index("worker_id")
         await db.bookings.create_index("customer_id")
+        await db.engagements.create_index("worker_id")
+        await db.engagements.create_index("customer_id")
+        await db.engagements.create_index("job_id")
+        await db.engagements.create_index(
+            [("job_id", 1), ("worker_id", 1)],
+            unique=True,
+            partialFilterExpression={"status": {"$in": ["requested", "accepted"]}},
+        )
+        await db.engagements.create_index([("worker_id", 1), ("status", 1)])
+        await db.engagements.create_index([("customer_id", 1), ("status", 1)])
     except Exception:
         pass
 
@@ -76,6 +92,10 @@ async def seed_data() -> None:
                 "role": "admin",
                 "village": None,
                 "phone": None,
+                "phone_verified": False,
+                "address": None,
+                "photo_url": None,
+                "preferred_language": "en",
                 "created_at": utc_now_iso(),
             }
         )
@@ -92,6 +112,17 @@ async def seed_data() -> None:
                 "role": "customer",
                 "village": "Hoshangabad",
                 "phone": None,
+                "phone_verified": False,
+                "address": {
+                    "village": "Hoshangabad",
+                    "post": "Hoshangabad",
+                    "block": "Hoshangabad",
+                    "district": "Hoshangabad",
+                    "state": "MP",
+                    "pincode": "461001",
+                },
+                "photo_url": None,
+                "preferred_language": "en",
                 "created_at": utc_now_iso(),
             }
         )
@@ -113,14 +144,25 @@ async def seed_data() -> None:
                     "user_id": str(uuid.uuid4()),
                     "name": worker["name"],
                     "skills": worker["skills"],
+                    "structured_skills": [{"category": "Legacy", "skill": skill} for skill in worker["skills"]],
                     "daily_rate": worker["rate"],
                     "bio": worker["bio"],
                     "village": village["name"],
                     "district": village["district"],
                     "state": village["state"],
+                    "address": {
+                        "village": village["name"],
+                        "post": village["post"],
+                        "block": village["block"],
+                        "district": village["district"],
+                        "state": village["state"],
+                        "pincode": village["pincode"],
+                    },
                     "lat": village["lat"] + random.uniform(-0.05, 0.05),
                     "lng": village["lng"] + random.uniform(-0.05, 0.05),
                     "available": True,
+                    "availability_status": "available",
+                    "last_active_at": utc_now_iso(),
                     "trust_tier": worker["tier"],
                     "avg_rating": worker["rating"],
                     "total_jobs": worker["jobs"],
@@ -144,8 +186,20 @@ async def seed_data() -> None:
                     "daily_rate": job["rate"],
                     "job_date": (datetime.now(timezone.utc) + timedelta(days=random.randint(1, 7))).date().isoformat(),
                     "village": village["name"],
+                    "address": {
+                        "village": village["name"],
+                        "post": village["post"],
+                        "block": village["block"],
+                        "district": village["district"],
+                        "state": village["state"],
+                        "pincode": village["pincode"],
+                    },
                     "lat": village["lat"],
                     "lng": village["lng"],
+                    "required_skills": [{"category": job["category"], "skill": job["category"]}],
+                    "urgency": "normal",
+                    "filled_count": 0,
+                    "accepted_worker_ids": [],
                     "status": "open",
                     "created_at": utc_now_iso(),
                 }
