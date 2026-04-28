@@ -71,6 +71,25 @@ spec:
               port: 8001
             initialDelaySeconds: 30
             periodSeconds: 30
+          volumeMounts:
+            - name: backend-uploads
+              mountPath: /app/static/uploads
+      volumes:
+        - name: backend-uploads
+          persistentVolumeClaim:
+            claimName: backend-uploads-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: backend-uploads-pvc
+  namespace: kaamnow
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
 ---
 apiVersion: v1
 kind: Service

@@ -3,6 +3,20 @@ from typing import List, Optional, Literal
 from pydantic import BaseModel, EmailStr, Field
 
 
+class Address(BaseModel):
+    village: Optional[str] = None
+    post: Optional[str] = None
+    block: Optional[str] = None
+    district: Optional[str] = None
+    state: Optional[str] = None
+    pincode: Optional[str] = None
+
+
+class StructuredSkill(BaseModel):
+    category: str
+    skill: str
+
+
 class RegisterIn(BaseModel):
     email: EmailStr
     password: str = Field(min_length=6)
@@ -10,6 +24,9 @@ class RegisterIn(BaseModel):
     role: Literal["worker", "customer"] = "customer"
     village: Optional[str] = None
     phone: Optional[str] = None
+    address: Optional[Address] = None
+    photo_url: Optional[str] = None
+    preferred_language: Optional[str] = "en"
 
 
 class LoginIn(BaseModel):
@@ -24,6 +41,10 @@ class UserOut(BaseModel):
     role: str
     village: Optional[str] = None
     phone: Optional[str] = None
+    phone_verified: Optional[bool] = False
+    address: Optional[Address] = None
+    photo_url: Optional[str] = None
+    preferred_language: Optional[str] = "en"
 
 
 class AuthResponse(BaseModel):
@@ -41,6 +62,9 @@ class WorkerProfileIn(BaseModel):
     lat: float
     lng: float
     available: bool = True
+    structured_skills: List[StructuredSkill] = Field(default_factory=list)
+    address: Optional[Address] = None
+    availability_status: Optional[Literal["available", "not_available"]] = None
 
 
 class WorkerOut(BaseModel):
@@ -60,6 +84,10 @@ class WorkerOut(BaseModel):
     avg_rating: float
     total_jobs: int
     photo_url: Optional[str] = None
+    structured_skills: List[StructuredSkill] = Field(default_factory=list)
+    address: Optional[Address] = None
+    last_active_at: Optional[str] = None
+    availability_status: Optional[str] = None
 
 
 class JobIn(BaseModel):
@@ -72,6 +100,9 @@ class JobIn(BaseModel):
     village: str
     lat: float
     lng: float
+    required_skills: List[StructuredSkill] = Field(default_factory=list)
+    address: Optional[Address] = None
+    urgency: Literal["urgent", "normal"] = "normal"
 
 
 class JobOut(BaseModel):
@@ -89,11 +120,23 @@ class JobOut(BaseModel):
     lng: float
     status: str
     created_at: str
+    required_skills: List[StructuredSkill] = Field(default_factory=list)
+    address: Optional[Address] = None
+    urgency: Optional[str] = "normal"
+    filled_count: Optional[int] = 0
+    accepted_worker_ids: List[str] = Field(default_factory=list)
+
+
 
 
 class BookingIn(BaseModel):
     job_id: str
     worker_id: str
+
+
+class EngagementIn(BaseModel):
+    job_id: str
+    worker_id: Optional[str] = None
 
 
 class RatingIn(BaseModel):

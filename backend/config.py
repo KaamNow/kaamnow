@@ -32,6 +32,10 @@ class Settings(BaseModel):
     gupshup_channel: str = "whatsapp"
     gupshup_verify_token: Optional[str] = None
 
+    feature_engagement_flow: bool = False
+    feature_otp_auth: bool = False
+    feature_whatsapp_notifications: bool = False
+
     class Config:
         extra = "ignore"
 
@@ -57,4 +61,7 @@ settings = Settings(
     gupshup_app_id=os.getenv("GUPSHUP_APP_ID"),
     gupshup_channel=os.getenv("GUPSHUP_CHANNEL", "whatsapp"),
     gupshup_verify_token=os.getenv("GUPSHUP_VERIFY_TOKEN"),
+    feature_engagement_flow=_to_bool(os.getenv("FEATURE_ENGAGEMENT_FLOW"), False),
+    feature_otp_auth=_to_bool(os.getenv("FEATURE_OTP_AUTH"), False),
+    feature_whatsapp_notifications=_to_bool(os.getenv("FEATURE_WHATSAPP_NOTIFICATIONS"), False),
 )

@@ -43,6 +43,7 @@ export default function Marketplace() {
   const [loading, setLoading] = useState(true);
   const [skill, setSkill] = useState("all");
   const [q, setQ] = useState("");
+  const [pincode, setPincode] = useState("");
   const [availableOnly, setAvailableOnly] = useState(false);
   const [jobs, setJobs] = useState([]);
   const [selectedJobId, setSelectedJobId] = useState(new URLSearchParams(location.search).get("job") || "");
@@ -74,30 +75,50 @@ export default function Marketplace() {
         if (!selectedJobId && selected) {
           setSelectedJobId(selected.id);
         }
+        // Auto-fill pincode from job if available
+        if (selected && !pincode) {
+          setPincode(selected.address?.pincode || selected.pincode || "");
+        }
       })
       .catch(() => {
         setJobs([]);
         setSelectedJob(null);
       });
-  }, [user, selectedJobId]);
+  }, [user, selectedJobId, pincode]);
 
   useEffect(() => {
     setLoading(true);
-    const params = {};
-    if (skill !== "all") params.skill = skill;
-    if (q) params.q = q;
-    if (availableOnly) params.available_only = true;
+    const params = {
+      available_only: availableOnly,
+    };
+    if (skill !== "all") params.skills = skill;
+    if (pincode) params.pincode = pincode;
+    
+    // Use the search endpoint for ranked discovery
     api
-      .get("/workers", { params })
-      .then((r) => setWorkers(r.data))
+      .get("/workers/search", { params })
+      .then((r) => {
+        let data = r.data;
+        if (q) {
+          const lowerQ = q.toLowerCase();
+          data = data.filter(w => 
+            w.name.toLowerCase().includes(lowerQ) || 
+            w.village.toLowerCase().includes(lowerQ) ||
+            w.skills.some(s => s.toLowerCase().includes(lowerQ))
+          );
+        }
+        setWorkers(data);
+      })
       .finally(() => setLoading(false));
-  }, [skill, q, availableOnly]);
+  }, [skill, q, availableOnly, pincode]);
 
   const center = useMemo(() => {
     if (workers.length === 0) return [22.9734, 78.6569];
-    const sumLat = workers.reduce((a, w) => a + w.lat, 0);
-    const sumLng = workers.reduce((a, w) => a + w.lng, 0);
-    return [sumLat / workers.length, sumLng / workers.length];
+    const validWorkers = workers.filter(w => w.lat && w.lng);
+    if (validWorkers.length === 0) return [22.9734, 78.6569];
+    const sumLat = validWorkers.reduce((a, w) => a + w.lat, 0);
+    const sumLng = validWorkers.reduce((a, w) => a + w.lng, 0);
+    return [sumLat / validWorkers.length, sumLng / validWorkers.length];
   }, [workers]);
 
   return (
@@ -108,15 +129,29 @@ export default function Marketplace() {
           {workers.length} verified workers ready to work.
         </h1>
 
-        <div className="mt-8 flex flex-wrap gap-3 items-center">
+        <div className="mt-8 flex flex-wrap gap-3 items-end">
           <div className="relative flex-1 min-w-[240px]">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <label className="text-xs font-bold text-gray-500 mb-1 block">Search name or skill</label>
+            <div className="relative">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                data-testid="search-input"
+                placeholder="e.g. Ramesh, Painting..."
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                className="kn-input pl-9"
+              />
+            </div>
+          </div>
+          <div className="w-40">
+            <label className="text-xs font-bold text-gray-500 mb-1 block">Pincode</label>
             <input
-              data-testid="search-input"
-              placeholder="Search by name, village or skill"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              className="kn-input pl-9"
+              data-testid="pincode-input"
+              placeholder="6-digit code"
+              value={pincode}
+              onChange={(e) => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+              className="kn-input"
+              maxLength={6}
             />
           </div>
           <label data-testid="available-toggle" className="flex items-center gap-2 px-3 h-[46px] border border-gray-200 rounded-lg bg-white cursor-pointer">
@@ -126,7 +161,7 @@ export default function Marketplace() {
               onChange={(e) => setAvailableOnly(e.target.checked)}
               className="accent-[#ff6b35]"
             />
-            <span className="text-sm font-semibold">Available only</span>
+            <span className="text-sm font-semibold whitespace-nowrap">Available only</span>
           </label>
         </div>
 
@@ -177,7 +212,7 @@ export default function Marketplace() {
                     >
                       {jobs.map((job) => (
                         <option key={job.id} value={job.id}>
-                          {job.title} • {job.workers_needed} worker(s) • {job.job_date}
+                          {job.title} • {job.filled_count || 0}/{job.workers_needed || 1} filled • {job.job_date}
                         </option>
                       ))}
                     </select>
@@ -186,7 +221,12 @@ export default function Marketplace() {
 
                 {selectedJob && (
                   <div className="mt-4 rounded-xl bg-[#f8f6ff] p-4 border border-[#d7d2ff]">
-                    <div className="font-semibold">{selectedJob.title}</div>
+                    <div className="flex items-center justify-between">
+                      <div className="font-semibold">{selectedJob.title}</div>
+                      <div className="text-xs font-bold px-2 py-1 bg-white rounded-full border border-[#d7d2ff]">
+                        {selectedJob.filled_count || 0} / {selectedJob.workers_needed || 1} Workers
+                      </div>
+                    </div>
                     <div className="text-sm text-gray-600 mt-1">{selectedJob.description}</div>
                     <div className="mt-2 text-xs uppercase tracking-wider font-bold text-[#3f37c9]">
                       Matching workers for this job

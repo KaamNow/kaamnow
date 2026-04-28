@@ -9,6 +9,9 @@ import Signup from "@/pages/Signup";
 import Marketplace from "@/pages/Marketplace";
 import WorkerProfile from "@/pages/WorkerProfile";
 import WorkerSetup from "@/pages/WorkerSetup";
+import WorkerOnboarding from "@/pages/WorkerOnboarding";
+import WorkerDashboard from "@/pages/WorkerDashboard";
+import WorkerJobFeed from "@/pages/WorkerJobFeed";
 import Dashboard from "@/pages/Dashboard";
 import PostJob from "@/pages/PostJob";
 import WhatsAppDemo from "@/pages/WhatsAppDemo";
@@ -71,12 +74,44 @@ function App() {
               </Layout>
             }
           />
+          {/* Legacy worker setup – kept for backwards compat */}
           <Route
             path="/worker/setup"
             element={
-              <Layout>
+              <Protected>
                 <WorkerSetup />
-              </Layout>
+              </Protected>
+            }
+          />
+          {/* New step-by-step onboarding */}
+          <Route
+            path="/worker/onboarding"
+            element={
+              <Protected>
+                <WorkerOnboarding />
+              </Protected>
+            }
+          />
+          {/* Worker-specific dashboard */}
+          <Route
+            path="/worker/dashboard"
+            element={
+              <Protected>
+                <Layout>
+                  <WorkerDashboard />
+                </Layout>
+              </Protected>
+            }
+          />
+          {/* Worker job feed */}
+          <Route
+            path="/worker/job-feed"
+            element={
+              <Protected>
+                <Layout>
+                  <WorkerJobFeed />
+                </Layout>
+              </Protected>
             }
           />
           <Route
