@@ -11,8 +11,6 @@ export default function Signup() {
     email: "",
     password: "",
     role: "customer",
-    village: "",
-    phone: "",
   });
   const [loading, setLoading] = useState(false);
 
@@ -67,8 +65,6 @@ export default function Signup() {
             <input data-testid="signup-name" required placeholder="Full name" value={form.name} onChange={update("name")} className="kn-input" />
             <input data-testid="signup-email" required type="email" placeholder="Email" value={form.email} onChange={update("email")} className="kn-input" />
             <input data-testid="signup-password" required type="password" placeholder="Password (min 6 chars)" value={form.password} onChange={update("password")} className="kn-input" />
-            <input data-testid="signup-village" placeholder="Village (optional)" value={form.village} onChange={update("village")} className="kn-input" />
-            <input data-testid="signup-phone" placeholder="Phone (optional)" value={form.phone} onChange={update("phone")} className="kn-input" />
             <button data-testid="signup-submit" disabled={loading} className="btn-saffron w-full disabled:opacity-60">
               {loading ? "Creating…" : "Create account"}
             </button>
