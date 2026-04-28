@@ -64,6 +64,11 @@ function ProfileSection({ profile, worker, onAvailToggle, toggling }) {
     .filter(Boolean)
     .join(", ");
 
+  // Stats
+  const totalEarnings = engagements
+    .filter(e => e.status === "completed")
+    .reduce((acc, e) => acc + (e.daily_rate || 0), 0);
+
   return (
     <div className="space-y-4">
       {/* Hero card */}
@@ -169,24 +174,20 @@ function ProfileSection({ profile, worker, onAvailToggle, toggling }) {
         </div>
       )}
 
-  // Stats
-  const totalEarnings = engagements
-    .filter(e => e.status === "completed")
-    .reduce((acc, e) => acc + (e.daily_rate || 0), 0);
-
-  return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-      {[
-        { label: "Total Jobs", value: worker.total_jobs || 0 },
-        { label: "Rating", value: worker.avg_rating ? worker.avg_rating.toFixed(1) + "★" : "—" },
-        { label: "Earnings", value: "₹" + totalEarnings },
-        { label: "Trust Tier", value: worker.trust_tier || 1 },
-      ].map((s) => (
-        <div key={s.label} className="kn-card p-4 text-center">
-          <div className="font-display text-2xl text-[#3f37c9] truncate">{s.value}</div>
-          <div className="text-[10px] uppercase tracking-wider font-bold text-gray-500 mt-1">{s.label}</div>
-        </div>
-      ))}
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { label: "Total Jobs", value: worker.total_jobs || 0 },
+          { label: "Rating", value: worker.avg_rating ? worker.avg_rating.toFixed(1) + "★" : "—" },
+          { label: "Earnings", value: "₹" + totalEarnings },
+          { label: "Trust Tier", value: worker.trust_tier || 1 },
+        ].map((s) => (
+          <div key={s.label} className="kn-card p-4 text-center">
+            <div className="font-display text-2xl text-[#3f37c9] truncate">{s.value}</div>
+            <div className="text-[10px] uppercase tracking-wider font-bold text-gray-500 mt-1">{s.label}</div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

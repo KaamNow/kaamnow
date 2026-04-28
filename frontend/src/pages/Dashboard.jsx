@@ -169,9 +169,6 @@ export default function Dashboard() {
   const [ratingComment, setRatingComment] = useState("");
   const [submittingRating, setSubmittingRating] = useState(false);
 
-  // Workers have their own dedicated dashboard
-  if (user && user.role === "worker") return <Navigate to="/worker/dashboard" replace />;
-
   const reload = useCallback(async () => {
     setLoading(true);
     try {
@@ -191,6 +188,16 @@ export default function Dashboard() {
   useEffect(() => {
     if (user) reload();
   }, [user, reload]);
+
+  const [recentlyViewed, setRecentlyViewed] = useState([]);
+  useEffect(() => {
+    const saved = JSON.parse(localStorage.getItem("recently_viewed_workers") || "[]");
+    setRecentlyViewed(saved);
+  }, []);
+
+  // Workers have their own dedicated dashboard
+  if (user && user.role === "worker") return <Navigate to="/worker/dashboard" replace />;
+  if (!user) return null;
 
   const complete = async (id) => {
     try {
@@ -222,8 +229,6 @@ export default function Dashboard() {
     }
   };
 
-  if (!user) return null;
-
   const activeBookings = bookings.filter(b => b.status === "confirmed" || b.status === "pending");
   const pastBookings = bookings.filter(b => b.status === "completed" || b.status === "cancelled");
   const openJobs = jobs.filter(j => j.status === "open");
@@ -231,12 +236,6 @@ export default function Dashboard() {
   const monthlySpend = bookings
     .filter(b => b.status === "completed")
     .reduce((acc, b) => acc + (b.daily_rate || 0), 0);
-
-  const [recentlyViewed, setRecentlyViewed] = useState([]);
-  useEffect(() => {
-    const saved = JSON.parse(localStorage.getItem("recently_viewed_workers") || "[]");
-    setRecentlyViewed(saved);
-  }, []);
 
   const spendByCat = bookings
     .filter(b => b.status === "completed")
