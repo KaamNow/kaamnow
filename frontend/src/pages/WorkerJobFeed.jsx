@@ -92,11 +92,9 @@ function JobCard({ job, onInterest, sending }) {
               <Calendar size={12} /> {job.job_date}
             </span>
           )}
-          {addrParts.length > 0 && (
-            <span className="flex items-center gap-1">
-              <MapPin size={12} /> {addrParts.join(", ")}
-            </span>
-          )}
+          <span className="flex items-center gap-1">
+            <MapPin size={12} /> {job.village || addr.village} {addr.pincode ? `(${addr.pincode})` : ""}
+          </span>
           <span className="flex items-center gap-1">
             <Clock size={12} /> {job.workers_needed} worker{job.workers_needed > 1 ? "s" : ""} needed
           </span>
@@ -170,15 +168,19 @@ export default function WorkerJobFeed() {
   const { user } = useAuth();
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(null); // job_id currently being sent
+  const [sending, setSending] = useState(null);
   const [interestedIds, setInterestedIds] = useState(new Set());
   const [pincodeFilter, setPincodeFilter] = useState("");
+  const [skillFilter, setSkillFilter] = useState("");
+  const [sortBy, setSortBy] = useState("match"); // match, newest, pay
   const [showFilter, setShowFilter] = useState(false);
 
-  const loadFeed = useCallback(async (pincode = "") => {
+  const loadFeed = useCallback(async (pincode = "", skills = "") => {
     setLoading(true);
     try {
-      const params = pincode ? { pincode } : {};
+      const params = {};
+      if (pincode) params.pincode = pincode;
+      if (skills) params.skills = skills;
       const r = await api.get("/jobs/feed", { params });
       setJobs(r.data || []);
     } catch (err) {
@@ -189,8 +191,13 @@ export default function WorkerJobFeed() {
   }, []);
 
   useEffect(() => {
-    if (user) loadFeed();
+    if (user) loadFeed(pincodeFilter, skillFilter);
   }, [user, loadFeed]);
+
+  const handleSearch = (e) => {
+    e.preventDefault();
+    loadFeed(pincodeFilter.trim(), skillFilter.trim());
+  };
 
   const handleInterest = async (jobId) => {
     if (interestedIds.has(jobId)) return;
@@ -206,18 +213,20 @@ export default function WorkerJobFeed() {
     }
   };
 
-  const handlePincodeSearch = (e) => {
-    e.preventDefault();
-    loadFeed(pincodeFilter.trim());
-  };
-
   const enrichedJobs = jobs.map((j) => ({
     ...j,
     _already_interested: interestedIds.has(j.id),
   }));
 
-  const bestMatches = enrichedJobs.filter((j) => j.match_rank === 1);
-  const otherMatches = enrichedJobs.filter((j) => j.match_rank !== 1);
+  const sortedJobs = [...enrichedJobs].sort((a, b) => {
+    if (sortBy === "newest") return new Date(b.created_at) - new Date(a.created_at);
+    if (sortBy === "pay") return b.daily_rate - a.daily_rate;
+    // Default: Match rank (already sorted by backend, but we can re-ensure)
+    return (a.match_rank || 4) - (b.match_rank || 4);
+  });
+
+  const bestMatches = sortedJobs.filter((j) => j.match_rank === 1);
+  const otherMatches = sortedJobs.filter((j) => j.match_rank !== 1);
 
   return (
     <div data-testid="worker-job-feed" className="max-w-3xl mx-auto px-4 py-8">
@@ -244,31 +253,60 @@ export default function WorkerJobFeed() {
       {/* Filter panel */}
       {showFilter && (
         <form
-          onSubmit={handlePincodeSearch}
-          className="kn-card p-4 mb-4 flex gap-2 items-end fade-up"
+          onSubmit={handleSearch}
+          className="kn-card p-6 mb-6 fade-up space-y-4"
         >
-          <div className="flex-1">
-            <label className="text-xs font-bold text-gray-700 mb-1 block">Search by pincode</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              maxLength={6}
-              value={pincodeFilter}
-              onChange={(e) => setPincodeFilter(e.target.value.replace(/\D/g, "").slice(0, 6))}
-              placeholder="Enter 6-digit pincode"
-              className="kn-input"
-            />
+          <div className="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-bold text-gray-500 mb-1 block uppercase">Pincode</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                value={pincodeFilter}
+                onChange={(e) => setPincodeFilter(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="6-digit code"
+                className="kn-input"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-gray-500 mb-1 block uppercase">Skill Search</label>
+              <input
+                type="text"
+                value={skillFilter}
+                onChange={(e) => setSkillFilter(e.target.value)}
+                placeholder="e.g. Plumber, Mason"
+                className="kn-input"
+              />
+            </div>
           </div>
-          <button type="submit" className="btn-indigo flex items-center gap-2 text-sm !py-2.5">
-            <Search size={14} /> Search
-          </button>
-          <button
-            type="button"
-            onClick={() => { setPincodeFilter(""); loadFeed(""); }}
-            className="btn-outline text-sm !py-2.5"
-          >
-            Reset
-          </button>
+
+          <div className="flex items-center gap-4 pt-2">
+            <div className="flex-1">
+              <label className="text-xs font-bold text-gray-500 mb-1 block uppercase">Sort By</label>
+              <select 
+                value={sortBy} 
+                onChange={(e) => setSortBy(e.target.value)}
+                className="kn-input"
+              >
+                <option value="match">Best Match</option>
+                <option value="newest">Newest First</option>
+                <option value="pay">Highest Pay</option>
+              </select>
+            </div>
+            <div className="flex gap-2 self-end">
+              <button type="submit" className="btn-saffron flex items-center gap-2 text-sm !py-2.5">
+                <Search size={14} /> Search
+              </button>
+              <button
+                type="button"
+                onClick={() => { setPincodeFilter(""); setSkillFilter(""); setSortBy("match"); loadFeed("", ""); }}
+                className="btn-outline text-sm !py-2.5"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
         </form>
       )}
 

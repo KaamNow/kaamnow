@@ -43,7 +43,7 @@ function StatusBadge({ status }) {
 }
 
 /* ─── Profile Section ──────────────────────────────────────────────────── */
-function ProfileSection({ profile, worker, onAvailToggle, toggling }) {
+function ProfileSection({ profile, worker, engagements, onAvailToggle, toggling }) {
   if (!worker) {
     return (
       <div className="kn-card p-8 text-center">
@@ -419,6 +419,7 @@ export default function WorkerDashboard() {
             <ProfileSection
               profile={user}
               worker={worker}
+              engagements={engagements}
               onAvailToggle={handleAvailToggle}
               toggling={toggling}
             />
