@@ -6,6 +6,8 @@ import { ArrowRight, ShieldCheck, MapPin, MessageCircle, Star, Users, Briefcase,
 
 export default function Landing() {
   const [stats, setStats] = useState({ workers: 0, jobs: 0, completed_bookings: 0, villages: 0 });
+  const [featuredWorkers, setFeaturedWorkers] = useState([]);
+  const [featuredJobs, setFeaturedJobs] = useState([]);
   const [waitEmail, setWaitEmail] = useState("");
   const [waitName, setWaitName] = useState("");
   const [waitRole, setWaitRole] = useState("customer");
@@ -13,6 +15,10 @@ export default function Landing() {
 
   useEffect(() => {
     api.get("/stats").then((r) => setStats(r.data)).catch(() => {});
+    // Fetch some workers for preview
+    api.get("/workers/search", { params: { limit: 4 } }).then((r) => setFeaturedWorkers(r.data.slice(0, 4))).catch(() => {});
+    // Fetch some jobs for preview
+    api.get("/jobs/feed", { params: { limit: 4 } }).then((r) => setFeaturedJobs(r.data.slice(0, 4))).catch(() => {});
   }, []);
 
   const submitWaitlist = async (e) => {
@@ -46,12 +52,15 @@ export default function Landing() {
               KaamNow connects 250M+ rural workers with farmers, homeowners and contractors —
               over WhatsApp, voice and a phone any villager already owns. No middlemen. Fair rates. Verified trust.
             </p>
-            <div className="mt-9 flex flex-wrap gap-4">
-              <Link to="/marketplace" data-testid="hero-find-workers" className="btn-saffron flex items-center gap-2">
+            <div className="mt-9 flex flex-wrap gap-4 items-center">
+              <Link to="/marketplace" data-testid="hero-find-workers" className="btn-saffron flex items-center gap-2 h-[52px] px-8 shadow-lg shadow-orange-200/50">
                 Find Workers <ArrowRight size={18} />
               </Link>
-              <Link to="/whatsapp-demo" data-testid="hero-whatsapp-demo" className="btn-outline flex items-center gap-2">
-                <MessageCircle size={16} /> Try WhatsApp bot
+              <Link to="/worker/job-feed" data-testid="hero-find-work" className="btn-indigo flex items-center gap-2 h-[52px] px-8">
+                Find Work <Briefcase size={16} />
+              </Link>
+              <Link to="/whatsapp-demo" data-testid="hero-whatsapp-demo" className="btn-outline flex items-center gap-2 h-[52px] px-6 border-gray-300 hover:border-[#3f37c9] hover:text-[#3f37c9]">
+                <MessageCircle size={16} /> WhatsApp Demo
               </Link>
             </div>
 
@@ -99,6 +108,115 @@ export default function Landing() {
               <div className="text-[10px] uppercase tracking-widest font-bold opacity-90">Live</div>
               <div className="font-display text-xl">{stats.workers} workers online</div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* QUICK PREVIEW / FIND WORK SECTION */}
+      <section className="py-12 bg-white">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-6 bg-[#f0f0ff] rounded-3xl p-8 md:p-12 border border-[#d7d2ff] shadow-sm">
+            <div className="flex-1">
+              <h2 className="font-display text-3xl md:text-4xl text-gray-900 leading-tight">
+                Looking for work? <span className="text-[#3f37c9]">KaamNow has jobs nearby.</span>
+              </h2>
+              <p className="mt-3 text-gray-600 max-w-lg">
+                Join 10,000+ workers who find daily मजदूरी directly on their phones. No more waiting at the chowk.
+              </p>
+              <div className="mt-6 flex flex-wrap gap-4">
+                <Link to="/signup" className="btn-indigo !px-8">Register as Worker</Link>
+                <Link to="/worker/job-feed" className="flex items-center gap-2 text-[#3f37c9] font-bold hover:underline">
+                  Browse Job Feed <ArrowRight size={14} />
+                </Link>
+              </div>
+            </div>
+            <div className="flex-1 w-full max-w-md">
+              <div className="space-y-3">
+                {featuredJobs.slice(0, 3).map((j, i) => (
+                  <Link to="/worker/job-feed" key={j.id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 flex items-center justify-between group hover:border-[#3f37c9] transition-all cursor-pointer" style={{ opacity: 1 - i * 0.15 }}>
+                    <div>
+                      <div className="font-bold text-sm text-gray-900">{j.title}</div>
+                      <div className="text-xs text-gray-500">{j.village} · ₹{j.daily_rate}/day</div>
+                    </div>
+                    <div className="text-[#3f37c9] opacity-0 group-hover:opacity-100 transition">
+                      <ArrowRight size={16} />
+                    </div>
+                  </Link>
+                ))}
+                {featuredJobs.length === 0 && (
+                  <div className="text-center py-6 text-gray-400 italic text-sm">Loading job opportunities...</div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* FEATURED WORKERS / MARKETPLACE PREVIEW */}
+      <section className="py-20">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+            <div>
+              <div className="kn-overline mb-3">Hire locally</div>
+              <h2 className="font-display text-4xl lg:text-5xl tracking-tight">
+                Hire <span className="text-[#ff6b35]">verified talent</span> in minutes.
+              </h2>
+            </div>
+            <div className="flex gap-3">
+              <Link to="/marketplace" className="btn-saffron flex items-center gap-2 shadow-md hover:shadow-lg transition-all">
+                Browse Marketplace <ArrowRight size={16} />
+              </Link>
+            </div>
+          </div>
+
+          {/* Simple Filter UI Preview */}
+          <div className="mb-10 p-4 bg-white rounded-2xl border border-gray-200 shadow-sm flex flex-wrap gap-3 items-center">
+            <div className="flex items-center gap-2 px-3 py-2 border-r border-gray-100">
+              <MapPin size={16} className="text-[#ff6b35]" />
+              <span className="text-sm font-bold">Pincode:</span>
+              <input placeholder="e.g. 302001" className="outline-none text-sm w-24 font-semibold text-gray-800" />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {["Mason", "Painter", "Helper", "Plumber"].map(s => (
+                <span key={s} className="px-3 py-1 bg-gray-100 rounded-full text-xs font-bold text-gray-600 hover:bg-[#3f37c9] hover:text-white transition cursor-pointer">
+                  {s}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {featuredWorkers.map((w, i) => (
+              <Link 
+                key={w.id} 
+                to={`/worker/${w.id}`}
+                className="kn-card p-5 group hover:border-[#ff6b35] transition-all hover:shadow-xl hover:-translate-y-1"
+                style={{ animationDelay: `${i * 0.1}s` }}
+              >
+                <div className="relative aspect-square rounded-xl overflow-hidden mb-4 shadow-inner bg-gray-100">
+                  <img src={w.photo_url || "https://images.pexels.com/photos/16476333/pexels-photo-16476333.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=400&w=400"} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                  <div className="absolute top-2 right-2 px-2 py-1 bg-white/90 backdrop-blur rounded-lg text-[10px] font-bold text-[#ff6b35] shadow-sm">
+                    ⭐ {w.avg_rating.toFixed(1)}
+                  </div>
+                </div>
+                <div className="font-display text-lg mb-1 group-hover:text-[#ff6b35] transition-colors">{w.name}</div>
+                <div className="flex flex-wrap gap-1 mb-3">
+                  {w.skills.slice(0, 2).map(s => (
+                    <span key={s} className="text-[10px] uppercase font-bold text-gray-400">{s}</span>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between text-sm pt-3 border-t border-gray-50">
+                  <span className="text-gray-500 flex items-center gap-1"><MapPin size={10} /> {w.village}</span>
+                  <span className="font-bold text-[#3f37c9]">₹{w.daily_rate}/day</span>
+                </div>
+                <div className="w-full mt-4 btn-outline !py-2 !text-xs opacity-0 group-hover:opacity-100 transition-all text-center">
+                  Request Worker
+                </div>
+              </Link>
+            ))}
+            {featuredWorkers.length === 0 && (
+              <div className="col-span-full py-12 text-center text-gray-400 italic">No workers listed in this area yet...</div>
+            )}
           </div>
         </div>
       </section>
@@ -261,6 +379,16 @@ export default function Landing() {
           </div>
         </div>
       </footer>
+
+      {/* Sticky Mobile Bar */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-lg border-t border-gray-200 px-6 py-3 flex gap-3 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
+        <Link to="/marketplace" className="flex-1 btn-saffron !text-xs !py-3 flex items-center justify-center gap-2">
+          <Users size={14} /> Find Workers
+        </Link>
+        <Link to="/worker/job-feed" className="flex-1 btn-indigo !text-xs !py-3 flex items-center justify-center gap-2">
+          <Briefcase size={14} /> Find Work
+        </Link>
+      </div>
     </div>
   );
 }
