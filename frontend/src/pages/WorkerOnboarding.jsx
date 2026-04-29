@@ -243,9 +243,9 @@ export default function WorkerOnboarding() {
   };
 
   const canProceed = () => {
-    if (step === 0) return name.trim().length >= 2;
-    if (step === 1) return phone.trim().length >= 8;
-    if (step === 2) return address.village.trim() && address.pincode.trim().length === 6;
+    if (step === 0) return (name || "").trim().length >= 2;
+    if (step === 1) return (phone || "").toString().trim().length === 10;
+    if (step === 2) return (address?.village || "").trim() && (address?.pincode || "").toString().trim().length === 6;
     if (step === 3) return selectedSkills.length >= 1;
     return true; // photo optional
   };
@@ -264,7 +264,15 @@ export default function WorkerOnboarding() {
   const handleSubmit = async () => {
     setSaving(true);
     try {
-      // Build payload compatible with existing WorkerProfileIn schema
+      // First, update the base user profile with the phone number and name
+      await api.patch("/auth/me", {
+        name,
+        phone,
+        village: address.village,
+        pincode: address.pincode,
+      });
+
+      // Then build payload for Worker Profile
       const skills = selectedSkills.map((x) => x.skill.toLowerCase());
       const payload = {
         skills,
@@ -359,17 +367,17 @@ export default function WorkerOnboarding() {
           <div className="fade-up kn-card p-8">
             <StepHeader icon={Phone} label="Phone Number" desc="Your phone helps customers reach you quickly." />
             <label className="block text-sm font-bold text-gray-700 mb-2">Mobile number</label>
-            <div className="flex gap-2">
-              <span className="kn-input w-16 text-center font-bold flex items-center justify-center text-gray-600">+91</span>
+            <div className="flex items-center border-2 border-gray-200 rounded-xl focus-within:border-[#3f37c9] overflow-hidden bg-white transition-colors h-14">
+              <span className="px-4 font-bold text-gray-500 border-r-2 border-gray-100 bg-gray-50 h-full flex items-center">+91</span>
               <input
                 data-testid="onboard-phone"
                 autoFocus
                 type="tel"
-                value={phone}
+                value={phone || ""}
                 onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
                 onKeyDown={(e) => e.key === "Enter" && next()}
-                placeholder="9876543210"
-                className="kn-input flex-1"
+                placeholder="Mobile number (10 digits)"
+                className="flex-1 px-4 outline-none w-full text-lg font-semibold h-full"
                 maxLength={10}
               />
             </div>
