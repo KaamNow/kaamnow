@@ -2,11 +2,11 @@ import os
 import shutil
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
-from ..auth import get_current_user
+from ..auth import get_current_user, get_optional_user
 from ..db import db
 from ..schemas import WorkerOut, WorkerProfileIn
 
@@ -38,7 +38,7 @@ def _split_skills(skills: Optional[str]) -> list[str]:
     return [skill.strip().lower() for skill in skills.split(",") if skill.strip()]
 
 
-def _skill_names(items: list[dict] | list[str] | None) -> set[str]:
+def _skill_names(items: Optional[Union[list[dict], list[str]]]) -> set[str]:
     names = set()
     for item in items or []:
         if isinstance(item, dict):
@@ -54,7 +54,7 @@ def _worker_skill_names(worker: dict) -> set[str]:
     return _skill_names(worker.get("structured_skills")) | _skill_names(worker.get("skills"))
 
 
-def _worker_pincode(worker: dict) -> str | None:
+def _worker_pincode(worker: dict) -> Optional[str]:
     return (worker.get("address") or {}).get("pincode")
 
 
@@ -67,7 +67,7 @@ def _worker_wage(worker: dict) -> dict:
     }
 
 
-def _rank_worker(worker: dict, pincode: str | None, skills: list[str]) -> tuple[int, int, float, int]:
+def _rank_worker(worker: dict, pincode: Optional[str], skills: list[str]) -> tuple[int, int, float, int]:
     worker_skills = _worker_skill_names(worker)
     skill_match_count = len(worker_skills.intersection(skills)) if skills else 0
     same_pincode = bool(pincode and _worker_pincode(worker) == pincode)
@@ -89,7 +89,7 @@ def _rank_worker(worker: dict, pincode: str | None, skills: list[str]) -> tuple[
     )
 
 
-def _enrich_worker_for_search(worker: dict, pincode: str | None, skills: list[str]) -> dict:
+def _enrich_worker_for_search(worker: dict, pincode: Optional[str], skills: list[str]) -> dict:
     worker_skills = _worker_skill_names(worker)
     matched_skills = sorted(worker_skills.intersection(skills)) if skills else []
     same_pincode = bool(pincode and _worker_pincode(worker) == pincode)
@@ -175,9 +175,9 @@ async def search_workers(
     pincode: Optional[str] = None,
     skills: Optional[str] = None,
     available_only: bool = False,
-    user: dict = Depends(get_current_user),
+    user: Optional[dict] = Depends(get_optional_user),
 ):
-    selected_pincode = pincode or (user.get("address") or {}).get("pincode")
+    selected_pincode = pincode or ((user or {}).get("address") or {}).get("pincode")
     selected_skills = _split_skills(skills)
 
     query = {}

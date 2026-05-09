@@ -10,6 +10,7 @@ import {
   IndianRupee,
   Zap,
   CheckCircle,
+  XCircle,
   Clock,
   Search,
   SlidersHorizontal,
@@ -54,7 +55,7 @@ function UrgencyBadge({ urgency }) {
 }
 
 /* ─── Job Card ─────────────────────────────────────────────────────────── */
-function JobCard({ job, onInterest, sending }) {
+function JobCard({ job, onInterest, sending, onWithdraw, withdrawing }) {
   const [expanded, setExpanded] = useState(false);
   const addr = job.address || {};
   const addrParts = [addr.village || job.village, addr.district, addr.state, addr.pincode]
@@ -98,6 +99,11 @@ function JobCard({ job, onInterest, sending }) {
           <span className="flex items-center gap-1">
             <Clock size={12} /> {job.workers_needed} worker{job.workers_needed > 1 ? "s" : ""} needed
           </span>
+          {job.distance_km != null && (
+            <span className="flex items-center gap-1 font-semibold text-[#3f37c9]">
+              📍 {job.distance_km < 1 ? "<1" : job.distance_km} km away
+            </span>
+          )}
         </div>
 
         {/* Matched skills */}
@@ -133,30 +139,71 @@ function JobCard({ job, onInterest, sending }) {
         )}
 
         {/* Action */}
-        <div className="mt-4 flex items-center gap-3">
-          <button
-            data-testid={`interest-${job.id}`}
-            disabled={sending === job.id || job._already_interested}
-            onClick={() => onInterest(job.id)}
-            className="btn-saffron flex items-center gap-2 text-sm !py-2 !px-4 disabled:opacity-60"
-          >
-            {sending === job.id ? (
-              <>
-                <RefreshCw size={13} className="animate-spin" /> Sending…
-              </>
-            ) : job._already_interested ? (
-              <>
-                <CheckCircle size={13} /> Interested
-              </>
-            ) : (
-              <>
-                <HandHeart size={13} /> Interested / रुचि है
-              </>
-            )}
-          </button>
-          {job.match_rank === 1 && (
-            <span className="text-xs text-green-600 font-semibold">Perfect match!</span>
-          )}
+        <div className="mt-4">
+          {(() => {
+            const eng = job._engagement;
+            if (!eng) {
+              return (
+                <div className="flex items-center gap-3">
+                  <button
+                    data-testid={`interest-${job.id}`}
+                    disabled={sending === job.id}
+                    onClick={() => onInterest(job.id)}
+                    className="btn-saffron flex items-center gap-2 text-sm !py-2 !px-4 disabled:opacity-60"
+                  >
+                    {sending === job.id ? (
+                      <><RefreshCw size={13} className="animate-spin" /> Sending…</>
+                    ) : (
+                      <><HandHeart size={13} /> Interested / रुचि है</>
+                    )}
+                  </button>
+                  {job.match_rank === 1 && <span className="text-xs text-green-600 font-semibold">Perfect match!</span>}
+                </div>
+              );
+            }
+            if (eng.status === "requested") {
+              return (
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="flex items-center gap-1.5 text-sm font-bold text-yellow-700 bg-yellow-50 px-3 py-1.5 rounded-xl border border-yellow-200">
+                    <RefreshCw size={13} /> Pending Approval
+                  </span>
+                  <button
+                    disabled={withdrawing === job.id}
+                    onClick={() => onWithdraw(eng.id, job.id)}
+                    className="text-xs text-red-500 hover:underline font-semibold disabled:opacity-50"
+                  >
+                    {withdrawing === job.id ? "Withdrawing…" : "Withdraw"}
+                  </button>
+                </div>
+              );
+            }
+            if (eng.status === "accepted") {
+              return (
+                <div className="rounded-xl p-3 space-y-1" style={{ background: "#f0fdf4" }}>
+                  <div className="flex items-center gap-2 text-sm font-bold text-green-700">
+                    <CheckCircle size={14} /> Booking Confirmed!
+                  </div>
+                  {eng.customer_phone && (
+                    <a href={`tel:${eng.customer_phone}`} className="text-sm text-green-700 font-semibold hover:underline block">
+                      📞 Customer: {eng.customer_phone}
+                    </a>
+                  )}
+                  <div className="text-xs text-green-600">Contact them to confirm timing and location.</div>
+                </div>
+              );
+            }
+            if (eng.status === "rejected" || eng.status === "cancelled") {
+              return (
+                <span className="text-xs font-bold text-gray-400 flex items-center gap-1">
+                  <XCircle size={12} /> {eng.status === "rejected" ? "Not approved" : "Withdrawn"} – apply to other jobs
+                </span>
+              );
+            }
+            if (eng.status === "completed") {
+              return <span className="text-xs font-bold text-gray-500 flex items-center gap-1"><CheckCircle size={12} /> Completed</span>;
+            }
+            return null;
+          })()}
         </div>
       </div>
     </div>
@@ -169,26 +216,44 @@ export default function WorkerJobFeed() {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(null);
-  const [interestedIds, setInterestedIds] = useState(new Set());
+  const [withdrawing, setWithdrawing] = useState(null);
+  // Map of job_id → engagement {id, status, customer_phone}
+  const [myEngagements, setMyEngagements] = useState({});
   const [pincodeFilter, setPincodeFilter] = useState("");
   const [skillFilter, setSkillFilter] = useState("");
-  const [sortBy, setSortBy] = useState("match"); // match, newest, pay
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [sortBy, setSortBy] = useState("match");
   const [showFilter, setShowFilter] = useState(false);
 
-  const loadFeed = useCallback(async (pincode = "", skills = "") => {
+  const loadEngagements = useCallback(async () => {
+    try {
+      const r = await api.get("/engagements/mine");
+      const map = {};
+      for (const e of (r.data || [])) {
+        map[e.job_id] = e;
+      }
+      setMyEngagements(map);
+    } catch {}
+  }, []);
+
+  const loadFeed = useCallback(async (pincode = "", skills = "", category = "") => {
     setLoading(true);
     try {
       const params = {};
       if (pincode) params.pincode = pincode;
       if (skills) params.skills = skills;
-      const r = await api.get("/jobs/feed", { params });
-      setJobs(r.data || []);
+      if (category) params.category = category;
+      const [feedRes] = await Promise.all([
+        api.get("/jobs/feed", { params }),
+        loadEngagements(),
+      ]);
+      setJobs(feedRes.data || []);
     } catch (err) {
       toast.error(formatApiError(err));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadEngagements]);
 
   useEffect(() => {
     if (user) loadFeed(pincodeFilter, skillFilter);
@@ -196,16 +261,16 @@ export default function WorkerJobFeed() {
 
   const handleSearch = (e) => {
     e.preventDefault();
-    loadFeed(pincodeFilter.trim(), skillFilter.trim());
+    loadFeed(pincodeFilter.trim(), skillFilter.trim(), categoryFilter);
   };
 
   const handleInterest = async (jobId) => {
-    if (interestedIds.has(jobId)) return;
+    if (myEngagements[jobId]) return;
     setSending(jobId);
     try {
       await api.post(`/jobs/${jobId}/interest`);
-      setInterestedIds((prev) => new Set([...prev, jobId]));
       toast.success("Interest sent! The customer will be notified.");
+      await loadEngagements();
     } catch (err) {
       toast.error(formatApiError(err));
     } finally {
@@ -213,9 +278,23 @@ export default function WorkerJobFeed() {
     }
   };
 
+  const handleWithdraw = async (engagementId, jobId) => {
+    setWithdrawing(jobId);
+    try {
+      await api.post(`/engagements/${engagementId}/cancel`);
+      toast.success("Interest withdrawn. Job is back open.");
+      await loadEngagements();
+    } catch (err) {
+      toast.error(formatApiError(err));
+    } finally {
+      setWithdrawing(null);
+    }
+  };
+
   const enrichedJobs = jobs.map((j) => ({
     ...j,
-    _already_interested: interestedIds.has(j.id),
+    _engagement: myEngagements[j.id] || null,
+    _already_interested: !!myEngagements[j.id],
   }));
 
   const sortedJobs = [...enrichedJobs].sort((a, b) => {
@@ -256,7 +335,7 @@ export default function WorkerJobFeed() {
           onSubmit={handleSearch}
           className="kn-card p-6 mb-6 fade-up space-y-4"
         >
-          <div className="grid sm:grid-cols-2 gap-4">
+          <div className="grid sm:grid-cols-3 gap-4">
             <div>
               <label className="text-xs font-bold text-gray-500 mb-1 block uppercase">Pincode</label>
               <input
@@ -279,6 +358,21 @@ export default function WorkerJobFeed() {
                 className="kn-input"
               />
             </div>
+            <div>
+              <label className="text-xs font-bold text-gray-500 mb-1 block uppercase">Category</label>
+              <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className="kn-input">
+                <option value="">All categories</option>
+                <option value="construction">Construction</option>
+                <option value="farm">Agriculture / Farm</option>
+                <option value="electrical">Electrical</option>
+                <option value="cleaning">Cleaning</option>
+                <option value="transport">Transport</option>
+                <option value="mechanical">Mechanical</option>
+                <option value="tailoring">Tailoring</option>
+                <option value="home">Home services</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
           </div>
 
           <div className="flex items-center gap-4 pt-2">
@@ -300,7 +394,7 @@ export default function WorkerJobFeed() {
               </button>
               <button
                 type="button"
-                onClick={() => { setPincodeFilter(""); setSkillFilter(""); setSortBy("match"); loadFeed("", ""); }}
+                onClick={() => { setPincodeFilter(""); setSkillFilter(""); setCategoryFilter(""); setSortBy("match"); loadFeed("", "", ""); }}
                 className="btn-outline text-sm !py-2.5"
               >
                 Reset
@@ -343,7 +437,7 @@ export default function WorkerJobFeed() {
               </div>
               <div className="space-y-3">
                 {bestMatches.map((job) => (
-                  <JobCard key={job.id} job={job} onInterest={handleInterest} sending={sending} />
+                  <JobCard key={job.id} job={job} onInterest={handleInterest} sending={sending} onWithdraw={handleWithdraw} withdrawing={withdrawing} />
                 ))}
               </div>
             </section>
@@ -358,7 +452,7 @@ export default function WorkerJobFeed() {
               )}
               <div className="space-y-3">
                 {otherMatches.map((job) => (
-                  <JobCard key={job.id} job={job} onInterest={handleInterest} sending={sending} />
+                  <JobCard key={job.id} job={job} onInterest={handleInterest} sending={sending} onWithdraw={handleWithdraw} withdrawing={withdrawing} />
                 ))}
               </div>
             </section>

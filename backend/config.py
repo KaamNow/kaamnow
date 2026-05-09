@@ -9,7 +9,7 @@ BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
 
 
-def _to_bool(value: str | None, default: bool = False) -> bool:
+def _to_bool(value: Optional[str], default: bool = False) -> bool:
     if value is None:
         return default
     return str(value).strip().lower() in {"1", "true", "yes", "on"}
@@ -22,8 +22,9 @@ class Settings(BaseModel):
     jwt_expiry_days: int = 7
     cookie_secure: bool = False
     cors_origins: str = "*"
-    admin_email: str = "admin@kaamnow.com"
-    admin_password: str = "admin123"
+    # Security: these MUST be set via env vars in production — no defaults
+    admin_email: str = Field(default="")
+    admin_password: str = Field(default="")
 
     gupshup_api_url: Optional[str] = None
     gupshup_api_key: Optional[str] = None
@@ -53,8 +54,8 @@ settings = Settings(
     jwt_expiry_days=int(os.getenv("JWT_EXPIRY_DAYS", "7")),
     cookie_secure=_to_bool(os.getenv("COOKIE_SECURE"), False),
     cors_origins=os.getenv("CORS_ORIGINS", "*"),
-    admin_email=os.getenv("ADMIN_EMAIL", "admin@kaamnow.com"),
-    admin_password=os.getenv("ADMIN_PASSWORD", "admin123"),
+    admin_email=os.getenv("ADMIN_EMAIL", ""),
+    admin_password=os.getenv("ADMIN_PASSWORD", ""),
     gupshup_api_url=os.getenv("GUPSHUP_API_URL"),
     gupshup_api_key=os.getenv("GUPSHUP_API_KEY"),
     gupshup_source=os.getenv("GUPSHUP_SOURCE"),

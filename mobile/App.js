@@ -28,6 +28,7 @@ import LoginScreen from "./src/screens/LoginScreen";
 import SignupScreen from "./src/screens/SignupScreen";
 import MarketplaceScreen from "./src/screens/MarketplaceScreen";
 import WorkerProfileScreen from "./src/screens/WorkerProfileScreen";
+import WorkerOnboardingScreen from "./src/screens/WorkerOnboardingScreen";
 import PostJobScreen from "./src/screens/PostJobScreen";
 import DashboardScreen from "./src/screens/DashboardScreen";
 import WhatsAppDemoScreen from "./src/screens/WhatsAppDemoScreen";
@@ -96,6 +97,7 @@ function RootNavigator() {
       <Stack.Screen name="Login" component={LoginScreen} />
       <Stack.Screen name="Signup" component={SignupScreen} />
       <Stack.Screen name="WorkerProfile" component={WorkerProfileScreen} />
+      <Stack.Screen name="WorkerOnboarding" component={WorkerOnboardingScreen} />
       <Stack.Screen name="PostJob" component={PostJobScreen} />
       <Stack.Screen name="Dashboard" component={DashboardScreen} />
     </Stack.Navigator>

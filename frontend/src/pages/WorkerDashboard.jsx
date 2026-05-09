@@ -116,25 +116,38 @@ function ProfileSection({ profile, worker, engagements, onAvailToggle, toggling 
         </div>
 
         {/* Availability toggle */}
-        <div className="mt-4 flex items-center justify-between">
-          <span className="text-white/80 text-sm font-semibold">
-            {worker.availability_status === "available" || worker.available
-              ? "🟢 Available for work"
-              : "🔴 Not available"}
-          </span>
-          <button
-            onClick={onAvailToggle}
-            disabled={toggling}
-            className="flex items-center gap-2 bg-white/20 hover:bg-white/30 transition px-3 py-1.5 rounded-lg text-white text-sm font-bold disabled:opacity-60"
-          >
-            {worker.availability_status === "available" || worker.available ? (
-              <ToggleRight size={18} />
-            ) : (
-              <ToggleLeft size={18} />
-            )}
-            Toggle
-          </button>
-        </div>
+        {(() => {
+          const isAvailable = worker.availability_status === "available" || worker.available;
+          return (
+            <div className="mt-4 pt-4 border-t border-white/20 flex items-center justify-between gap-3">
+              <div>
+                <div className="text-white/70 text-xs font-bold uppercase tracking-wider mb-0.5">Availability</div>
+                <div className={`text-sm font-bold flex items-center gap-1.5 ${isAvailable ? "text-green-300" : "text-white/50"}`}>
+                  <span className={`w-2 h-2 rounded-full ${isAvailable ? "bg-green-400 shadow-[0_0_6px_#4ade80]" : "bg-white/30"}`} />
+                  {isAvailable ? "Online – accepting jobs" : "Offline – not shown to customers"}
+                </div>
+              </div>
+              <button
+                onClick={onAvailToggle}
+                disabled={toggling}
+                className={`relative flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all disabled:opacity-60 ${
+                  isAvailable
+                    ? "bg-green-500 hover:bg-green-400 text-white shadow-lg"
+                    : "bg-white/15 hover:bg-white/25 text-white/70"
+                }`}
+              >
+                {toggling ? (
+                  <span className="w-4 h-4 border-2 border-white/50 border-t-white rounded-full animate-spin" />
+                ) : isAvailable ? (
+                  <ToggleRight size={18} />
+                ) : (
+                  <ToggleLeft size={18} />
+                )}
+                {isAvailable ? "Go Offline" : "Go Online"}
+              </button>
+            </div>
+          );
+        })()}
       </div>
 
       {/* Skills */}
@@ -211,6 +224,17 @@ function EngagementCard({ eng, onCancel, isCancelling, onRate }) {
           <div className="text-xs text-gray-400 mt-1 capitalize">
             via {eng.source === "worker_interest" ? "your interest" : "customer booking"}
           </div>
+
+          {eng.status === "accepted" && (
+            <div className="mt-3 p-3 rounded-xl bg-green-50 border border-green-200">
+              <div className="text-xs font-bold text-green-700 mb-1">✅ Booking Confirmed!</div>
+              {eng.customer_phone && (
+                <a href={`tel:${eng.customer_phone}`} className="text-sm font-bold text-green-700 hover:underline">
+                  📞 Customer: {eng.customer_phone}
+                </a>
+              )}
+            </div>
+          )}
 
           {eng.status === "completed" && (
             <div className="mt-3 flex flex-wrap gap-4 items-center border-t border-gray-100 pt-3">

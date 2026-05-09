@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import { useAuth, formatApiError } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import LocationPicker from "@/components/LocationPicker";
+import { usePincodeLookup } from "@/lib/usePincode";
 import {
   User,
   Phone,
@@ -12,6 +14,9 @@ import {
   ChevronRight,
   ChevronLeft,
   Check,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
   Hammer,
   Leaf,
   Paintbrush,
@@ -24,6 +29,7 @@ import {
   Building2,
   Wheat,
   Wind,
+  Navigation,
 } from "lucide-react";
 
 /* ─── Skill Categories ─────────────────────────────────────────────────── */
@@ -90,6 +96,7 @@ const STEPS = [
   { id: "name", label: "Your Name", icon: User },
   { id: "phone", label: "Phone", icon: Phone },
   { id: "address", label: "Address", icon: MapPin },
+  { id: "location", label: "Location", icon: Navigation },
   { id: "skills", label: "Skills", icon: Briefcase },
   { id: "photo", label: "Profile Photo", icon: Camera },
 ];
@@ -183,6 +190,12 @@ export default function WorkerOnboarding() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  // OTP State
+  const [otpSent, setOtpSent] = useState(false);
+  const [otp, setOtp] = useState("");
+  const [phoneVerified, setPhoneVerified] = useState(user?.phone_verified || false);
+  const [otpLoading, setOtpLoading] = useState(false);
+
   // Form state
   const [name, setName] = useState(user?.name || "");
   const [phone, setPhone] = useState(user?.phone || "");
@@ -193,12 +206,14 @@ export default function WorkerOnboarding() {
     block: "",
     district: "",
     state: "",
-    pincode: user?.pincode || "",
+    pincode: user?.address?.pincode || "",
   });
+  const { pincode: pincodeVal, setPincode: setPincodeVal, status: pinStatus, result: pinResult, errorMsg: pinError } = usePincodeLookup();
   const [selectedSkills, setSelectedSkills] = useState([]); // [{category, skill}]
   const [bio, setBio] = useState("");
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
+  const [locationCoords, setLocationCoords] = useState({ lat: null, lng: null });
 
   useEffect(() => {
     const loadWorker = async () => {
@@ -208,10 +223,17 @@ export default function WorkerOnboarding() {
           setName(r.data.name || user?.name || "");
           setPhone(r.data.phone || user?.phone || "");
           setDailyRate(r.data.daily_rate || 350);
-          if (r.data.address) setAddress(r.data.address);
+          if (r.data.address) {
+            setAddress(r.data.address);
+            if (r.data.address.pincode) setPincodeVal(r.data.address.pincode);
+          }
           if (r.data.structured_skills) setSelectedSkills(r.data.structured_skills);
           setBio(r.data.bio || "");
           setPhotoPreview(r.data.photo_url);
+          // Restore saved location
+          if (r.data.lat && r.data.lng) {
+            setLocationCoords({ lat: r.data.lat, lng: r.data.lng });
+          }
         }
       } catch (e) {
         // No profile yet, that's fine
@@ -221,6 +243,19 @@ export default function WorkerOnboarding() {
     };
     if (user) loadWorker();
   }, [user]);
+
+  // Auto-fill address when pincode lookup succeeds
+  useEffect(() => {
+    if (pinResult) {
+      setAddress(prev => ({
+        ...prev,
+        district: pinResult.district,
+        state: pinResult.state,
+        pincode: pincodeVal,
+        village: prev.village || pinResult.name,
+      }));
+    }
+  }, [pinResult, pincodeVal]);
 
   if (loading) return <div className="p-12 text-center text-gray-500 font-display text-xl animate-pulse">Loading profile...</div>;
 
@@ -244,15 +279,17 @@ export default function WorkerOnboarding() {
 
   const canProceed = () => {
     if (step === 0) return (name || "").trim().length >= 2;
-    if (step === 1) return (phone || "").toString().trim().length === 10;
-    if (step === 2) return (address?.village || "").trim() && (address?.pincode || "").toString().trim().length === 6;
-    if (step === 3) return selectedSkills.length >= 1;
+    if (step === 1) return true; // phone optional — verified or skipped
+    if (step === 2) return (address?.village || "").trim().length >= 2;
+    if (step === 3) return true; // location optional — can skip
+    if (step === 4) return selectedSkills.length >= 1;
     return true; // photo optional
   };
 
   const next = () => {
     if (!canProceed()) {
-      toast.error(step === 2 ? "Enter village name and 6-digit pincode" : "Please fill this step first");
+      if (step === 2) toast.error("Please enter your village or town name");
+      else toast.error("Please fill this step first");
       return;
     }
     if (step < STEPS.length - 1) setStep((s) => s + 1);
@@ -260,6 +297,34 @@ export default function WorkerOnboarding() {
   };
 
   const back = () => setStep((s) => Math.max(0, s - 1));
+
+  const sendOtp = async () => {
+    if (phone.length !== 10) return;
+    setOtpLoading(true);
+    try {
+      await api.post("/auth/send-otp", { phone });
+      setOtpSent(true);
+      toast.success("OTP sent to " + phone);
+    } catch (err) {
+      toast.error(formatApiError(err));
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  const verifyOtp = async () => {
+    if (otp.length < 4) return;
+    setOtpLoading(true);
+    try {
+      await api.post("/auth/verify-otp", { phone, otp });
+      setPhoneVerified(true);
+      toast.success("Phone verified successfully!");
+    } catch (err) {
+      toast.error("Invalid OTP. Try '123456' for local testing.");
+    } finally {
+      setOtpLoading(false);
+    }
+  };
 
   const handleSubmit = async () => {
     setSaving(true);
@@ -280,10 +345,10 @@ export default function WorkerOnboarding() {
         daily_rate: Number(daily_rate),
         bio,
         village: address.village,
-        district: address.district,
-        state: address.state,
-        lat: 22.9734,
-        lng: 78.6569,
+        district: address.district || "",
+        state: address.state || "",
+        lat: locationCoords.lat || 22.9734,
+        lng: locationCoords.lng || 78.6569,
         available: true,
         address,
         availability_status: "available",
@@ -305,6 +370,9 @@ export default function WorkerOnboarding() {
       }
 
       toast.success("🎉 Profile created! Welcome to KaamNow!");
+      if (window.posthog) {
+        window.posthog.capture("worker_onboarded", { skills });
+      }
       nav("/worker/dashboard");
     } catch (err) {
       toast.error(formatApiError(err));
@@ -367,22 +435,65 @@ export default function WorkerOnboarding() {
           <div className="fade-up kn-card p-8">
             <StepHeader icon={Phone} label="Phone Number" desc="Your phone helps customers reach you quickly." />
             <label className="block text-sm font-bold text-gray-700 mb-2">Mobile number</label>
-            <div className="flex items-center border-2 border-gray-200 rounded-xl focus-within:border-[#3f37c9] overflow-hidden bg-white transition-colors h-14">
-              <span className="px-4 font-bold text-gray-500 border-r-2 border-gray-100 bg-gray-50 h-full flex items-center">+91</span>
+            <div className={`flex items-center border-2 rounded-xl overflow-hidden transition-colors h-14 ${phoneVerified ? 'border-green-500 bg-green-50' : 'border-gray-200 focus-within:border-[#3f37c9] bg-white'}`}>
+              <span className={`px-4 font-bold h-full flex items-center border-r-2 ${phoneVerified ? 'border-green-200 text-green-700 bg-green-100' : 'border-gray-100 text-gray-500 bg-gray-50'}`}>+91</span>
               <input
                 data-testid="onboard-phone"
                 autoFocus
                 type="tel"
                 value={phone || ""}
-                onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                onChange={(e) => {
+                  setPhone(e.target.value.replace(/\D/g, "").slice(0, 10));
+                  setPhoneVerified(false);
+                  setOtpSent(false);
+                  setOtp("");
+                }}
+                disabled={phoneVerified}
                 onKeyDown={(e) => e.key === "Enter" && next()}
                 placeholder="Mobile number (10 digits)"
-                className="flex-1 px-4 outline-none w-full text-lg font-semibold h-full"
+                className="flex-1 px-4 outline-none w-full text-lg font-semibold h-full bg-transparent"
                 maxLength={10}
               />
+              {phoneVerified && (
+                <span className="px-4 text-green-600 font-bold flex items-center">
+                  <Check size={18} className="mr-1" /> Verified
+                </span>
+              )}
             </div>
+
+            {!phoneVerified && phone.length === 10 && !otpSent && (
+              <button 
+                onClick={sendOtp}
+                disabled={otpLoading}
+                className="mt-4 w-full btn-outline"
+              >
+                {otpLoading ? "Sending..." : "Send OTP"}
+              </button>
+            )}
+
+            {otpSent && !phoneVerified && (
+              <div className="mt-4 p-4 border border-gray-200 rounded-xl bg-gray-50 animate-in fade-in slide-in-from-top-2">
+                <label className="block text-sm font-bold text-gray-700 mb-2">Enter OTP</label>
+                <input
+                  type="text"
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="6-digit code"
+                  className="kn-input text-center text-xl tracking-[0.5em] font-mono"
+                  maxLength={6}
+                />
+                <button 
+                  onClick={verifyOtp}
+                  disabled={otpLoading || otp.length < 4}
+                  className="mt-3 w-full btn-saffron"
+                >
+                  {otpLoading ? "Verifying..." : "Verify OTP"}
+                </button>
+              </div>
+            )}
+
             <div className="mt-4 rounded-xl p-3 text-sm text-gray-600" style={{ background: "#fff4f0" }}>
-              📱 OTP verification will be available soon. Your number is safe with us.
+              📱 Phone helps customers reach you. You can add/verify it later from your dashboard.
             </div>
           </div>
         )}
@@ -390,41 +501,53 @@ export default function WorkerOnboarding() {
         {/* ─── Step 2: Address ─── */}
         {step === 2 && (
           <div className="fade-up kn-card p-8">
-            <StepHeader icon={MapPin} label="Your Address" desc="Customers nearby will find you based on your pincode." />
+            <StepHeader icon={MapPin} label="Your Address" desc="Enter your pincode — village, district, and state will fill automatically." />
             <div className="space-y-3">
+
+              {/* Pincode first — auto-fills the rest */}
+              <div>
+                <label className="block text-sm font-bold text-gray-700 mb-1">
+                  Pincode <span className="text-red-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    data-testid="onboard-pincode"
+                    autoFocus
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    value={pincodeVal}
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/\D/g, "").slice(0, 6);
+                      setPincodeVal(v);
+                      setAddress(a => ({ ...a, pincode: v }));
+                    }}
+                    placeholder="6-digit pincode"
+                    className="kn-input pr-10"
+                  />
+                  {pinStatus === "loading" && <Loader2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-gray-400" />}
+                  {pinStatus === "success" && <CheckCircle2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-green-500" />}
+                  {pinStatus === "error" && <AlertCircle size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-red-400" />}
+                </div>
+                {pinStatus === "success" && pinResult && (
+                  <div className="mt-1.5 flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: "#f0fdf4", color: "#15803d" }}>
+                    <CheckCircle2 size={11} /> {pinResult.district} district · {pinResult.state}
+                  </div>
+                )}
+                {pinStatus === "error" && <p className="mt-1 text-xs text-red-500">{pinError}</p>}
+              </div>
+
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-1">Village / Town <span className="text-red-500">*</span></label>
                 <input
                   data-testid="onboard-village"
-                  autoFocus
                   value={address.village}
                   onChange={(e) => setAddress({ ...address, village: e.target.value })}
-                  placeholder="e.g. Ramnagar"
+                  placeholder={pinStatus === "loading" ? "Fetching from pincode…" : "e.g. Ramnagar"}
                   className="kn-input"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-1">Post</label>
-                  <input
-                    data-testid="onboard-post"
-                    value={address.post}
-                    onChange={(e) => setAddress({ ...address, post: e.target.value })}
-                    placeholder="Post office"
-                    className="kn-input"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-1">Block</label>
-                  <input
-                    data-testid="onboard-block"
-                    value={address.block}
-                    onChange={(e) => setAddress({ ...address, block: e.target.value })}
-                    placeholder="Block / Tehsil"
-                    className="kn-input"
-                  />
-                </div>
-              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-sm font-bold text-gray-700 mb-1">District</label>
@@ -432,7 +555,7 @@ export default function WorkerOnboarding() {
                     data-testid="onboard-district"
                     value={address.district}
                     onChange={(e) => setAddress({ ...address, district: e.target.value })}
-                    placeholder="District"
+                    placeholder="Auto-filled"
                     className="kn-input"
                   />
                 </div>
@@ -442,32 +565,62 @@ export default function WorkerOnboarding() {
                     data-testid="onboard-state"
                     value={address.state}
                     onChange={(e) => setAddress({ ...address, state: e.target.value })}
-                    placeholder="State"
+                    placeholder="Auto-filled"
                     className="kn-input"
                   />
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1">
-                  Pincode <span className="text-red-500">*</span>
-                </label>
-                <input
-                  data-testid="onboard-pincode"
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={6}
-                  value={address.pincode}
-                  onChange={(e) => setAddress({ ...address, pincode: e.target.value.replace(/\D/g, "").slice(0, 6) })}
-                  placeholder="6-digit pincode"
-                  className="kn-input"
-                />
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">Post office</label>
+                  <input
+                    data-testid="onboard-post"
+                    value={address.post || ""}
+                    onChange={(e) => setAddress({ ...address, post: e.target.value })}
+                    placeholder="Optional"
+                    className="kn-input"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-1">Block / Tehsil</label>
+                  <input
+                    data-testid="onboard-block"
+                    value={address.block || ""}
+                    onChange={(e) => setAddress({ ...address, block: e.target.value })}
+                    placeholder="Optional"
+                    className="kn-input"
+                  />
+                </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* ─── Step 3: Skills ─── */}
+        {/* ─── Step 3: Location Map ─── */}
         {step === 3 && (
+          <div className="fade-up kn-card p-6">
+            <StepHeader
+              icon={Navigation}
+              label="Your Location"
+              desc="Customers nearby will see you on the map. Tap your village/area or use GPS. You can skip this for now."
+            />
+            <LocationPicker
+              lat={locationCoords.lat}
+              lng={locationCoords.lng}
+              onChange={({ lat, lng }) => setLocationCoords({ lat, lng })}
+              height="300px"
+            />
+            {!locationCoords.lat && (
+              <p className="text-xs text-gray-400 mt-3 text-center">
+                No location? That's fine — tap <strong>Continue</strong> to skip for now.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* ─── Step 4: Skills ─── */}
+        {step === 4 && (
           <div className="fade-up">
             <div className="kn-card p-6 mb-4">
               <StepHeader icon={Briefcase} label="Your Skills" desc="Select all skills that apply. Customers will match jobs to your skills." />
@@ -511,8 +664,8 @@ export default function WorkerOnboarding() {
           </div>
         )}
 
-        {/* ─── Step 4: Photo ─── */}
-        {step === 4 && (
+        {/* ─── Step 5: Photo ─── */}
+        {step === 5 && (
           <div className="fade-up kn-card p-8 text-center">
             <StepHeader icon={Camera} label="Profile Photo" desc="A photo builds trust. Customers are more likely to hire workers with photos." />
 

@@ -1,5 +1,5 @@
 @import url("https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@400,500,700,800,900&display=swap");
-@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700;800&family=Noto+Sans+Devanagari:wght@400;600;700;800&display=swap");
 @import url("https://unpkg.com/leaflet@1.9.4/dist/leaflet.css");
 
 @tailwind base;
@@ -7,16 +7,31 @@
 @tailwind utilities;
 
 :root {
+    /* Brand */
     --kn-saffron: #ff6b35;
     --kn-saffron-dark: #e85a25;
     --kn-indigo: #3f37c9;
     --kn-indigo-dark: #2f28a8;
-    --kn-bg: #fcfbf9;
+    /* Rural palette */
+    --kaam-ochre: #CC7722;
+    --kaam-terracotta: #E07A5F;
+    --kaam-cream: #F4F1EA;
+    --kaam-deep-green: #2D6A4F;
+    --kaam-dark: #3A2E20;
+    --kaam-mud: #8B7355;
+    --kaam-mustard: #F2C94C;
+    /* Surfaces */
+    --kn-bg: #F4F1EA;
     --kn-surface: #ffffff;
-    --kn-text: #111827;
-    --kn-text-secondary: #4b5563;
-    --kn-border: #e5e7eb;
-    --kn-border-strong: #d1d5db;
+    --kn-text: #3A2E20;
+    --kn-text-secondary: #6B5744;
+    --kn-border: #E5D9CC;
+    --kn-border-strong: #C8B89A;
+}
+
+/* Devanagari body text */
+:lang(hi), .hindi {
+    font-family: "Noto Sans Devanagari", "Manrope", sans-serif;
 }
 
 * {
@@ -186,24 +201,26 @@ body {
     color: var(--kn-indigo);
 }
 
-/* Speech bubbles */
+/* Speech bubbles (legacy — WhatsAppDemo now uses inline styles) */
 .bubble-bot {
-    background: #f3f4f6;
+    background: #fff;
     color: #111827;
     border-radius: 16px 16px 16px 4px;
     padding: 10px 14px;
-    max-width: 80%;
+    max-width: 78%;
     font-size: 14px;
     white-space: pre-wrap;
-    line-height: 1.5;
+    line-height: 1.55;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.08);
 }
 .bubble-user {
-    background: var(--kn-saffron);
-    color: #fff;
+    background: #DCF8C6;
+    color: #111;
     border-radius: 16px 16px 4px 16px;
     padding: 10px 14px;
-    max-width: 80%;
+    max-width: 78%;
     font-size: 14px;
     margin-left: auto;
-    line-height: 1.5;
+    line-height: 1.55;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.08);
 }

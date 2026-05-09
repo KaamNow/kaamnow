@@ -2,393 +2,626 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import api from "@/lib/api";
 import { toast } from "sonner";
-import { ArrowRight, ShieldCheck, MapPin, MessageCircle, Star, Users, Briefcase, Zap } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { Star, MapPin, ShieldCheck, Users, Briefcase, ArrowRight, ChevronDown, ChevronUp, MessageCircle } from "lucide-react";
 
+/* ─── Palette shortcuts ────────────────────────────────────────────────────── */
+const C = {
+  terracotta: "#E07A5F",
+  green:      "#2D6A4F",
+  ochre:      "#CC7722",
+  dark:       "#3A2E20",
+  cream:      "#F4F1EA",
+  mud:        "#8B7355",
+  bg:         "#F4F1EA",
+  cardBg:     "#FFFFFF",
+  border:     "#E5D9CC",
+};
+
+/* ─── Service categories config ────────────────────────────────────────────── */
+const CATEGORIES = [
+  { key: "construction", slug: "construction", emoji: "🏗️", color: C.terracotta, bg: "#FFF0EC" },
+  { key: "farm",         slug: "farm",         emoji: "🌾", color: C.green,      bg: "#EAF4EE" },
+  { key: "electrical",   slug: "electrical",   emoji: "⚡", color: C.ochre,      bg: "#FFF8EC" },
+  { key: "cleaning",     slug: "cleaning",     emoji: "✨", color: "#4A90D9",    bg: "#EBF4FF" },
+  { key: "transport",    slug: "transport",    emoji: "🚛", color: "#6B4C9A",    bg: "#F3EEFF" },
+  { key: "mechanical",   slug: "mechanical",   emoji: "🔧", color: "#C0392B",    bg: "#FEECEB" },
+  { key: "tailoring",    slug: "tailoring",    emoji: "✂️", color: "#D4699A",    bg: "#FEF0F7" },
+  { key: "home",         slug: "home",         emoji: "🏠", color: C.dark,       bg: "#F0EDE8" },
+];
+
+/* ─── Trust badge ──────────────────────────────────────────────────────────── */
+function TrustBadge({ tier }) {
+  const cfg = {
+    1: { label: { en: "Self-verified", hi: "खुद सत्यापित" }, bg: "#F4F1EA", color: C.mud },
+    2: { label: { en: "Gaon Verified", hi: "गाँव सत्यापित" }, bg: "#EAF4EE", color: C.green },
+    3: { label: { en: "KaamNow Pro",   hi: "KaamNow Pro"   }, bg: "#FFF0EC", color: C.terracotta },
+  }[tier] || { label: { en: "Verified", hi: "सत्यापित" }, bg: "#F4F1EA", color: C.mud };
+  const { lang } = useLanguage();
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full"
+      style={{ background: cfg.bg, color: cfg.color }}>
+      <ShieldCheck size={9} />{cfg.label[lang] ?? cfg.label.en}
+    </span>
+  );
+}
+
+/* ─── FAQ item ─────────────────────────────────────────────────────────────── */
+function FAQItem({ q, a }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ borderBottom: `1px solid ${C.border}` }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between py-4 text-left gap-4"
+      >
+        <span className="font-bold text-sm leading-snug" style={{ color: C.dark }}>{q}</span>
+        {open
+          ? <ChevronUp size={16} style={{ color: C.mud, flexShrink: 0 }} />
+          : <ChevronDown size={16} style={{ color: C.mud, flexShrink: 0 }} />}
+      </button>
+      {open && (
+        <p className="pb-4 text-sm leading-relaxed" style={{ color: "#6B5744" }}>{a}</p>
+      )}
+    </div>
+  );
+}
+
+/* ─── Section heading ──────────────────────────────────────────────────────── */
+function SectionHead({ overline, heading, accent, sub, center }) {
+  return (
+    <div className={center ? "text-center" : ""}>
+      {overline && (
+        <div className="text-xs font-bold uppercase tracking-widest mb-2 flex items-center gap-2"
+          style={{ color: C.ochre, justifyContent: center ? "center" : undefined }}>
+          <span style={{ width: 20, height: 2, background: C.ochre, display: "inline-block", borderRadius: 1 }} />
+          {overline}
+          <span style={{ width: 20, height: 2, background: C.ochre, display: "inline-block", borderRadius: 1 }} />
+        </div>
+      )}
+      <h2 className="font-bold leading-tight"
+        style={{ fontSize: "clamp(1.55rem, 4vw, 2.4rem)", color: C.dark }}>
+        {heading}{" "}
+        {accent && <span style={{ color: C.terracotta }}>{accent}</span>}
+      </h2>
+      {sub && <p className="mt-3 text-sm leading-relaxed max-w-lg" style={{ color: "#6B5744" }}>{sub}</p>}
+    </div>
+  );
+}
+
+/* ─── Main Component ───────────────────────────────────────────────────────── */
 export default function Landing() {
-  const [stats, setStats] = useState({ workers: 0, jobs: 0, completed_bookings: 0, villages: 0 });
-  const [featuredWorkers, setFeaturedWorkers] = useState([]);
-  const [featuredJobs, setFeaturedJobs] = useState([]);
-  const [waitEmail, setWaitEmail] = useState("");
-  const [waitName, setWaitName] = useState("");
-  const [waitRole, setWaitRole] = useState("customer");
-  const [submitting, setSubmitting] = useState(false);
+  const { t, lang } = useLanguage();
+  const [stats, setStats]               = useState({ workers: 0, jobs: 0, villages: 0 });
+  const [featuredWorkers, setWorkers]   = useState([]);
+  const [featuredJobs, setJobs]         = useState([]);
+  const [waitName, setWaitName]         = useState("");
+  const [waitPhone, setWaitPhone]       = useState("");
+  const [waitRole, setWaitRole]         = useState("customer");
+  const [submitting, setSubmitting]     = useState(false);
 
   useEffect(() => {
-    api.get("/stats").then((r) => setStats(r.data)).catch(() => {});
-    // Fetch some workers for preview
-    api.get("/workers/search", { params: { limit: 4 } }).then((r) => setFeaturedWorkers(r.data.slice(0, 4))).catch(() => {});
-    // Fetch some jobs for preview
-    api.get("/jobs/feed", { params: { limit: 4 } }).then((r) => setFeaturedJobs(r.data.slice(0, 4))).catch(() => {});
+    api.get("/stats").then(r => setStats(r.data)).catch(() => {});
+    api.get("/workers/search").then(r => setWorkers(r.data.slice(0, 4))).catch(() => {});
+    api.get("/jobs/feed").then(r => setJobs(r.data.slice(0, 3))).catch(() => {});
   }, []);
 
   const submitWaitlist = async (e) => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await api.post("/waitlist", { email: waitEmail, name: waitName, role: waitRole });
-      toast.success("You're on the list! We'll be in touch soon.");
-      setWaitEmail("");
-      setWaitName("");
-    } catch (err) {
-      toast.error("Could not join waitlist. Try again.");
-    } finally {
-      setSubmitting(false);
-    }
+      await api.post("/waitlist", {
+        email: `wa_${waitPhone}@kaamnow.com`,
+        name: waitName,
+        role: waitRole,
+      });
+      toast.success(t("wait_success"));
+      setWaitName(""); setWaitPhone("");
+    } catch { toast.error(t("wait_error")); }
+    finally { setSubmitting(false); }
   };
 
-  return (
-    <div data-testid="landing-page" className="bg-[#fcfbf9]">
-      {/* HERO */}
-      <section className="relative overflow-hidden">
-        <div className="max-w-7xl mx-auto px-6 pt-16 pb-20 lg:pt-24 lg:pb-28 grid lg:grid-cols-12 gap-10 items-center">
-          <div className="lg:col-span-7 fade-up">
-            <div className="kn-overline mb-5">Bharat&apos;s village labour marketplace</div>
-            <h1 className="font-display text-5xl sm:text-6xl lg:text-7xl tracking-tighter leading-[0.95] text-gray-900">
-              Kaam milega.<br />
-              <span className="text-[#ff6b35]">Mazdoori milegi.</span><br />
-              <span className="text-[#3f37c9]">Izzat ke saath.</span>
-            </h1>
-            <p className="mt-7 text-lg text-gray-600 max-w-xl leading-relaxed">
-              KaamNow connects 250M+ rural workers with farmers, homeowners and contractors —
-              over WhatsApp, voice and a phone any villager already owns. No middlemen. Fair rates. Verified trust.
-            </p>
-            <div className="mt-9 flex flex-wrap gap-4 items-center">
-              <Link to="/marketplace" data-testid="hero-find-workers" className="btn-saffron flex items-center gap-2 h-[52px] px-8 shadow-lg shadow-orange-200/50">
-                Find Workers <ArrowRight size={18} />
-              </Link>
-              <Link to="/worker/job-feed" data-testid="hero-find-work" className="btn-indigo flex items-center gap-2 h-[52px] px-8">
-                Find Work <Briefcase size={16} />
-              </Link>
-              <Link to="/whatsapp-demo" data-testid="hero-whatsapp-demo" className="btn-outline flex items-center gap-2 h-[52px] px-6 border-gray-300 hover:border-[#3f37c9] hover:text-[#3f37c9]">
-                <MessageCircle size={16} /> WhatsApp Demo
-              </Link>
-            </div>
+  const isHi = lang === "hi";
 
-            <div className="mt-12 grid grid-cols-2 sm:grid-cols-4 gap-6 max-w-2xl">
-              {[
-                { v: stats.workers + "+", l: "Verified workers" },
-                { v: stats.villages + "+", l: "Villages" },
-                { v: "₹450", l: "Avg daily wage" },
-                { v: "<15min", l: "Avg match time" },
-              ].map((s) => (
-                <div key={s.l}>
-                  <div className="font-display text-3xl text-gray-900">{s.v}</div>
-                  <div className="text-xs uppercase tracking-wider text-gray-500 mt-1 font-semibold">{s.l}</div>
-                </div>
-              ))}
-            </div>
+  return (
+    <div data-testid="landing-page"
+      style={{ background: C.bg, color: C.dark, fontFamily: isHi ? "'Noto Sans Devanagari','Manrope',sans-serif" : undefined }}>
+
+      {/* ══════════════════════════════════════════════════════════
+          1. HERO — direct, no fluff, two clear paths
+      ══════════════════════════════════════════════════════════ */}
+      <section style={{ background: "linear-gradient(160deg,#FDF6E3 0%,#F4F1EA 100%)", borderBottom: `1px solid ${C.border}` }}>
+        <div className="max-w-5xl mx-auto px-5 pt-12 pb-14">
+
+          {/* Overline */}
+          <div className="text-xs font-bold uppercase tracking-widest mb-4"
+            style={{ color: C.ochre }}>
+            {t("hero_overline")}
           </div>
 
-          <div className="lg:col-span-5 relative">
-            <div className="relative aspect-[4/5] rounded-2xl overflow-hidden border border-gray-200">
-              <img
-                src="https://images.pexels.com/photos/12921278/pexels-photo-12921278.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=900&w=720"
-                alt="Mason at work"
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#3f37c9]/40 via-transparent to-transparent" />
-            </div>
-            <div className="absolute -bottom-6 -left-6 bg-white border border-gray-200 rounded-xl p-4 w-64 shadow-sm">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-[#3f37c9] text-white flex items-center justify-center">
-                  <ShieldCheck size={18} />
-                </div>
-                <div>
-                  <div className="text-sm font-bold">Gaon Verified</div>
-                  <div className="text-xs text-gray-600">Tier 2 trust badge</div>
-                </div>
+          {/* Headline — bilingual stacked so non-toggle users still see Hindi */}
+          <h1 className="font-bold leading-tight"
+            style={{ fontSize: "clamp(1.9rem,6vw,3.6rem)", color: C.dark }}>
+            {isHi ? (
+              <>
+                बिना दलाल, सीधे <span style={{ color: C.terracotta }}>मोबाइल से</span><br />
+                <span style={{ color: C.green }}>काम मिलेगा।</span>
+              </>
+            ) : (
+              <>
+                Find work directly —<br />
+                <span style={{ color: C.terracotta }}>no middlemen,</span>{" "}
+                <span style={{ color: C.green }}>right from your mobile.</span>
+              </>
+            )}
+          </h1>
+
+          <p className="mt-4 max-w-xl text-base leading-relaxed" style={{ color: "#6B5744" }}>
+            {t("hero_sub")}
+          </p>
+
+          {/* Two big CTAs */}
+          <div className="mt-7 flex flex-wrap gap-3">
+            <Link to="/worker/job-feed"
+              className="flex items-center gap-2 font-bold rounded-2xl active:scale-95 transition-all shadow-md"
+              style={{ background: C.green, color: "white", padding: "14px 28px", fontSize: 15, minHeight: 52 }}>
+              <Briefcase size={17} /> {t("hero_cta_worker")}
+            </Link>
+            <Link to="/marketplace"
+              className="flex items-center gap-2 font-bold rounded-2xl active:scale-95 transition-all shadow-md"
+              style={{ background: C.terracotta, color: "white", padding: "14px 28px", fontSize: 15, minHeight: 52 }}>
+              <Users size={17} /> {t("hero_cta_customer")}
+            </Link>
+            <Link to="/whatsapp-demo"
+              className="flex items-center gap-2 font-bold rounded-2xl transition-all"
+              style={{ background: "white", color: "#075E54", border: `1.5px solid #9DCDB5`, padding: "13px 20px", fontSize: 14, minHeight: 52 }}>
+              <MessageCircle size={16} /> {t("hero_cta_demo")}
+            </Link>
+          </div>
+
+          {/* Stats strip */}
+          <div className="mt-10 flex flex-wrap gap-x-8 gap-y-4">
+            {[
+              { v: `${stats.workers || 20}+`, l: t("stat_workers") },
+              { v: `${stats.villages || 6}+`, l: t("stat_villages") },
+              { v: "₹450",                    l: t("stat_wage") },
+              { v: "<15m",                    l: t("stat_match") },
+            ].map(s => (
+              <div key={s.l}>
+                <div className="font-bold" style={{ fontSize: "clamp(1.6rem,4vw,2.2rem)", color: C.dark, lineHeight: 1 }}>{s.v}</div>
+                <div className="text-xs font-semibold uppercase tracking-wide mt-0.5" style={{ color: C.mud }}>{s.l}</div>
               </div>
-              <div className="mt-3 flex items-center gap-1 text-xs text-gray-500">
-                <Star size={12} className="fill-[#ff6b35] text-[#ff6b35]" /> 4.8
-                <span className="mx-1.5">•</span>
-                47 jobs done
-              </div>
-            </div>
-            <div className="absolute -top-4 -right-4 bg-[#ff6b35] text-white rounded-xl px-4 py-3">
-              <div className="text-[10px] uppercase tracking-widest font-bold opacity-90">Live</div>
-              <div className="font-display text-xl">{stats.workers} workers online</div>
-            </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* QUICK PREVIEW / FIND WORK SECTION */}
-      <section className="py-12 bg-white">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="flex flex-col md:flex-row items-center justify-between gap-6 bg-[#f0f0ff] rounded-3xl p-8 md:p-12 border border-[#d7d2ff] shadow-sm">
-            <div className="flex-1">
-              <h2 className="font-display text-3xl md:text-4xl text-gray-900 leading-tight">
-                Looking for work? <span className="text-[#3f37c9]">KaamNow has jobs nearby.</span>
+      {/* ══════════════════════════════════════════════════════════
+          2. SERVICE CATEGORIES — the most important section
+             "Kya kaam karwana hai?" — answers instantly
+      ══════════════════════════════════════════════════════════ */}
+      <section style={{ background: "white", borderBottom: `1px solid ${C.border}` }}>
+        <div className="max-w-5xl mx-auto px-5 py-12">
+          <div className="mb-7">
+            <h2 className="font-bold" style={{ fontSize: "clamp(1.3rem,3.5vw,1.9rem)", color: C.dark }}>
+              {t("cat_heading")}
+            </h2>
+            <p className="mt-1.5 text-sm" style={{ color: "#6B5744" }}>{t("cat_sub")}</p>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {CATEGORIES.map(cat => (
+              <Link
+                key={cat.key}
+                to={`/marketplace?category=${cat.slug}`}
+                className="flex flex-col items-start gap-2 rounded-2xl p-4 transition-all hover:-translate-y-0.5 hover:shadow-md active:scale-95"
+                style={{ background: cat.bg, border: `1px solid ${cat.color}22` }}
+              >
+                <span style={{ fontSize: 28, lineHeight: 1 }}>{cat.emoji}</span>
+                <div>
+                  <div className="font-bold text-sm leading-tight" style={{ color: cat.color }}>
+                    {t(`cat_${cat.key}`)}
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════
+          3. FOR WORKERS — find work section
+      ══════════════════════════════════════════════════════════ */}
+      <section style={{ background: C.bg, borderBottom: `1px solid ${C.border}` }}>
+        <div className="max-w-5xl mx-auto px-5 py-12">
+          <div className="rounded-3xl p-7 sm:p-10 grid md:grid-cols-2 gap-8 items-center"
+            style={{ background: "linear-gradient(135deg,#EAF4EE 0%,#F4F1EA 100%)", border: `1px solid #9DCDB5` }}>
+            <div>
+              <div className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: C.green }}>
+                {t("findwork_overline")}
+              </div>
+              <h2 className="font-bold leading-tight" style={{ fontSize: "clamp(1.4rem,3.5vw,2rem)", color: C.dark }}>
+                {t("findwork_headline")}<br />
+                <span style={{ color: C.green }}>{t("findwork_headline_accent")}</span>
               </h2>
-              <p className="mt-3 text-gray-600 max-w-lg">
-                Join 10,000+ workers who find daily मजदूरी directly on their phones. No more waiting at the chowk.
-              </p>
-              <div className="mt-6 flex flex-wrap gap-4">
-                <Link to="/signup" className="btn-indigo !px-8">Register as Worker</Link>
-                <Link to="/worker/job-feed" className="flex items-center gap-2 text-[#3f37c9] font-bold hover:underline">
-                  Browse Job Feed <ArrowRight size={14} />
+              <p className="mt-3 text-sm leading-relaxed" style={{ color: "#4B5563" }}>{t("findwork_sub")}</p>
+              <div className="mt-6 flex flex-wrap gap-3">
+                <Link to="/signup"
+                  className="font-bold rounded-xl px-6 py-3 text-sm text-white active:scale-95 transition shadow"
+                  style={{ background: C.green }}>
+                  {t("findwork_cta_register")}
+                </Link>
+                <Link to="/worker/job-feed"
+                  className="flex items-center gap-1 font-bold text-sm transition hover:underline"
+                  style={{ color: C.green }}>
+                  {t("findwork_cta_browse")} <ArrowRight size={13} />
                 </Link>
               </div>
             </div>
-            <div className="flex-1 w-full max-w-md">
-              <div className="space-y-3">
-                {featuredJobs.slice(0, 3).map((j, i) => (
-                  <Link to="/worker/job-feed" key={j.id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100 flex items-center justify-between group hover:border-[#3f37c9] transition-all cursor-pointer" style={{ opacity: 1 - i * 0.15 }}>
-                    <div>
-                      <div className="font-bold text-sm text-gray-900">{j.title}</div>
-                      <div className="text-xs text-gray-500">{j.village} · ₹{j.daily_rate}/day</div>
+
+            {/* Live job teasers */}
+            <div className="space-y-2.5">
+              {featuredJobs.map((j, i) => (
+                <Link to="/worker/job-feed" key={j.id}
+                  className="flex items-center justify-between rounded-xl px-4 py-3.5 transition hover:shadow-md"
+                  style={{ background: "white", border: `1px solid ${C.border}`, opacity: 1 - i * 0.12 }}>
+                  <div>
+                    <div className="font-bold text-sm" style={{ color: C.dark }}>{j.title}</div>
+                    <div className="text-xs mt-0.5" style={{ color: C.mud }}>
+                      {j.village} · ₹{j.daily_rate}/day
                     </div>
-                    <div className="text-[#3f37c9] opacity-0 group-hover:opacity-100 transition">
-                      <ArrowRight size={16} />
-                    </div>
-                  </Link>
-                ))}
-                {featuredJobs.length === 0 && (
-                  <div className="text-center py-6 text-gray-400 italic text-sm">Loading job opportunities...</div>
-                )}
-              </div>
+                  </div>
+                  <ArrowRight size={14} style={{ color: C.green }} />
+                </Link>
+              ))}
+              {featuredJobs.length === 0 && (
+                <div className="text-center py-6 text-sm italic" style={{ color: C.mud }}>
+                  {t("findwork_empty")}
+                </div>
+              )}
             </div>
           </div>
         </div>
       </section>
 
-      {/* FEATURED WORKERS / MARKETPLACE PREVIEW */}
-      <section className="py-20">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
-            <div>
-              <div className="kn-overline mb-3">Hire locally</div>
-              <h2 className="font-display text-4xl lg:text-5xl tracking-tight">
-                Hire <span className="text-[#ff6b35]">verified talent</span> in minutes.
-              </h2>
-            </div>
-            <div className="flex gap-3">
-              <Link to="/marketplace" className="btn-saffron flex items-center gap-2 shadow-md hover:shadow-lg transition-all">
-                Browse Marketplace <ArrowRight size={16} />
-              </Link>
-            </div>
+      {/* ══════════════════════════════════════════════════════════
+          4. FEATURED WORKERS
+      ══════════════════════════════════════════════════════════ */}
+      <section style={{ background: "white", borderBottom: `1px solid ${C.border}` }}>
+        <div className="max-w-5xl mx-auto px-5 py-12">
+          <div className="flex items-end justify-between mb-7 gap-4">
+            <SectionHead heading={t("workers_headline")} accent={t("workers_headline_accent")} />
+            <Link to="/marketplace"
+              className="flex items-center gap-1.5 font-bold text-sm whitespace-nowrap rounded-xl px-5 py-3 text-white shadow transition-all"
+              style={{ background: C.terracotta }}>
+              {t("workers_cta")} <ArrowRight size={14} />
+            </Link>
           </div>
 
-          {/* Simple Filter UI Preview */}
-          <div className="mb-10 p-4 bg-white rounded-2xl border border-gray-200 shadow-sm flex flex-wrap gap-3 items-center">
-            <div className="flex items-center gap-2 px-3 py-2 border-r border-gray-100">
-              <MapPin size={16} className="text-[#ff6b35]" />
-              <span className="text-sm font-bold">Pincode:</span>
-              <input placeholder="e.g. 302001" className="outline-none text-sm w-24 font-semibold text-gray-800" />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {["Mason", "Painter", "Helper", "Plumber"].map(s => (
-                <span key={s} className="px-3 py-1 bg-gray-100 rounded-full text-xs font-bold text-gray-600 hover:bg-[#3f37c9] hover:text-white transition cursor-pointer">
-                  {s}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {featuredWorkers.map((w, i) => (
-              <Link 
-                key={w.id} 
-                to={`/worker/${w.id}`}
-                className="kn-card p-5 group hover:border-[#ff6b35] transition-all hover:shadow-xl hover:-translate-y-1"
-                style={{ animationDelay: `${i * 0.1}s` }}
-              >
-                <div className="relative aspect-square rounded-xl overflow-hidden mb-4 shadow-inner bg-gray-100">
-                  <img src={w.photo_url || "https://images.pexels.com/photos/16476333/pexels-photo-16476333.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=400&w=400"} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                  <div className="absolute top-2 right-2 px-2 py-1 bg-white/90 backdrop-blur rounded-lg text-[10px] font-bold text-[#ff6b35] shadow-sm">
-                    ⭐ {w.avg_rating.toFixed(1)}
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {featuredWorkers.map(w => (
+              <Link key={w.id} to={`/worker/${w.id}`}
+                className="block rounded-2xl overflow-hidden transition-all hover:-translate-y-1 hover:shadow-lg"
+                style={{ border: `1px solid ${C.border}`, background: C.cardBg }}>
+                <div className="relative aspect-square bg-gray-100">
+                  <img
+                    src={w.photo_url || "https://images.pexels.com/photos/16476333/pexels-photo-16476333.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=400&w=400"}
+                    alt={w.name}
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute top-2 right-2 flex items-center gap-1 bg-white/95 rounded-full px-2 py-1 shadow-sm">
+                    <Star size={10} style={{ fill: "#F2C94C", color: "#F2C94C" }} />
+                    <span className="text-xs font-bold" style={{ color: C.dark }}>{w.avg_rating?.toFixed(1)}</span>
                   </div>
                 </div>
-                <div className="font-display text-lg mb-1 group-hover:text-[#ff6b35] transition-colors">{w.name}</div>
-                <div className="flex flex-wrap gap-1 mb-3">
-                  {w.skills.slice(0, 2).map(s => (
-                    <span key={s} className="text-[10px] uppercase font-bold text-gray-400">{s}</span>
-                  ))}
-                </div>
-                <div className="flex items-center justify-between text-sm pt-3 border-t border-gray-50">
-                  <span className="text-gray-500 flex items-center gap-1"><MapPin size={10} /> {w.village}</span>
-                  <span className="font-bold text-[#3f37c9]">₹{w.daily_rate}/day</span>
-                </div>
-                <div className="w-full mt-4 btn-outline !py-2 !text-xs opacity-0 group-hover:opacity-100 transition-all text-center">
-                  Request Worker
+                <div className="p-4">
+                  <div className="font-bold text-base mb-1" style={{ color: C.dark }}>{w.name}</div>
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {w.skills?.slice(0, 2).map(s => (
+                      <span key={s} className="text-[10px] font-bold uppercase tracking-wider" style={{ color: C.mud }}>{s}</span>
+                    ))}
+                  </div>
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-xs flex items-center gap-1" style={{ color: C.mud }}>
+                      <MapPin size={10} />{w.village}
+                    </span>
+                    <span className="font-bold text-sm" style={{ color: C.green }}>₹{w.daily_rate}/day</span>
+                  </div>
+                  <TrustBadge tier={w.trust_tier} />
                 </div>
               </Link>
             ))}
             {featuredWorkers.length === 0 && (
-              <div className="col-span-full py-12 text-center text-gray-400 italic">No workers listed in this area yet...</div>
+              <div className="col-span-full py-12 text-center text-sm italic" style={{ color: C.mud }}>
+                {t("workers_empty")}
+              </div>
             )}
           </div>
         </div>
       </section>
 
-      {/* HOW IT WORKS */}
-      <section className="border-t border-gray-200 bg-white py-20">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="kn-overline">How it works</div>
-          <h2 className="font-display text-4xl lg:text-5xl tracking-tight mt-3 max-w-3xl">
-            Three taps. One worker. <span className="text-[#3f37c9]">Zero middlemen.</span>
-          </h2>
-          <div className="mt-14 grid md:grid-cols-3 gap-6">
+      {/* ══════════════════════════════════════════════════════════
+          5. HOW IT WORKS
+      ══════════════════════════════════════════════════════════ */}
+      <section id="how-it-works" style={{ background: C.bg, borderBottom: `1px solid ${C.border}`, scrollMarginTop: 100 }}>
+        <div className="max-w-5xl mx-auto px-5 py-12">
+          <SectionHead
+            overline={t("how_overline")}
+            heading={t("how_headline")}
+            accent={t("how_headline_accent")}
+            center
+          />
+
+          <div className="mt-8 grid md:grid-cols-3 gap-4">
             {[
-              { n: "01", t: "Post via WhatsApp or app", d: "Tell us what work, when, and where. Voice-in works. Hindi works. 60 seconds.", icon: MessageCircle, color: "#3f37c9" },
-              { n: "02", t: "We find verified workers nearby", d: "Sarpanch-vouched, peer-rated workers within 5km. Trust tiers shown upfront.", icon: MapPin, color: "#ff6b35" },
-              { n: "03", t: "Confirm. They arrive. Pay cash or UPI.", d: "Cash-friendly. Rate after work. Reputation grows for everyone.", icon: ShieldCheck, color: "#3f37c9" },
+              { n: "01", emoji: "📱", title: t("how_step1_title"), desc: t("how_step1_desc"), color: C.green },
+              { n: "02", emoji: "📍", title: t("how_step2_title"), desc: t("how_step2_desc"), color: C.ochre },
+              { n: "03", emoji: "🤝", title: t("how_step3_title"), desc: t("how_step3_desc"), color: C.terracotta },
             ].map((s, i) => (
-              <div key={i} className="kn-card p-7 fade-up" style={{ animationDelay: `${i * 0.1}s` }}>
-                <div className="flex items-start justify-between">
-                  <div className="font-display text-5xl text-gray-200">{s.n}</div>
-                  <s.icon size={28} style={{ color: s.color }} />
+              <div key={i} className="rounded-2xl p-6"
+                style={{ background: "white", border: `1px solid ${C.border}` }}>
+                <div className="flex items-center justify-between mb-4">
+                  <span className="font-bold text-4xl" style={{ color: C.border, lineHeight: 1 }}>{s.n}</span>
+                  <span style={{ fontSize: 32 }}>{s.emoji}</span>
                 </div>
-                <h3 className="font-display text-2xl mt-6">{s.t}</h3>
-                <p className="text-gray-600 mt-3 leading-relaxed">{s.d}</p>
+                <div className="w-8 h-1 rounded-full mb-3" style={{ background: s.color }} />
+                <h3 className="font-bold text-base mb-2 leading-snug" style={{ color: C.dark }}>{s.title}</h3>
+                <p className="text-sm leading-relaxed" style={{ color: "#6B5744" }}>{s.desc}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* FEATURES TETRIS */}
-      <section className="py-20">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="kn-overline">What makes us different</div>
-          <h2 className="font-display text-4xl lg:text-5xl tracking-tight mt-3 max-w-3xl">
-            Built for the <span className="text-[#ff6b35]">last village</span>, not the metro.
-          </h2>
-
-          <div className="mt-12 grid md:grid-cols-6 gap-5">
-            <div className="md:col-span-4 kn-card p-8 bg-[#3f37c9] text-white border-[#3f37c9]">
-              <Users size={28} />
-              <h3 className="font-display text-3xl mt-6">WhatsApp-native booking</h3>
-              <p className="mt-3 text-white/85 max-w-lg">
-                700M+ Indians are on WhatsApp. We&apos;re where they already are — no app download, no learning curve.
-              </p>
-            </div>
-            <div className="md:col-span-2 kn-card p-7">
-              <Zap size={24} className="text-[#ff6b35]" />
-              <h3 className="font-display text-xl mt-5">Voice-first UX</h3>
-              <p className="text-gray-600 text-sm mt-2">Speak in Bhojpuri, Marathi, Tamil. We transcribe.</p>
-            </div>
-
-            <div className="md:col-span-2 kn-card p-7">
-              <ShieldCheck size={24} className="text-[#3f37c9]" />
-              <h3 className="font-display text-xl mt-5">3-tier trust system</h3>
-              <p className="text-gray-600 text-sm mt-2">Self-verified → Gaon Verified → KaamNow Pro.</p>
-            </div>
-            <div className="md:col-span-2 kn-card p-7">
-              <Briefcase size={24} className="text-[#ff6b35]" />
-              <h3 className="font-display text-xl mt-5">Farm calendar booking</h3>
-              <p className="text-gray-600 text-sm mt-2">Pre-book crews 7 days ahead for sowing/harvest.</p>
-            </div>
-            <div className="md:col-span-2 kn-card p-7 bg-[#ff6b35] text-white border-[#ff6b35]">
-              <Star size={24} />
-              <h3 className="font-display text-xl mt-5">Cash + UPI hybrid</h3>
-              <p className="text-white/90 text-sm mt-2">Start with cash. Move to UPI when ready. Never forced.</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* TESTIMONIAL */}
-      <section className="bg-white border-y border-gray-200 py-20">
-        <div className="max-w-5xl mx-auto px-6">
-          <div className="kn-overline">From the chowk</div>
-          <blockquote className="font-display text-3xl lg:text-5xl tracking-tight leading-tight mt-5 text-gray-900">
-            &ldquo;Pehle 12 din kaam milta tha, ab 18 din. Bachhon ki padhai bhi chal rahi hai.&rdquo;
-          </blockquote>
-          <div className="mt-8 flex items-center gap-4">
-            <img
-              src="https://images.pexels.com/photos/36998122/pexels-photo-36998122.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=200&w=200"
-              alt="Worker"
-              className="w-12 h-12 rounded-full object-cover border border-gray-200"
-            />
+      {/* ══════════════════════════════════════════════════════════
+          6. WHATSAPP — our biggest differentiator (not on DiHaadi)
+      ══════════════════════════════════════════════════════════ */}
+      <section style={{ background: "#075E54" }}>
+        <div className="max-w-5xl mx-auto px-5 py-14">
+          <div className="grid md:grid-cols-2 gap-10 items-center">
             <div>
-              <div className="font-bold">Ramesh Kumar, Mason</div>
-              <div className="text-sm text-gray-600">Pratapgarh, UP — 47 jobs on KaamNow</div>
+              <div className="text-xs font-bold uppercase tracking-widest mb-3" style={{ color: "#9DCDB5" }}>
+                {t("wa_section_overline")}
+              </div>
+              <h2 className="font-bold leading-tight text-white"
+                style={{ fontSize: "clamp(1.5rem,4vw,2.2rem)" }}>
+                {t("wa_section_heading")}
+              </h2>
+              <p className="mt-4 text-sm leading-relaxed" style={{ color: "rgba(255,255,255,0.8)" }}>
+                {t("wa_section_sub")}
+              </p>
+              <Link to="/whatsapp-demo"
+                className="mt-6 inline-flex items-center gap-2 font-bold rounded-xl px-6 py-3 text-sm transition-all active:scale-95"
+                style={{ background: "#25D366", color: "white" }}>
+                <MessageCircle size={16} /> {t("wa_try")}
+              </Link>
+            </div>
+
+            {/* Command list */}
+            <div className="space-y-2.5">
+              {[t("wa_cmd1"), t("wa_cmd2"), t("wa_cmd3"), t("wa_cmd4")].map((cmd, i) => (
+                <div key={i} className="flex items-center gap-3 rounded-xl px-4 py-3"
+                  style={{ background: "rgba(255,255,255,0.07)", border: "1px solid rgba(255,255,255,0.12)" }}>
+                  <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: "#25D366" }} />
+                  <span className="text-sm font-semibold text-white">{cmd}</span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
       </section>
 
-      {/* WAITLIST / CTA */}
-      <section
-        className="py-20 relative bg-cover bg-center"
-        style={{
-          backgroundImage:
-            "linear-gradient(180deg, rgba(63,55,201,0.92), rgba(63,55,201,0.92)), url('https://images.pexels.com/photos/32915125/pexels-photo-32915125.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=800&w=1500')",
-        }}
-      >
-        <div className="max-w-4xl mx-auto px-6 text-center text-white">
-          <h2 className="font-display text-4xl lg:text-6xl tracking-tighter">
-            Ready when your village is.
+      {/* ══════════════════════════════════════════════════════════
+          7. TESTIMONIALS — three real voices
+      ══════════════════════════════════════════════════════════ */}
+      <section style={{ background: "white", borderBottom: `1px solid ${C.border}` }}>
+        <div className="max-w-5xl mx-auto px-5 py-12">
+          <SectionHead overline={t("test_overline")} heading={isHi ? "उनकी जुबानी" : "Their words"} />
+
+          <div className="mt-8 grid md:grid-cols-3 gap-5">
+            {[
+              {
+                quote: t("test_quote"),
+                name: isHi ? "रमेश कुमार, राज मिस्त्री" : "Ramesh Kumar, Mason",
+                meta: isHi ? "प्रतापगढ़, UP — 47 काम पूरे" : "Pratapgarh, UP — 47 jobs",
+                img: "https://images.pexels.com/photos/36998122/pexels-photo-36998122.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=200&w=200",
+                accent: C.terracotta,
+              },
+              {
+                quote: t("test2_quote"),
+                name: isHi ? "सुनीता देवी, Painter" : "Sunita Devi, Painter",
+                meta: isHi ? "मुजफ्फरपुर, Bihar — 32 काम" : "Muzaffarpur, Bihar — 32 jobs",
+                img: "https://images.pexels.com/photos/12921278/pexels-photo-12921278.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=200&w=200",
+                accent: C.green,
+              },
+              {
+                quote: t("test3_quote"),
+                name: isHi ? "सुरेश शर्मा, Plumber" : "Suresh Sharma, Plumber",
+                meta: isHi ? "वर्धा, Maharashtra — 63 काम" : "Wardha, Maharashtra — 63 jobs",
+                img: "https://images.pexels.com/photos/29858623/pexels-photo-29858623.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=200&w=200",
+                accent: C.ochre,
+              },
+            ].map((item, i) => (
+              <div key={i} className="rounded-2xl p-6 flex flex-col"
+                style={{ background: C.bg, border: `1px solid ${C.border}` }}>
+                {/* Quote mark */}
+                <div className="text-4xl font-bold leading-none mb-3" style={{ color: item.accent, opacity: 0.35 }}>"</div>
+                <p className="text-sm leading-relaxed flex-1" style={{ color: C.dark, fontFamily: isHi ? "'Noto Sans Devanagari','Manrope',sans-serif" : undefined }}>
+                  {item.quote}
+                </p>
+                <div className="mt-5 flex items-center gap-3 pt-4" style={{ borderTop: `1px solid ${C.border}` }}>
+                  <img src={item.img} alt={item.name}
+                    className="w-10 h-10 rounded-full object-cover"
+                    style={{ border: `2px solid ${item.accent}` }} />
+                  <div>
+                    <div className="font-bold text-xs" style={{ color: C.dark }}>{item.name}</div>
+                    <div className="text-xs mt-0.5" style={{ color: C.mud }}>{item.meta}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════
+          8. WHY KAAMNOW — 5 differentiators
+      ══════════════════════════════════════════════════════════ */}
+      <section style={{ background: C.bg, borderBottom: `1px solid ${C.border}` }}>
+        <div className="max-w-5xl mx-auto px-5 py-12">
+          <SectionHead
+            overline={t("feat_overline")}
+            heading={t("feat_headline")}
+            accent={t("feat_headline_accent")}
+          />
+
+          <div className="mt-8 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[
+              { emoji: "💬", title: t("feat_wa_title"),       desc: t("feat_wa_desc"),       big: true },
+              { emoji: "🎙️", title: t("feat_voice_title"),   desc: t("feat_voice_desc") },
+              { emoji: "🛡️", title: t("feat_trust_title"),   desc: t("feat_trust_desc") },
+              { emoji: "📅", title: t("feat_calendar_title"), desc: t("feat_calendar_desc") },
+              { emoji: "💵", title: t("feat_pay_title"),      desc: t("feat_pay_desc") },
+            ].map((f, i) => (
+              <div key={i}
+                className={`rounded-2xl p-6 ${f.big ? "sm:col-span-2 lg:col-span-1" : ""}`}
+                style={{
+                  background: f.big ? C.green : "white",
+                  border: `1px solid ${f.big ? C.green : C.border}`,
+                  color: f.big ? "white" : C.dark,
+                }}>
+                <div style={{ fontSize: 32, marginBottom: 12 }}>{f.emoji}</div>
+                <div className="font-bold text-base mb-2">{f.title}</div>
+                <p className="text-sm leading-relaxed" style={{ color: f.big ? "rgba(255,255,255,0.82)" : "#6B5744" }}>
+                  {f.desc}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════
+          9. FAQ
+      ══════════════════════════════════════════════════════════ */}
+      <section style={{ background: "white", borderBottom: `1px solid ${C.border}` }}>
+        <div className="max-w-3xl mx-auto px-5 py-12">
+          <SectionHead heading={t("faq_heading")} center />
+          <div className="mt-8">
+            {[1, 2, 3, 4, 5, 6].map(n => (
+              <FAQItem key={n} q={t(`faq_q${n}`)} a={t(`faq_a${n}`)} />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════════════════════════════════════════════════
+          10. WAITLIST / CTA
+      ══════════════════════════════════════════════════════════ */}
+      <section style={{ background: `linear-gradient(160deg, ${C.ochre} 0%, #A85E10 100%)` }}>
+        <div className="max-w-4xl mx-auto px-5 py-14 text-center text-white">
+          <div style={{ fontSize: 44, marginBottom: 12 }}>🌾</div>
+          <h2 className="font-bold leading-tight"
+            style={{ fontSize: "clamp(1.7rem,5vw,2.8rem)" }}>
+            {t("wait_headline")}
           </h2>
-          <p className="mt-5 text-white/85 text-lg">
-            Join the waitlist. Be among the first 100 villages we onboard in 2026.
+          <p className="mt-4 text-base" style={{ color: "rgba(255,255,255,0.88)" }}>
+            {t("wait_sub")}
           </p>
-          <form
-            onSubmit={submitWaitlist}
-            data-testid="waitlist-form"
-            className="mt-10 max-w-xl mx-auto bg-white rounded-xl p-5 grid sm:grid-cols-2 gap-3 text-left"
-          >
-            <input
-              data-testid="waitlist-name"
-              required
-              placeholder="Your name"
-              value={waitName}
-              onChange={(e) => setWaitName(e.target.value)}
-              className="kn-input"
-            />
-            <input
-              data-testid="waitlist-email"
-              required
-              type="email"
-              placeholder="Email"
-              value={waitEmail}
-              onChange={(e) => setWaitEmail(e.target.value)}
-              className="kn-input"
-            />
-            <select
-              data-testid="waitlist-role"
-              value={waitRole}
-              onChange={(e) => setWaitRole(e.target.value)}
-              className="kn-input"
-            >
-              <option value="customer">I need workers</option>
-              <option value="worker">I am a worker</option>
-              <option value="partner">NGO / Government partner</option>
-            </select>
-            <button
-              data-testid="waitlist-submit"
-              disabled={submitting}
-              className="btn-saffron disabled:opacity-60"
-            >
-              {submitting ? "Joining…" : "Join Waitlist"}
-            </button>
+
+          <form onSubmit={submitWaitlist} data-testid="waitlist-form"
+            className="mt-8 max-w-lg mx-auto rounded-2xl p-5 text-left"
+            style={{ background: "white", boxShadow: "0 20px 50px rgba(0,0,0,0.18)" }}>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <input required data-testid="waitlist-name" placeholder={t("wait_name")}
+                value={waitName} onChange={e => setWaitName(e.target.value)} className="kn-input" />
+              <input required data-testid="waitlist-phone" type="tel" inputMode="numeric"
+                placeholder={t("wait_phone")} value={waitPhone}
+                onChange={e => setWaitPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                className="kn-input" />
+              <select data-testid="waitlist-role" value={waitRole}
+                onChange={e => setWaitRole(e.target.value)} className="kn-input">
+                <option value="customer">{t("wait_role_customer")}</option>
+                <option value="worker">{t("wait_role_worker")}</option>
+                <option value="partner">{t("wait_role_partner")}</option>
+              </select>
+              <button disabled={submitting} data-testid="waitlist-submit"
+                className="font-bold rounded-xl py-3 transition-all active:scale-95 disabled:opacity-60"
+                style={{ background: C.ochre, color: "white", fontSize: 15 }}>
+                {submitting ? t("wait_cta_loading") : t("wait_cta")}
+              </button>
+            </div>
           </form>
         </div>
       </section>
 
-      <footer className="bg-white border-t border-gray-200 py-10">
-        <div className="max-w-7xl mx-auto px-6 flex flex-wrap items-center justify-between gap-4 text-sm text-gray-600">
-          <div className="font-display text-lg text-gray-900">
-            kaamnow<span className="text-[#ff6b35]">.com</span>
+      {/* ══════════════════════════════════════════════════════════
+          11. FOOTER
+      ══════════════════════════════════════════════════════════ */}
+      <footer style={{ background: C.dark, color: "rgba(255,255,255,0.6)" }}>
+        <div className="max-w-5xl mx-auto px-5 py-10">
+          <div className="flex flex-wrap items-center justify-between gap-4 text-sm">
+            <div className="font-bold text-xl text-white">
+              kaam<span style={{ color: C.terracotta }}>now</span>.com
+            </div>
+            <div style={{ color: "rgba(255,255,255,0.4)" }}>{t("footer_copy")}</div>
+            <div className="flex gap-5">
+              <Link to="/marketplace" className="hover:text-white transition">{t("footer_marketplace")}</Link>
+              <Link to="/whatsapp-demo" className="hover:text-white transition">{t("footer_whatsapp")}</Link>
+            </div>
           </div>
-          <div>© {new Date().getFullYear()} KaamNow. Built for Bharat.</div>
-          <div className="flex gap-5">
-            <Link to="/marketplace" className="hover:text-[#3f37c9]">Marketplace</Link>
-            <Link to="/whatsapp-demo" className="hover:text-[#3f37c9]">WhatsApp</Link>
+
+          {/* Social row */}
+          <div className="flex flex-wrap items-center justify-between gap-4 mt-5 pt-5"
+            style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+            <span className="text-xs font-bold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.35)" }}>
+              {t("footer_follow")}
+            </span>
+            <div className="flex items-center gap-3">
+              <a href="https://www.instagram.com/kaamnow_" target="_blank" rel="noreferrer"
+                aria-label="KaamNow on Instagram"
+                className="flex items-center justify-center rounded-xl transition"
+                style={{ width: 44, height: 44, background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)" }}
+                onMouseEnter={e => e.currentTarget.style.background = "rgba(224,122,95,0.25)"}
+                onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.08)"}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                  stroke="rgba(255,255,255,0.7)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+                  <circle cx="12" cy="12" r="4.5"/>
+                  <circle cx="17.5" cy="6.5" r="1" fill="rgba(255,255,255,0.7)" stroke="none"/>
+                </svg>
+              </a>
+              {/* X button disabled — link to be added */}
+            </div>
+            <div className="text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>{t("footer_tagline")}</div>
           </div>
         </div>
       </footer>
 
-      {/* Sticky Mobile Bar */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-lg border-t border-gray-200 px-6 py-3 flex gap-3 shadow-[0_-4px_12px_rgba(0,0,0,0.05)]">
-        <Link to="/marketplace" className="flex-1 btn-saffron !text-xs !py-3 flex items-center justify-center gap-2">
-          <Users size={14} /> Find Workers
+      {/* ══════════════════════════════════════════════════════════
+          MOBILE STICKY BAR
+      ══════════════════════════════════════════════════════════ */}
+      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 flex gap-2 px-4 py-3"
+        style={{ background: "rgba(244,241,234,0.96)", backdropFilter: "blur(12px)", borderTop: `1px solid ${C.border}` }}>
+        <Link to="/marketplace"
+          className="flex-1 flex items-center justify-center gap-2 font-bold rounded-xl py-3.5 text-sm text-white active:scale-95 transition"
+          style={{ background: C.terracotta }}>
+          <Users size={15} /> {t("mob_workers")}
         </Link>
-        <Link to="/worker/job-feed" className="flex-1 btn-indigo !text-xs !py-3 flex items-center justify-center gap-2">
-          <Briefcase size={14} /> Find Work
+        <Link to="/worker/job-feed"
+          className="flex-1 flex items-center justify-center gap-2 font-bold rounded-xl py-3.5 text-sm text-white active:scale-95 transition"
+          style={{ background: C.green }}>
+          <Briefcase size={15} /> {t("mob_work")}
         </Link>
       </div>
+
+      {/* JSON-LD */}
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({
+        "@context": "https://schema.org", "@type": "LocalBusiness",
+        "name": "KaamNow", "url": "https://kaamnow.com",
+        "description": "India's village labour marketplace.",
+        "address": { "@type": "PostalAddress", "addressCountry": "IN" }
+      })}} />
     </div>
   );
 }

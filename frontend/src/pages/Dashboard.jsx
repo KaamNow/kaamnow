@@ -19,6 +19,7 @@ import {
   Clock,
   XCircle,
   Settings,
+  Bell,
 } from "lucide-react";
 
 /* ─── Status Badge ─────────────────────────────────────────────────────── */
@@ -169,15 +170,22 @@ export default function Dashboard() {
   const [ratingComment, setRatingComment] = useState("");
   const [submittingRating, setSubmittingRating] = useState(false);
 
+  const [pendingEngagements, setPendingEngagements] = useState([]);
+  const [notifications, setNotifications] = useState([]);
+
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const [jRes, bRes] = await Promise.all([
+      const [jRes, bRes, eRes, nRes] = await Promise.all([
         api.get("/jobs/mine"),
         api.get("/bookings/mine"),
+        api.get("/engagements/mine"),
+        api.get("/notifications/mine"),
       ]);
       setJobs(jRes.data || []);
       setBookings(bRes.data || []);
+      setPendingEngagements((eRes.data || []).filter(e => e.status === "requested"));
+      setNotifications(nRes.data || []);
     } catch (err) {
       toast.error(formatApiError(err));
     } finally {
@@ -207,6 +215,31 @@ export default function Dashboard() {
     } catch (e) {
       toast.error(formatApiError(e));
     }
+  };
+
+  const approveEngagement = async (engId, workerName) => {
+    try {
+      await api.post(`/engagements/${engId}/accept`);
+      toast.success(`${workerName} approved! Contact details are now shared.`);
+      reload();
+    } catch (e) {
+      toast.error(formatApiError(e));
+    }
+  };
+
+  const rejectEngagement = async (engId, workerName) => {
+    try {
+      await api.post(`/engagements/${engId}/reject`);
+      toast.success(`${workerName} rejected. Job is back open.`);
+      reload();
+    } catch (e) {
+      toast.error(formatApiError(e));
+    }
+  };
+
+  const markNotifRead = async (id) => {
+    await api.post(`/notifications/${id}/read`).catch(() => {});
+    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
   };
 
   const submitRating = async () => {
@@ -266,11 +299,13 @@ export default function Dashboard() {
         <StatCard label="Open Jobs" value={openJobs.length} icon={Briefcase} color="#ff6b35" />
       </div>
 
-      <div className="flex gap-2 mb-8 border-b border-gray-200 pb-px">
+      <div className="flex gap-2 mb-8 border-b border-gray-200 pb-px overflow-x-auto">
         {[
           { id: "overview", label: "Overview", icon: Calendar },
+          { id: "pending", label: `Pending${pendingEngagements.length ? ` (${pendingEngagements.length})` : ""}`, icon: Clock },
           { id: "jobs", label: "My Jobs", icon: Briefcase },
           { id: "history", label: "History", icon: History },
+          { id: "notifications", label: `Alerts${notifications.filter(n=>!n.read).length ? ` (${notifications.filter(n=>!n.read).length})` : ""}`, icon: Star },
           { id: "profile", label: "Profile", icon: User },
         ].map(t => (
           <button
@@ -313,10 +348,17 @@ export default function Dashboard() {
                               <span className="flex items-center gap-1"><Calendar size={12} /> {b.job_date}</span>
                             </div>
                           </div>
-                          <div className="flex items-center gap-3">
+                          <div className="flex flex-col items-end gap-2">
                             <StatusBadge status={b.status} />
                             {b.status === "confirmed" && (
-                              <button onClick={() => complete(b.id)} className="btn-outline !py-2 !px-3 text-sm">Mark Done</button>
+                              <>
+                                {b.worker_phone && (
+                                  <a href={`tel:${b.worker_phone}`} className="text-xs font-bold text-green-700 hover:underline">
+                                    📞 {b.worker_phone}
+                                  </a>
+                                )}
+                                <button onClick={() => complete(b.id)} className="btn-outline !py-2 !px-3 text-sm">Mark Done</button>
+                              </>
                             )}
                           </div>
                         </div>
@@ -420,6 +462,42 @@ export default function Dashboard() {
             </div>
           )}
 
+          {tab === "pending" && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-500">Workers who expressed interest in your jobs. Approve to book them, or reject to keep the job open.</p>
+              {pendingEngagements.length === 0 && (
+                <div className="kn-card p-12 text-center text-gray-500">No pending approvals right now.</div>
+              )}
+              {pendingEngagements.map(e => (
+                <div key={e.id} className="kn-card p-5 border-l-4 border-[#ff6b35]">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <div className="font-display text-lg">{e.job_title}</div>
+                      <div className="text-sm text-gray-600 mt-1">
+                        👷 <strong>{e.worker_name}</strong> is interested · ₹{e.daily_rate}/day · {e.job_date}
+                      </div>
+                      <div className="text-xs text-gray-400 mt-1">Requested {new Date(e.created_at).toLocaleDateString()}</div>
+                    </div>
+                    <div className="flex gap-2 flex-wrap">
+                      <button
+                        onClick={() => approveEngagement(e.id, e.worker_name)}
+                        className="px-4 py-2 rounded-xl bg-green-500 hover:bg-green-400 text-white text-sm font-bold transition flex items-center gap-1.5"
+                      >
+                        <CheckCircle2 size={14} /> Approve
+                      </button>
+                      <button
+                        onClick={() => rejectEngagement(e.id, e.worker_name)}
+                        className="px-4 py-2 rounded-xl bg-gray-100 hover:bg-red-100 text-gray-700 hover:text-red-600 text-sm font-bold transition flex items-center gap-1.5"
+                      >
+                        <XCircle size={14} /> Reject
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           {tab === "history" && (
             <div className="space-y-3">
               {pastBookings.length === 0 && <div className="kn-card p-12 text-center text-gray-500">No past activity found.</div>}
@@ -449,6 +527,41 @@ export default function Dashboard() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {tab === "notifications" && (
+            <div className="space-y-3">
+              {notifications.length === 0 && (
+                <div className="kn-card p-12 text-center text-gray-500">No notifications yet.</div>
+              )}
+              {notifications.map(n => (
+                <div
+                  key={n.id}
+                  onClick={() => markNotifRead(n.id)}
+                  className={`kn-card p-4 cursor-pointer transition ${n.read ? "opacity-60" : "border-l-4 border-[#3f37c9]"}`}
+                >
+                  <div className="flex items-start gap-3">
+                    <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${n.read ? "bg-gray-300" : "bg-[#3f37c9]"}`} />
+                    <div>
+                      <div className="font-bold text-sm">{n.title}</div>
+                      <div className="text-xs text-gray-600 mt-0.5">{n.body}</div>
+                      <div className="text-xs text-gray-400 mt-1">{new Date(n.created_at).toLocaleString()}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {notifications.some(n => !n.read) && (
+                <button
+                  onClick={async () => {
+                    await api.post("/notifications/read-all").catch(() => {});
+                    reload();
+                  }}
+                  className="text-sm text-[#3f37c9] font-bold hover:underline"
+                >
+                  Mark all as read
+                </button>
+              )}
             </div>
           )}
 

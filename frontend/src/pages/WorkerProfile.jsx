@@ -77,7 +77,7 @@ export default function WorkerProfile() {
         <div className="lg:col-span-2 kn-card p-8">
           <div className="flex flex-wrap gap-6 items-start">
             <img
-              src={worker.photo_url}
+              src={worker.photo_url || "https://images.pexels.com/photos/16476333/pexels-photo-16476333.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=400&w=400"}
               alt={worker.name}
               className="w-28 h-28 rounded-xl object-cover border border-gray-200"
             />

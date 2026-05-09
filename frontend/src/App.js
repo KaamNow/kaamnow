@@ -1,7 +1,9 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
+import { LanguageProvider } from "@/contexts/LanguageContext";
 import Navbar from "@/components/Navbar";
+import KaamSaathi from "@/components/KaamSaathi";
 import Landing from "@/pages/Landing";
 import Strategy from "@/pages/Strategy";
 import Login from "@/pages/Login";
@@ -15,6 +17,9 @@ import WorkerJobFeed from "@/pages/WorkerJobFeed";
 import Dashboard from "@/pages/Dashboard";
 import PostJob from "@/pages/PostJob";
 import WhatsAppDemo from "@/pages/WhatsAppDemo";
+import FindWork from "@/pages/FindWork";
+import AdminDashboard from "@/pages/AdminDashboard";
+import ContactSupport from "@/pages/ContactSupport";
 import "@/App.css";
 
 function Protected({ children }) {
@@ -38,9 +43,11 @@ function Layout({ children }) {
 
 function App() {
   return (
+    <LanguageProvider>
     <AuthProvider>
       <BrowserRouter>
         <Toaster position="top-right" richColors />
+        <KaamSaathi />
         <Routes>
           <Route
             path="/"
@@ -115,6 +122,14 @@ function App() {
             }
           />
           <Route
+            path="/find-work"
+            element={
+              <Layout>
+                <FindWork />
+              </Layout>
+            }
+          />
+          <Route
             path="/whatsapp-demo"
             element={
               <Layout>
@@ -144,9 +159,28 @@ function App() {
               </Protected>
             }
           />
+          <Route
+            path="/admin"
+            element={
+              <Protected>
+                <Layout>
+                  <AdminDashboard />
+                </Layout>
+              </Protected>
+            }
+          />
+          <Route
+            path="/support"
+            element={
+              <Layout>
+                <ContactSupport />
+              </Layout>
+            }
+          />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
+    </LanguageProvider>
   );
 }
 

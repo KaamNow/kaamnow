@@ -1,14 +1,65 @@
-node_modules
-build
-.git
+# ── Git ────────────────────────────────────────────────────────────────────
+.git/
+.gitignore
+
+# ── Secrets (injected via k8s secrets / build args, never baked into image) ─
 .env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+.env.*
+*.env
+backend/.env
+frontend/.env
+
+# ── Python venv (Docker installs from requirements.prod.txt) ───────────────
+backend/venv/
+backend/.venv/
+**/__pycache__/
+**/*.py[cod]
+**/*.pyo
+**/*.egg-info/
+
+# ── Node / Frontend build artefacts ────────────────────────────────────────
+frontend/node_modules/
+frontend/build/
+frontend/.yarn/install-state.gz
+
+# ── Dev + AI tooling (not needed inside containers) ───────────────────────
+.claude/
+.agent/
+.cursorrules
+CLAUDE.md
+graphify-out/
+.emergent/
+.chainlit
+chainlit.md
+fix_typing.py
+
+# ── Mobile (not deployed via Docker) ───────────────────────────────────────
+mobile/
+
+# ── Root-level source logo (processed copy lives in frontend/public/images/) ─
+logo.png
+
+# ── OS / editor junk ──────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# ── Logs & debug ──────────────────────────────────────────────────────────
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-__pycache__
-*.pyc
-.DS_Store
+dump.rdb
+
+# ── Archives ──────────────────────────────────────────────────────────────
+*.zip
+*.tar.gz
+*.tar
+*.tgz
+
+# ── Tests & docs (not needed in runtime image) ────────────────────────────
+tests/
+docs/
+*.md
+!backend/requirements.prod.txt

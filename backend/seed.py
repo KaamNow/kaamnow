@@ -73,6 +73,12 @@ async def ensure_indexes() -> None:
         )
         await db.engagements.create_index([("worker_id", 1), ("status", 1)])
         await db.engagements.create_index([("customer_id", 1), ("status", 1)])
+        await db.notifications.create_index("user_id")
+        await db.notifications.create_index([("user_id", 1), ("read", 1)])
+        await db.wa_notif_log.create_index([("job_id", 1), ("user_id", 1)], unique=True)
+        await db.wa_notif_log.create_index("sent_at")
+        await db.bot_sessions.create_index("session_id")
+        await db.bot_sessions.create_index("updated_at")
     except Exception:
         pass
 
@@ -91,7 +97,6 @@ async def seed_data() -> None:
                 "name": "Admin",
                 "role": "admin",
                 "village": None,
-                "phone": None,
                 "phone_verified": False,
                 "address": None,
                 "photo_url": None,
@@ -111,7 +116,6 @@ async def seed_data() -> None:
                 "name": "Demo customer",
                 "role": "customer",
                 "village": "Hoshangabad",
-                "phone": None,
                 "phone_verified": False,
                 "address": {
                     "village": "Hoshangabad",

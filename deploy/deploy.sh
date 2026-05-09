@@ -187,13 +187,18 @@ apply_manifests() {
 
   # Idempotent secret: only generate fresh credentials on first deploy.
   if kubectl -n kaamnow get secret backend-secrets &>/dev/null; then
-    yellow "Existing 'backend-secrets' found — keeping current JWT_SECRET and admin password."
-    ADMIN_PASSWORD="(unchanged — see existing secret with: kubectl -n kaamnow get secret backend-secrets -o jsonpath='{.data.ADMIN_PASSWORD}' | base64 -d)"
+    yellow "Existing 'backend-secrets' found — patching MONGO_URL to Atlas and keeping everything else."
+    kubectl -n kaamnow patch secret backend-secrets \
+      --type=merge \
+      -p "{\"stringData\":{\"MONGO_URL\":\"mongodb+srv://KaamNowAdmin:KaamNowAdmin%40123@cluster0.dduibsm.mongodb.net/?appName=Cluster0\",\"DB_NAME\":\"kaamnow_db\"}}"
+    ADMIN_PASSWORD="(unchanged — retrieve with: kubectl -n kaamnow get secret backend-secrets -o jsonpath='{.data.ADMIN_PASSWORD}' | base64 -d)"
   else
     step "Generating fresh JWT_SECRET + ADMIN_PASSWORD..."
     JWT_SECRET=$(openssl rand -hex 32)
     ADMIN_PASSWORD=$(openssl rand -base64 12)
     kubectl -n kaamnow create secret generic backend-secrets \
+      --from-literal=MONGO_URL="mongodb+srv://KaamNowAdmin:KaamNowAdmin%40123@cluster0.dduibsm.mongodb.net/?appName=Cluster0" \
+      --from-literal=DB_NAME="kaamnow_db" \
       --from-literal=JWT_SECRET="${JWT_SECRET}" \
       --from-literal=ADMIN_EMAIL="admin@kaamnow.com" \
       --from-literal=ADMIN_PASSWORD="${ADMIN_PASSWORD}"

@@ -6,12 +6,16 @@ metadata:
   namespace: kaamnow
 type: Opaque
 stringData:
-  # IMPORTANT: change ADMIN_PASSWORD after first deploy via mongosh
+  # MongoDB Atlas — shared across dev and prod (same data)
+  MONGO_URL: "mongodb+srv://KaamNowAdmin:KaamNowAdmin%40123@cluster0.dduibsm.mongodb.net/?appName=Cluster0"
+  DB_NAME: "kaamnow_db"
+  # JWT / admin — deploy script overwrites these on first deploy
   JWT_SECRET: "REPLACE_ME_WITH_64_CHAR_HEX_FROM_DEPLOY_SCRIPT"
   ADMIN_EMAIL: "admin@kaamnow.com"
   ADMIN_PASSWORD: "ChangeMe-After-First-Deploy"
+  # WhatsApp / Gupshup
   GUPSHUP_API_URL: "https://api.gupshup.io/wa/api/v1/msg"
-  GUPSHUP_API_KEY: "abcd1234xyz"
+  GUPSHUP_API_KEY: "sk_376ba99b7f584e659b35f7cbf92d4286"
   GUPSHUP_SOURCE: "917834811114"
   GUPSHUP_APP_ID: "KaamNow"
   GUPSHUP_VERIFY_TOKEN: "my_secure_token_123"
@@ -22,8 +26,7 @@ metadata:
   name: backend-config
   namespace: kaamnow
 data:
-  MONGO_URL: "mongodb://mongodb:27017"
-  DB_NAME: "kaamnow_db"
+  # MONGO_URL and DB_NAME are in the Secret (contain credentials)
   CORS_ORIGINS: "https://kaamnow.com,https://www.kaamnow.com"
 ---
 apiVersion: apps/v1

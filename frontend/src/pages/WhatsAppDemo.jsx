@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import api from "@/lib/api";
-import { Send, MessageCircle } from "lucide-react";
+import { Send, RotateCcw, Zap } from "lucide-react";
 
 const SESSION_KEY = "kn_wa_session";
 
@@ -13,16 +13,51 @@ function ensureSession() {
   return s;
 }
 
+/** Render WhatsApp-style markdown: *bold*, line breaks */
+function BotText({ text }) {
+  // Split on *bold* markers and render each segment
+  const parts = text.split(/(\*[^*]+\*)/g);
+  return (
+    <span style={{ whiteSpace: "pre-wrap", lineHeight: 1.55 }}>
+      {parts.map((p, i) =>
+        p.startsWith("*") && p.endsWith("*")
+          ? <strong key={i}>{p.slice(1, -1)}</strong>
+          : p
+      )}
+    </span>
+  );
+}
+
+const QUICK_REPLIES = [
+  { label: "JOBS", hint: "Open jobs near me" },
+  { label: "STATUS", hint: "My applications" },
+  { label: "HELP", hint: "All commands" },
+  { label: "MENU", hint: "Start over" },
+];
+
+const COMMAND_GUIDE = [
+  { cmd: "JOBS", desc: "Open jobs near your area, nearest first" },
+  { cmd: "JOBS 841219", desc: "Jobs in any pincode (temporary search)" },
+  { cmd: "JOBS farm", desc: "Filter by category" },
+  { cmd: "1 – 5", desc: "View job details from the list" },
+  { cmd: "APPLY", desc: "Express interest in a job" },
+  { cmd: "MORE", desc: "Next 5 jobs" },
+  { cmd: "WITHDRAW", desc: "Cancel a pending application" },
+  { cmd: "STATUS", desc: "Your active bookings" },
+  { cmd: "PINCODE 841219", desc: "Save your home pincode" },
+  { cmd: "HELP", desc: "See all commands" },
+];
+
 export default function WhatsAppDemo() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const sessionId = useRef(ensureSession());
   const scrollRef = useRef(null);
+  const inputRef = useRef(null);
 
   useEffect(() => {
-    // Send empty message to get welcome
-    send("hi", true);
+    sendMsg("hi", true);
     // eslint-disable-next-line
   }, []);
 
@@ -30,22 +65,20 @@ export default function WhatsAppDemo() {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages]);
 
-  const send = async (textOverride, hideUser) => {
-    const text = textOverride ?? input;
-    if (!text.trim()) return;
+  const sendMsg = async (textOverride, hideUser) => {
+    const text = (textOverride ?? input).trim();
+    if (!text) return;
     setSending(true);
     if (!hideUser) setMessages((m) => [...m, { from: "user", text }]);
     setInput("");
     try {
-      const r = await api.post("/whatsapp/message", {
-        session_id: sessionId.current,
-        message: text,
-      });
+      const r = await api.post("/whatsapp/message", { session_id: sessionId.current, message: text });
       setMessages((m) => [...m, { from: "bot", text: r.data.reply }]);
     } catch {
-      setMessages((m) => [...m, { from: "bot", text: "Sorry, something went wrong." }]);
+      setMessages((m) => [...m, { from: "bot", text: "Something went wrong. Try again." }]);
     } finally {
       setSending(false);
+      inputRef.current?.focus();
     }
   };
 
@@ -53,69 +86,165 @@ export default function WhatsAppDemo() {
     localStorage.removeItem(SESSION_KEY);
     sessionId.current = ensureSession();
     setMessages([]);
-    setTimeout(() => send("hi", true), 200);
+    setTimeout(() => sendMsg("hi", true), 150);
+  };
+
+  const quickReply = (label) => {
+    setMessages((m) => [...m, { from: "user", text: label }]);
+    sendMsg(label, true);
   };
 
   return (
-    <div data-testid="whatsapp-demo-page" className="max-w-4xl mx-auto px-6 py-10">
-      <div className="kn-overline">WhatsApp bot — simulated demo</div>
-      <h1 className="font-display text-4xl tracking-tight mt-2">
-        Book workers without an app.
-      </h1>
-      <p className="text-gray-600 mt-2 max-w-xl">
-        This is exactly how the conversation flows on real WhatsApp. Try it: type <code className="bg-gray-100 px-1.5 py-0.5 rounded text-sm">1</code> to book workers, or <code className="bg-gray-100 px-1.5 py-0.5 rounded text-sm">menu</code> to restart.
-      </p>
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10">
+      {/* Header */}
+      <div className="mb-8">
+        <div className="kn-overline mb-1">Live bot preview</div>
+        <h1 className="font-display text-4xl tracking-tight">
+          Try the KaamNow bot
+        </h1>
+        <p className="text-gray-500 mt-2 text-sm max-w-lg">
+          This is the real bot — same conversation your workers have on WhatsApp.
+          Type a command or tap a quick reply below.
+        </p>
+      </div>
 
-      <div className="mt-8 grid lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 kn-card overflow-hidden flex flex-col h-[640px]">
-          <div className="px-5 py-4 border-b border-gray-200 bg-[#3f37c9] text-white flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-[#ff6b35] flex items-center justify-center font-display">K</div>
-            <div>
-              <div className="font-bold">KaamNow Bot</div>
-              <div className="text-xs text-white/80">online · simulated WhatsApp</div>
+      <div className="grid lg:grid-cols-5 gap-6 items-start">
+
+        {/* ── Chat window ── */}
+        <div className="lg:col-span-3 rounded-2xl overflow-hidden shadow-lg border border-gray-200 flex flex-col" style={{ height: 600 }}>
+
+          {/* Chat header — WhatsApp green */}
+          <div className="flex items-center gap-3 px-4 py-3" style={{ background: "#075E54" }}>
+            <div className="w-10 h-10 rounded-full bg-[#25D366] flex items-center justify-center text-white font-bold text-lg shadow">
+              K
             </div>
-            <button data-testid="reset-chat" onClick={reset} className="ml-auto text-xs underline">Reset</button>
+            <div className="flex-1 min-w-0">
+              <div className="text-white font-bold text-sm leading-tight">KaamNow Worker Bot</div>
+              <div className="text-white/70 text-xs">kaamnow.com · live demo</div>
+            </div>
+            <button
+              onClick={reset}
+              title="Reset chat"
+              className="p-1.5 rounded-lg hover:bg-white/10 transition text-white/70 hover:text-white"
+            >
+              <RotateCcw size={15} />
+            </button>
           </div>
 
-          <div ref={scrollRef} data-testid="chat-messages" className="flex-1 overflow-y-auto p-5 space-y-3 bg-[#f5f4ef]">
+          {/* Messages */}
+          <div
+            ref={scrollRef}
+            className="flex-1 overflow-y-auto p-4 space-y-2"
+            style={{ background: "#ECE5DD" }}
+          >
             {messages.map((m, i) => (
-              <div key={i} className={m.from === "user" ? "flex" : "flex"}>
-                <div className={m.from === "user" ? "bubble-user" : "bubble-bot"}>{m.text}</div>
+              <div key={i} className={`flex ${m.from === "user" ? "justify-end" : "justify-start"}`}>
+                <div
+                  className="max-w-[78%] px-3 py-2 rounded-2xl shadow-sm text-sm"
+                  style={
+                    m.from === "user"
+                      ? { background: "#DCF8C6", color: "#111", borderBottomRightRadius: 4 }
+                      : { background: "#fff", color: "#111", borderBottomLeftRadius: 4 }
+                  }
+                >
+                  {m.from === "bot" ? <BotText text={m.text} /> : m.text}
+                  <div className="text-[10px] mt-1 text-right" style={{ color: m.from === "user" ? "#6e9e6e" : "#999" }}>
+                    {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    {m.from === "user" && <span className="ml-1" style={{ color: "#53bdeb" }}>✓✓</span>}
+                  </div>
+                </div>
               </div>
             ))}
-            {sending && <div className="bubble-bot opacity-60">typing…</div>}
+            {sending && (
+              <div className="flex justify-start">
+                <div className="bg-white px-4 py-2.5 rounded-2xl shadow-sm text-sm text-gray-400" style={{ borderBottomLeftRadius: 4 }}>
+                  <span className="inline-flex gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: "0ms" }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: "150ms" }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-gray-400 animate-bounce" style={{ animationDelay: "300ms" }} />
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
+          {/* Quick replies */}
+          <div className="flex gap-2 px-3 py-2 overflow-x-auto" style={{ background: "#ECE5DD", borderTop: "1px solid #d1c7bc" }}>
+            {QUICK_REPLIES.map((q) => (
+              <button
+                key={q.label}
+                onClick={() => quickReply(q.label)}
+                disabled={sending}
+                title={q.hint}
+                className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-full border border-[#075E54] text-[#075E54] bg-white hover:bg-[#e8f5e9] transition disabled:opacity-50"
+              >
+                {q.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Input */}
           <form
-            onSubmit={(e) => { e.preventDefault(); send(); }}
-            className="border-t border-gray-200 p-3 flex gap-2 bg-white"
-            data-testid="chat-form"
+            onSubmit={(e) => { e.preventDefault(); sendMsg(); }}
+            className="flex gap-2 px-3 py-3 bg-[#F0F0F0] border-t border-gray-200"
           >
             <input
-              data-testid="chat-input"
+              ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Type a message…"
-              className="kn-input"
+              disabled={sending}
+              className="flex-1 px-4 py-2.5 rounded-full text-sm bg-white border border-gray-200 outline-none focus:border-[#075E54] transition"
             />
-            <button data-testid="chat-send" disabled={sending} className="btn-saffron flex items-center gap-1">
-              <Send size={14} />
+            <button
+              type="submit"
+              disabled={sending || !input.trim()}
+              className="w-10 h-10 rounded-full flex items-center justify-center text-white transition disabled:opacity-40"
+              style={{ background: "#075E54" }}
+            >
+              <Send size={16} />
             </button>
           </form>
         </div>
 
-        <div className="kn-card p-6">
-          <MessageCircle size={24} className="text-[#3f37c9]" />
-          <h3 className="font-display text-xl mt-4">Why WhatsApp first?</h3>
-          <ul className="mt-4 space-y-3 text-sm text-gray-700">
-            <li>• 700M+ Indians on WhatsApp daily</li>
-            <li>• No app download or learning curve</li>
-            <li>• Voice notes work perfectly for low-literacy users</li>
-            <li>• Works on the cheapest Android phones</li>
-            <li>• Familiar trust — they already use it daily</li>
-          </ul>
-          <div className="mt-6 p-4 bg-[#fff7f3] border border-[#ffd4c2] rounded-lg text-xs text-[#993c1d]">
-            <b>Coming soon:</b> Real WhatsApp Business API via Gupshup with Hindi voice in/out using Sarvam AI.
+        {/* ── Command guide ── */}
+        <div className="lg:col-span-2 space-y-4">
+          <div className="kn-card p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <Zap size={16} className="text-[#ff6b35]" />
+              <span className="font-bold text-sm">Worker Commands</span>
+            </div>
+            <div className="space-y-2.5">
+              {COMMAND_GUIDE.map((c) => (
+                <button
+                  key={c.cmd}
+                  onClick={() => { setInput(c.cmd); inputRef.current?.focus(); }}
+                  className="w-full text-left group flex items-start gap-3 hover:bg-gray-50 -mx-2 px-2 py-1.5 rounded-lg transition"
+                >
+                  <code className="shrink-0 text-xs font-bold px-2 py-0.5 rounded-md bg-[#f0f0ff] text-[#3f37c9] group-hover:bg-[#3f37c9] group-hover:text-white transition">
+                    {c.cmd}
+                  </code>
+                  <span className="text-xs text-gray-500 leading-relaxed pt-0.5">{c.desc}</span>
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-gray-400 mt-4">Tap any command to paste it in the chat.</p>
+          </div>
+
+          <div className="kn-card p-5">
+            <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">Live on real WhatsApp</div>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              This preview runs the same backend your workers use on WhatsApp. Messages sent from registered numbers reach real jobs and bookings in the platform.
+            </p>
+            <a
+              href="https://wa.me/917834811114"
+              target="_blank"
+              rel="noreferrer"
+              className="mt-4 flex items-center gap-2 text-sm font-bold text-[#075E54] hover:underline"
+            >
+              <span className="w-5 h-5 rounded-full bg-[#25D366] flex items-center justify-center text-white text-xs">W</span>
+              Message on WhatsApp →
+            </a>
           </div>
         </div>
       </div>

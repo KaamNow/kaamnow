@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..auth import get_current_user
@@ -10,6 +12,11 @@ from ..engagements import (
     list_engagements_for_user,
 )
 from ..schemas import BookingIn, RatingIn
+from ..whatsapp_notify import (
+    notify_customer_booking_accepted,
+    notify_worker_job_completed,
+    notify_worker_new_booking,
+)
 
 router = APIRouter(prefix="/api/bookings", tags=["bookings"])
 
@@ -22,7 +29,18 @@ async def create_booking(body: BookingIn, user: dict = Depends(get_current_user)
         source="customer_booking",
         user=user,
     )
-    return engagement_to_booking(engagement)
+    booking = engagement_to_booking(engagement)
+
+    # Notify worker via WhatsApp (non-blocking)
+    worker_doc = await db.workers.find_one({"id": body.worker_id}, {"_id": 0})
+    if worker_doc:
+        worker_user = await db.users.find_one({"id": worker_doc.get("user_id")}, {"_id": 0})
+        if worker_user and worker_user.get("phone"):
+            asyncio.create_task(
+                asyncio.to_thread(notify_worker_new_booking, worker_user["phone"], booking)
+            )
+
+    return booking
 
 
 @router.get("/mine")
@@ -44,7 +62,15 @@ async def my_bookings(user: dict = Depends(get_current_user)):
 async def accept_booking(booking_id: str, user: dict = Depends(get_current_user)):
     engagement = await db.engagements.find_one({"id": booking_id})
     if engagement:
-        return await accept_engagement(booking_id, user)
+        result = await accept_engagement(booking_id, user)
+        # Notify customer via WhatsApp (non-blocking)
+        booking_data = engagement_to_booking(engagement)
+        customer_doc = await db.users.find_one({"id": engagement.get("customer_id")}, {"_id": 0})
+        if customer_doc and customer_doc.get("phone"):
+            asyncio.create_task(
+                asyncio.to_thread(notify_customer_booking_accepted, customer_doc["phone"], booking_data)
+            )
+        return result
 
     if user["role"] != "worker":
         raise HTTPException(status_code=403, detail="Only workers can accept bookings")
@@ -57,6 +83,12 @@ async def accept_booking(booking_id: str, user: dict = Depends(get_current_user)
     if booking["status"] != "pending":
         raise HTTPException(status_code=400, detail="Only pending bookings can be accepted")
     await db.bookings.update_one({"id": booking_id}, {"$set": {"status": "confirmed"}})
+    # Notify customer for legacy booking
+    customer_doc = await db.users.find_one({"id": booking.get("customer_id")}, {"_id": 0})
+    if customer_doc and customer_doc.get("phone"):
+        asyncio.create_task(
+            asyncio.to_thread(notify_customer_booking_accepted, customer_doc["phone"], booking)
+        )
     return {"ok": True}
 
 
@@ -64,7 +96,17 @@ async def accept_booking(booking_id: str, user: dict = Depends(get_current_user)
 async def complete_booking(booking_id: str, user: dict = Depends(get_current_user)):
     engagement = await db.engagements.find_one({"id": booking_id})
     if engagement:
-        return await complete_engagement(booking_id, user)
+        result = await complete_engagement(booking_id, user)
+        # Notify worker via WhatsApp (non-blocking)
+        worker_doc = await db.workers.find_one({"id": engagement.get("worker_id")}, {"_id": 0})
+        if worker_doc:
+            worker_user = await db.users.find_one({"id": worker_doc.get("user_id")}, {"_id": 0})
+            if worker_user and worker_user.get("phone"):
+                booking_data = engagement_to_booking(engagement)
+                asyncio.create_task(
+                    asyncio.to_thread(notify_worker_job_completed, worker_user["phone"], booking_data)
+                )
+        return result
 
     if user["role"] != "customer":
         raise HTTPException(status_code=403, detail="Only customers can mark bookings as completed")
@@ -76,6 +118,14 @@ async def complete_booking(booking_id: str, user: dict = Depends(get_current_use
     if booking["status"] != "confirmed":
         raise HTTPException(status_code=400, detail="Only confirmed bookings can be completed")
     await db.bookings.update_one({"id": booking_id}, {"$set": {"status": "completed"}})
+    # Notify worker for legacy booking
+    worker_doc = await db.workers.find_one({"id": booking.get("worker_id")}, {"_id": 0})
+    if worker_doc:
+        worker_user = await db.users.find_one({"id": worker_doc.get("user_id")}, {"_id": 0})
+        if worker_user and worker_user.get("phone"):
+            asyncio.create_task(
+                asyncio.to_thread(notify_worker_job_completed, worker_user["phone"], booking)
+            )
     return {"ok": True}
 
 

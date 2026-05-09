@@ -1,10 +1,45 @@
 import uuid
-from typing import Literal
+from typing import Literal, Optional
 
 from fastapi import HTTPException
 
 from .db import db
 from .utils import utc_now_iso
+
+
+async def _notify(user_id: str, title: str, body: str, kind: str, ref_id: str = None) -> None:
+    """
+    Store in-app notification AND fire WhatsApp if the user has a phone.
+    WhatsApp is sent for booking_accepted and booking_rejected events.
+    """
+    try:
+        await db.notifications.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "title": title,
+            "body": body,
+            "kind": kind,
+            "ref_id": ref_id,
+            "read": False,
+            "created_at": utc_now_iso(),
+        })
+    except Exception:
+        pass
+
+    # Fire WhatsApp for events the worker cares about in real-time
+    if kind in ("booking_accepted", "booking_rejected", "interest_withdrawn", "booking_request"):
+        try:
+            user = await db.users.find_one({"id": user_id}, {"_id": 0, "phone": 1})
+            if user and user.get("phone"):
+                from .whatsapp_notify import _send as _wa_send
+                import threading
+                threading.Thread(
+                    target=_wa_send,
+                    args=(user["phone"], f"{title}\n{body}"),
+                    daemon=True,
+                ).start()
+        except Exception:
+            pass
 
 ACTIVE_ENGAGEMENT_STATUSES = ["requested", "accepted"]
 MAX_ACTIVE_REQUESTS_PER_WORKER = 5
@@ -163,6 +198,17 @@ async def create_engagement_request(
     }
     await db.engagements.insert_one(engagement)
     engagement.pop("_id", None)
+
+    # Notify customer when worker expresses interest
+    if source == "worker_interest":
+        await _notify(
+            job["customer_id"],
+            f"New interest: {engagement['job_title']}",
+            f"{worker['name']} is interested in your job. Tap to approve or reject.",
+            "booking_request",
+            engagement["id"],
+        )
+
     return engagement
 
 
@@ -191,7 +237,7 @@ async def list_engagements_for_user(user: dict) -> list[dict]:
     return await db.engagements.find({"customer_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
 
 
-def _can_decide_engagement(engagement: dict, user: dict, worker: dict | None) -> bool:
+def _can_decide_engagement(engagement: dict, user: dict, worker: Optional[dict]) -> bool:
     if engagement["source"] == "worker_interest":
         return user["role"] == "customer" and engagement["customer_id"] == user["id"]
     if engagement["source"] == "customer_booking":
@@ -216,19 +262,51 @@ async def accept_engagement(engagement_id: str, user: dict) -> dict:
     await _ensure_job_can_accept_more(job)
     await _ensure_worker_can_take_job(engagement_worker, job)
 
+    now = utc_now_iso()
+
+    # Fetch contact details for sharing
+    worker_user = await db.users.find_one({"id": engagement_worker.get("user_id")}, {"_id": 0, "phone": 1, "name": 1})
+    customer_user = await db.users.find_one({"id": engagement["customer_id"]}, {"_id": 0, "phone": 1, "name": 1})
+
     await db.engagements.update_one(
         {"id": engagement_id},
-        {"$set": {"status": "accepted", "accepted_at": utc_now_iso(), "updated_at": utc_now_iso()}},
+        {"$set": {
+            "status": "accepted",
+            "accepted_at": now,
+            "updated_at": now,
+            "worker_phone": worker_user.get("phone") if worker_user else None,
+            "customer_phone": customer_user.get("phone") if customer_user else None,
+        }},
     )
 
     accepted_worker_ids = list(job.get("accepted_worker_ids") or [])
     if engagement["worker_id"] not in accepted_worker_ids:
         accepted_worker_ids.append(engagement["worker_id"])
+
+    # If job is now fully booked, mark it
+    workers_needed = int(job.get("workers_needed") or 1)
+    new_filled = len(accepted_worker_ids)
+    new_job_status = "booked" if new_filled >= workers_needed else "open"
+
     await db.jobs.update_one(
         {"id": job["id"]},
-        {"$set": {"accepted_worker_ids": accepted_worker_ids, "filled_count": len(accepted_worker_ids)}},
+        {"$set": {
+            "accepted_worker_ids": accepted_worker_ids,
+            "filled_count": new_filled,
+            "status": new_job_status,
+        }},
     )
-    return {"ok": True}
+
+    # Notify worker that they were accepted
+    await _notify(
+        engagement_worker.get("user_id", ""),
+        f"✅ Booking confirmed: {engagement.get('job_title')}",
+        f"Your interest was approved! Contact the customer at {customer_user.get('phone', 'N/A') if customer_user else 'N/A'}.",
+        "booking_accepted",
+        engagement_id,
+    )
+
+    return {"ok": True, "worker_phone": worker_user.get("phone") if worker_user else None, "customer_phone": customer_user.get("phone") if customer_user else None}
 
 
 async def reject_engagement(engagement_id: str, user: dict) -> dict:
@@ -244,10 +322,23 @@ async def reject_engagement(engagement_id: str, user: dict) -> dict:
     if engagement["status"] != "requested":
         raise HTTPException(status_code=400, detail="Only requested engagements can be rejected")
 
+    now = utc_now_iso()
     await db.engagements.update_one(
         {"id": engagement_id},
-        {"$set": {"status": "rejected", "rejected_at": utc_now_iso(), "updated_at": utc_now_iso()}},
+        {"$set": {"status": "rejected", "rejected_at": now, "updated_at": now}},
     )
+
+    # Notify worker of rejection
+    engagement_worker = await db.workers.find_one({"id": engagement["worker_id"]}, {"_id": 0})
+    if engagement_worker:
+        await _notify(
+            engagement_worker.get("user_id", ""),
+            f"Interest not approved: {engagement.get('job_title')}",
+            "The customer chose a different worker for this job. Browse the feed for other opportunities.",
+            "booking_rejected",
+            engagement_id,
+        )
+
     return {"ok": True}
 
 
@@ -255,10 +346,39 @@ async def cancel_engagement(engagement_id: str, user: dict) -> dict:
     engagement = await get_engagement_for_user(engagement_id, user)
     if engagement["status"] not in ["requested", "accepted"]:
         raise HTTPException(status_code=400, detail="Only active engagements can be cancelled")
+
+    now = utc_now_iso()
     await db.engagements.update_one(
         {"id": engagement_id},
-        {"$set": {"status": "cancelled", "cancelled_at": utc_now_iso(), "updated_at": utc_now_iso()}},
+        {"$set": {"status": "cancelled", "cancelled_at": now, "updated_at": now}},
     )
+
+    # If worker is cancelling, notify customer; if customer cancels, notify worker
+    if user["role"] == "worker":
+        worker_name = engagement.get("worker_name", "A worker")
+        await _notify(
+            engagement["customer_id"],
+            f"Interest withdrawn: {engagement.get('job_title')}",
+            f"{worker_name} has withdrawn their interest. Your job is back open.",
+            "interest_withdrawn",
+            engagement_id,
+        )
+        # Reopen job if it was marked booked
+        await db.jobs.update_one(
+            {"id": engagement["job_id"], "status": "booked"},
+            {"$set": {"status": "open"}}
+        )
+    elif user["role"] == "customer":
+        eng_worker = await db.workers.find_one({"id": engagement["worker_id"]}, {"_id": 0})
+        if eng_worker:
+            await _notify(
+                eng_worker.get("user_id", ""),
+                f"Booking cancelled: {engagement.get('job_title')}",
+                "The customer cancelled this booking. Browse the feed for other opportunities.",
+                "booking_rejected",
+                engagement_id,
+            )
+
     return {"ok": True}
 
 

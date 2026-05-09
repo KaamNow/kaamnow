@@ -1,6 +1,7 @@
 import bcrypt
 import jwt
 from datetime import datetime, timezone, timedelta
+from typing import Optional
 from fastapi import HTTPException, Request, Response
 
 from .config import settings
@@ -27,7 +28,7 @@ def create_token(user_id: str, email: str) -> str:
     return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
 
 
-def _get_token(request: Request) -> str | None:
+def _get_token(request: Request) -> Optional[str]:
     token = request.cookies.get("access_token")
     if token:
         return token
@@ -37,6 +38,18 @@ def _get_token(request: Request) -> str | None:
         return auth_header[7:]
 
     return None
+
+
+async def get_optional_user(request: Request) -> Optional[dict]:
+    token = _get_token(request)
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
+        user = await db.users.find_one({"id": payload["sub"]}, {"_id": 0, "password_hash": 0})
+        return user
+    except Exception:
+        return None
 
 
 async def get_current_user(request: Request) -> dict:
