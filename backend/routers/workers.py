@@ -190,7 +190,48 @@ async def search_workers(
 
 @router.get("/me/profile")
 async def my_worker_profile(user: dict = Depends(get_current_user)):
-    return await db.workers.find_one({"user_id": user["id"]}, {"_id": 0})
+    worker = await db.workers.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not worker:
+        raise HTTPException(status_code=404, detail="Worker profile not found")
+    return worker
+
+
+@router.patch("/profile")
+async def update_worker_profile(
+    body: WorkerProfileIn,
+    user: dict = Depends(get_current_user),
+):
+    """Partial profile update - only provided fields are updated."""
+    if user["role"] != "worker":
+        raise HTTPException(status_code=403, detail="Only workers can update profiles")
+
+    now = datetime.now(timezone.utc).isoformat()
+    profile = body.model_dump(exclude_unset=True)
+    profile["last_active_at"] = now
+
+    # Handle address if provided
+    if "address" in profile and profile["address"]:
+        profile["address"] = _legacy_address(profile)
+        if profile["address"]["village"]:
+            profile["village"] = profile["address"]["village"]
+        if profile["address"]["district"]:
+            profile["district"] = profile["address"]["district"]
+        if profile["address"]["state"]:
+            profile["state"] = profile["address"]["state"]
+
+    # Handle structured_skills if provided
+    if "structured_skills" in profile:
+        profile["structured_skills"] = profile.get("structured_skills") or []
+
+    result = await db.workers.update_one(
+        {"user_id": user["id"]},
+        {"$set": profile}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Worker profile not found")
+
+    worker = await db.workers.find_one({"user_id": user["id"]}, {"_id": 0})
+    return worker
 
 
 @router.patch("/me/availability")
