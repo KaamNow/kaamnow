@@ -180,9 +180,9 @@ install_cert_manager() {
 
 # --- Apply manifests ------------------------------------------------------
 apply_manifests() {
-  step "Applying namespace + MongoDB + frontend manifests..."
+  step "Applying namespace + frontend manifests..."
   kubectl apply -f "${SCRIPT_DIR}/k8s/00-namespace.yaml"
-  kubectl apply -f "${SCRIPT_DIR}/k8s/10-mongodb.yaml"
+  # 10-mongodb.yaml intentionally skipped — using MongoDB Atlas instead of local MongoDB
   kubectl apply -f "${SCRIPT_DIR}/k8s/30-frontend.yaml"
 
   # Idempotent secret: only generate fresh credentials on first deploy.
