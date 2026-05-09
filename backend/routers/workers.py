@@ -196,7 +196,7 @@ async def my_worker_profile(user: dict = Depends(get_current_user)):
     return worker
 
 
-@router.patch("/profile")
+@router.patch("/profile", response_model=WorkerOut)
 async def update_worker_profile(
     body: WorkerProfileIn,
     user: dict = Depends(get_current_user),

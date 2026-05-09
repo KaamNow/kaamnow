@@ -110,15 +110,15 @@ class WorkerOut(BaseModel):
     id: str
     user_id: str
     name: str
-    skills: List[str]
-    daily_rate: int
-    bio: str
-    village: str
-    district: str
-    state: str
-    lat: float
-    lng: float
-    available: bool
+    skills: Optional[List[str]] = Field(default_factory=list)
+    daily_rate: Optional[int] = None
+    bio: Optional[str] = ""
+    village: Optional[str] = None
+    district: Optional[str] = ""
+    state: Optional[str] = ""
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    available: bool = True
     trust_tier: int
     avg_rating: float
     total_jobs: int
