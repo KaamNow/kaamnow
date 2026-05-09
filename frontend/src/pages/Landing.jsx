@@ -162,7 +162,7 @@ export default function Landing() {
 
           {/* Two big CTAs */}
           <div className="mt-7 flex flex-wrap gap-3">
-            <Link to="/worker/job-feed"
+            <Link to="/find-work"
               className="flex items-center gap-2 font-bold rounded-2xl active:scale-95 transition-all shadow-md"
               style={{ background: C.green, color: "white", padding: "14px 28px", fontSize: 15, minHeight: 52 }}>
               <Briefcase size={17} /> {t("hero_cta_worker")}
@@ -251,7 +251,7 @@ export default function Landing() {
                   style={{ background: C.green }}>
                   {t("findwork_cta_register")}
                 </Link>
-                <Link to="/worker/job-feed"
+                <Link to="/find-work"
                   className="flex items-center gap-1 font-bold text-sm transition hover:underline"
                   style={{ color: C.green }}>
                   {t("findwork_cta_browse")} <ArrowRight size={13} />
@@ -262,7 +262,7 @@ export default function Landing() {
             {/* Live job teasers */}
             <div className="space-y-2.5">
               {featuredJobs.map((j, i) => (
-                <Link to="/worker/job-feed" key={j.id}
+                <Link to="/find-work" key={j.id}
                   className="flex items-center justify-between rounded-xl px-4 py-3.5 transition hover:shadow-md"
                   style={{ background: "white", border: `1px solid ${C.border}`, opacity: 1 - i * 0.12 }}>
                   <div>
@@ -608,7 +608,7 @@ export default function Landing() {
           style={{ background: C.terracotta }}>
           <Users size={15} /> {t("mob_workers")}
         </Link>
-        <Link to="/worker/job-feed"
+        <Link to="/find-work"
           className="flex-1 flex items-center justify-center gap-2 font-bold rounded-xl py-3.5 text-sm text-white active:scale-95 transition"
           style={{ background: C.green }}>
           <Briefcase size={15} /> {t("mob_work")}
