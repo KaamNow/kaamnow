@@ -13,7 +13,8 @@ from backend.schemas import WorkerProfileIn, WorkerOut, StructuredSkill, Address
 class TestThreeStepOnboarding:
     """Tests for simplified 3-step onboarding (name, phone, address)"""
 
-    def test_create_profile_minimal_fields(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_create_profile_minimal_fields(self, monkeypatch):
         """Verify profile creation with only 3 critical fields"""
         from tests.test_current_flows import DummyDb
 
@@ -28,7 +29,7 @@ class TestThreeStepOnboarding:
         )
 
         # Should succeed even without lat, lng, skills, daily_rate
-        result = workers_routes.upsert_worker_profile(profile_in, user=user)
+        result = await workers_routes.upsert_worker_profile(profile_in, user=user)
 
         assert result["id"]
         assert result["name"] == "Ramesh Kumar"
@@ -39,7 +40,8 @@ class TestThreeStepOnboarding:
         assert result["daily_rate"] is None  # Deferred
         assert result["photo_url"] is None  # Deferred
 
-    def test_partial_profile_has_defaults(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_partial_profile_has_defaults(self, monkeypatch):
         """Verify partial profiles get sensible defaults"""
         from tests.test_current_flows import DummyDb
 
@@ -48,7 +50,7 @@ class TestThreeStepOnboarding:
         user = {"id": "worker-2", "name": "Priya", "role": "worker"}
 
         profile_in = WorkerProfileIn(village="Village2", address=Address(village="Village2"))
-        result = workers_routes.upsert_worker_profile(profile_in, user=user)
+        result = await workers_routes.upsert_worker_profile(profile_in, user=user)
 
         # Verify defaults are applied
         assert result["available"] == True
@@ -81,7 +83,8 @@ class TestThreeStepOnboarding:
 class TestSkillSelectorModal:
     """Tests for skills update via PATCH /profile endpoint"""
 
-    def test_patch_profile_update_skills(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_patch_profile_update_skills(self, monkeypatch):
         """Verify PATCH endpoint updates only skills, leaves other fields alone"""
         from tests.test_current_flows import DummyDb
 
@@ -107,7 +110,7 @@ class TestSkillSelectorModal:
             ]
         )
 
-        result = workers_routes.update_worker_profile(skills_update, user=user)
+        result = await workers_routes.update_worker_profile(skills_update, user=user)
 
         # Skills should be updated
         assert len(result["structured_skills"]) == 1
@@ -118,7 +121,8 @@ class TestSkillSelectorModal:
         assert result["lat"] is None
         assert result["daily_rate"] is None
 
-    def test_patch_preserves_existing_photo(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_patch_preserves_existing_photo(self, monkeypatch):
         """Verify PATCH doesn't overwrite photo_url when not in request"""
         from tests.test_current_flows import DummyDb
 
@@ -140,12 +144,13 @@ class TestSkillSelectorModal:
             ]
         )
 
-        result = workers_routes.update_worker_profile(skills_update, user=user)
+        result = await workers_routes.update_worker_profile(skills_update, user=user)
 
         # Photo should be preserved
         assert result["photo_url"] == "/static/uploads/photo.jpg"
 
-    def test_patch_multiple_skills(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_patch_multiple_skills(self, monkeypatch):
         """Verify PATCH can update multiple skills at once"""
         from tests.test_current_flows import DummyDb
 
@@ -167,7 +172,7 @@ class TestSkillSelectorModal:
             ]
         )
 
-        result = workers_routes.update_worker_profile(skills_update, user=user)
+        result = await workers_routes.update_worker_profile(skills_update, user=user)
 
         assert len(result["structured_skills"]) == 3
         assert any(s["skill"] == "Mason" for s in result["structured_skills"])
@@ -203,7 +208,8 @@ class TestPhotoUploadModal:
 class TestEndToEndFlow:
     """Integration tests for complete Phase 2 flow"""
 
-    def test_signup_onboarding_modals_flow(self, monkeypatch):
+    @pytest.mark.asyncio
+    async def test_signup_onboarding_modals_flow(self, monkeypatch):
         """
         Test complete flow:
         1. User signs up (3-step)
@@ -226,7 +232,7 @@ class TestEndToEndFlow:
             address=Address(village="TestVillage")
         )
 
-        worker = workers_routes.upsert_worker_profile(onboarding, user=user)
+        worker = await workers_routes.upsert_worker_profile(onboarding, user=user)
         assert worker["id"]
         assert worker["structured_skills"] == []  # Skills not yet provided
         assert worker["photo_url"] is None  # Photo not yet provided
@@ -243,7 +249,7 @@ class TestEndToEndFlow:
             ]
         )
 
-        updated_worker = workers_routes.update_worker_profile(
+        updated_worker = await workers_routes.update_worker_profile(
             skills_input,
             user=user
         )

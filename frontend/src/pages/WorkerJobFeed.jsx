@@ -3,6 +3,9 @@ import { Link } from "react-router-dom";
 import api from "@/lib/api";
 import { useAuth, formatApiError } from "@/contexts/AuthContext";
 import { toast } from "sonner";
+import SkillSelectorModal from "@/components/SkillSelectorModal";
+import PhotoUploadModal from "@/components/PhotoUploadModal";
+import DailyRateModal from "@/components/DailyRateModal";
 import {
   Briefcase,
   MapPin,
@@ -192,11 +195,27 @@ function JobCard({ job, onInterest, sending, onWithdraw, withdrawing }) {
                 </div>
               );
             }
-            if (eng.status === "rejected" || eng.status === "cancelled") {
+            if (eng.status === "rejected") {
               return (
                 <span className="text-xs font-bold text-gray-400 flex items-center gap-1">
-                  <XCircle size={12} /> {eng.status === "rejected" ? "Not approved" : "Withdrawn"} – apply to other jobs
+                  <XCircle size={12} /> Not approved by customer
                 </span>
+              );
+            }
+            if (eng.status === "cancelled") {
+              return (
+                <div className="flex items-center gap-3">
+                  <button
+                    disabled={sending === job.id}
+                    onClick={() => onInterest(job.id)}
+                    className="btn-saffron flex items-center gap-2 text-sm !py-2 !px-4 disabled:opacity-60"
+                  >
+                    {sending === job.id
+                      ? <><RefreshCw size={13} className="animate-spin" /> Sending…</>
+                      : <><HandHeart size={13} /> Apply Again</>}
+                  </button>
+                  <span className="text-xs text-gray-400">Previously withdrawn</span>
+                </div>
               );
             }
             if (eng.status === "completed") {
@@ -225,14 +244,46 @@ export default function WorkerJobFeed() {
   const [sortBy, setSortBy] = useState("match");
   const [showFilter, setShowFilter] = useState(false);
 
+  // Modal states for deferred collection
+  const [showSkillSelector, setShowSkillSelector] = useState(false);
+  const [showPhotoUpload, setShowPhotoUpload] = useState(false);
+  const [showDailyRate, setShowDailyRate] = useState(false);
+  const [workerProfile, setWorkerProfile] = useState(null);
+  const [firstVisit, setFirstVisit] = useState(true);
+
   const loadEngagements = useCallback(async () => {
     try {
-      const r = await api.get("/engagements/mine");
+      const [engRes, profileRes] = await Promise.all([
+        api.get("/engagements/mine"),
+        api.get("/workers/me/profile").catch(() => null),
+      ]);
+
+      // Keep latest engagement per job (most recent created_at wins)
       const map = {};
-      for (const e of (r.data || [])) {
-        map[e.job_id] = e;
+      for (const e of (engRes.data || [])) {
+        const existing = map[e.job_id];
+        if (!existing || e.created_at > existing.created_at) {
+          map[e.job_id] = e;
+        }
       }
       setMyEngagements(map);
+
+      // Store worker profile for modal logic
+      if (profileRes?.data) {
+        setWorkerProfile(profileRes.data);
+      }
+
+      // Check if should show photo modal (first booking accepted)
+      if (profileRes?.data) {
+        const hasAcceptedBooking = (engRes.data || []).some(e => e.status === "accepted");
+        if (hasAcceptedBooking && !profileRes.data.photo_url) {
+          setShowPhotoUpload(true);
+        }
+        // Show daily rate modal after photo is set
+        if (hasAcceptedBooking && profileRes.data.photo_url && !profileRes.data.daily_rate) {
+          setShowDailyRate(true);
+        }
+      }
     } catch {}
   }, []);
 
@@ -256,8 +307,21 @@ export default function WorkerJobFeed() {
   }, [loadEngagements]);
 
   useEffect(() => {
-    if (user) loadFeed(pincodeFilter, skillFilter);
+    if (user) {
+      loadFeed(pincodeFilter, skillFilter);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, loadFeed]);
+
+  // Show skill selector once on first visit if no skills set
+  useEffect(() => {
+    if (!firstVisit || !workerProfile) return;
+    setFirstVisit(false);
+    if (!workerProfile.structured_skills?.length) {
+      setShowSkillSelector(true);
+    }
+    // Location picker is shown after skills are saved (not on auto-load)
+  }, [workerProfile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSearch = (e) => {
     e.preventDefault();
@@ -265,7 +329,9 @@ export default function WorkerJobFeed() {
   };
 
   const handleInterest = async (jobId) => {
-    if (myEngagements[jobId]) return;
+    const existing = myEngagements[jobId];
+    // Block only if there's an active engagement (not cancelled/rejected)
+    if (existing && !["cancelled", "rejected", "completed"].includes(existing.status)) return;
     setSending(jobId);
     try {
       await api.post(`/jobs/${jobId}/interest`);
@@ -288,6 +354,34 @@ export default function WorkerJobFeed() {
       toast.error(formatApiError(err));
     } finally {
       setWithdrawing(null);
+    }
+  };
+
+  const handleSkillsSave = async (skills) => {
+    try {
+      await api.patch("/workers/profile", {
+        structured_skills: skills,
+      });
+      setWorkerProfile(prev => ({
+        ...prev,
+        structured_skills: skills,
+      }));
+      toast.success("Skills saved!");
+      setShowSkillSelector(false);
+    } catch (err) {
+      toast.error(formatApiError(err));
+    }
+  };
+
+
+  const handleDailyRateSave = async (rate) => {
+    try {
+      await api.patch("/workers/profile", { daily_rate: rate });
+      setWorkerProfile(prev => ({ ...prev, daily_rate: rate }));
+      toast.success("Daily rate saved!");
+      setShowDailyRate(false);
+    } catch (err) {
+      toast.error(formatApiError(err));
     }
   };
 
@@ -459,6 +553,32 @@ export default function WorkerJobFeed() {
           )}
         </div>
       )}
+
+      {/* Modals for Deferred Collection */}
+      <SkillSelectorModal
+        isOpen={showSkillSelector}
+        onClose={() => setShowSkillSelector(false)}
+        onSave={handleSkillsSave}
+        initialSkills={workerProfile?.structured_skills || []}
+      />
+
+      <PhotoUploadModal
+        isOpen={showPhotoUpload}
+        onClose={() => {
+          setShowPhotoUpload(false);
+          loadEngagements();
+        }}
+        currentPhoto={workerProfile?.photo_url}
+        userName={user?.name}
+      />
+
+
+      <DailyRateModal
+        isOpen={showDailyRate}
+        onClose={() => setShowDailyRate(false)}
+        onSave={handleDailyRateSave}
+        currentRate={workerProfile?.daily_rate}
+      />
     </div>
   );
 }

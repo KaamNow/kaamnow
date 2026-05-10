@@ -2,7 +2,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import KaamNowLogo from "@/components/KaamNowLogo";
-import { Bell, User, X, Menu, ChevronDown, MapPin, Users, Briefcase } from "lucide-react";
+import { Bell, User, X, Menu, ChevronDown, MapPin, Users, Briefcase, Settings, LogOut } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import api from "@/lib/api";
 
@@ -66,6 +66,7 @@ function LangToggle() {
 function NotifBell({ size = 18 }) {
   const [count, setCount] = useState(0);
   const { user } = useAuth();
+  const nav = useNavigate();
   useEffect(() => {
     if (!user) return;
     const load = () =>
@@ -74,10 +75,16 @@ function NotifBell({ size = 18 }) {
     const id = setInterval(load, 30000);
     return () => clearInterval(id);
   }, [user]);
-  const dashLink = user?.role === "worker" ? "/worker/dashboard" : "/dashboard";
+
+  const handleClick = () => {
+    const tab = "notifications";
+    const base = user?.role === "worker" ? "/worker/dashboard" : "/dashboard";
+    nav(`${base}?tab=${tab}`, { replace: false });
+  };
+
   return (
-    <Link to={dashLink} aria-label="Notifications"
-      style={{ position: "relative", padding: 7, borderRadius: 10, color: C.muted, display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s, color 0.15s" }}
+    <button onClick={handleClick} aria-label="Notifications"
+      style={{ position: "relative", padding: 7, borderRadius: 10, color: C.muted, display: "flex", alignItems: "center", justifyContent: "center", transition: "background 0.15s, color 0.15s", background: "none", border: "none", cursor: "pointer" }}
       onMouseEnter={e => { e.currentTarget.style.background = "#F0EAE0"; e.currentTarget.style.color = C.brown; }}
       onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = C.muted; }}>
       <Bell size={size} />
@@ -90,7 +97,7 @@ function NotifBell({ size = 18 }) {
           {count > 9 ? "9+" : count}
         </span>
       )}
-    </Link>
+    </button>
   );
 }
 
@@ -112,21 +119,20 @@ function UserDropdown({ user, logout, t }) {
       <button
         onClick={() => setOpen(o => !o)}
         style={{
-          display: "flex", alignItems: "center", gap: 8,
-          padding: "5px 12px 5px 5px", borderRadius: 24,
-          border: `1px solid ${C.border}`, background: "white",
+          display: "flex", alignItems: "center", gap: 6,
+          padding: 4, borderRadius: 24,
+          border: `1.5px solid ${open ? C.accent : C.border}`, background: "white",
           cursor: "pointer", transition: "border-color 0.15s",
         }}
         onMouseEnter={e => e.currentTarget.style.borderColor = C.accent}
-        onMouseLeave={e => e.currentTarget.style.borderColor = C.border}
+        onMouseLeave={e => { if (!open) e.currentTarget.style.borderColor = C.border; }}
       >
-        <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#E8E3DC", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <User size={14} style={{ color: C.muted }} />
+        <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#E8E3DC", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, overflow: "hidden" }}>
+          {user.photo_url
+            ? <img src={user.photo_url.startsWith("http") ? user.photo_url : `${process.env.REACT_APP_BACKEND_URL}${user.photo_url}`} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+            : <span style={{ fontSize: 13, fontWeight: 700, color: C.muted }}>{user.name?.[0]?.toUpperCase()}</span>}
         </div>
-        <span style={{ fontSize: 13.5, fontWeight: 600, color: C.brown, whiteSpace: "nowrap" }}>
-          Hi, {user.name?.split(" ")[0]}
-        </span>
-        <ChevronDown size={12} style={{ color: C.muted, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
+        <ChevronDown size={11} style={{ color: C.muted, marginRight: 4, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.15s" }} />
       </button>
 
       {open && (
@@ -137,18 +143,25 @@ function UserDropdown({ user, logout, t }) {
           border: `1px solid ${C.border}`,
           padding: 8, minWidth: 180, zIndex: 100,
         }}>
+          <Link to={dashLink} onClick={() => { setOpen(false); }} state={{ tab: "profile" }}
+            style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, color: C.brown, fontWeight: 600, fontSize: 14, textDecoration: "none" }}
+            onMouseEnter={e => e.currentTarget.style.background = "#F5F0E8"}
+            onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+            <User size={15} style={{ color: C.muted }} /> My Profile
+          </Link>
           <Link to={dashLink} onClick={() => setOpen(false)}
             style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, color: C.brown, fontWeight: 600, fontSize: 14, textDecoration: "none" }}
             onMouseEnter={e => e.currentTarget.style.background = "#F5F0E8"}
             onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-            {t("nav_dashboard")}
+            <Settings size={15} style={{ color: C.muted }} /> Dashboard
           </Link>
+          <div style={{ height: 1, background: C.border, margin: "4px 8px" }} />
           <button
             onClick={async () => { await logout(); nav("/"); setOpen(false); }}
-            style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, color: C.accent, fontWeight: 600, fontSize: 14, background: "none", border: "none", cursor: "pointer", textAlign: "left" }}
+            style={{ width: "100%", display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 10, color: "#dc2626", fontWeight: 600, fontSize: 14, background: "none", border: "none", cursor: "pointer", textAlign: "left" }}
             onMouseEnter={e => e.currentTarget.style.background = "#FFF1EC"}
             onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-            {t("nav_logout")}
+            <LogOut size={15} style={{ color: "#dc2626" }} /> {t("nav_logout")}
           </button>
         </div>
       )}
@@ -469,11 +482,17 @@ export default function Navbar() {
                   <NavItem to="/worker/job-feed"  active={loc.pathname === "/worker/job-feed"}>{t("nav_work")}</NavItem>
                   <NavItem to="/support"          active={loc.pathname === "/support"}>Help</NavItem>
                 </>
+              ) : user ? (
+                <>
+                  <NavItem to="/marketplace"   active={loc.pathname === "/marketplace"}>{t("nav_workers")}</NavItem>
+                  <NavItem to="/post-job"       active={loc.pathname === "/post-job"}>Post a Job</NavItem>
+                  <NavItem to="/dashboard"      active={loc.pathname === "/dashboard"}>My Bookings</NavItem>
+                </>
               ) : (
                 <>
                   <NavItem to="/"              active={loc.pathname === "/"}>{t("nav_home")}</NavItem>
                   <NavItem to="/marketplace"   active={loc.pathname === "/marketplace"}>{t("nav_workers")}</NavItem>
-                  <NavItem to="/find-work" active={loc.pathname === "/find-work"}>{t("nav_work")}</NavItem>
+                  <NavItem to="/find-work"     active={loc.pathname === "/find-work"}>{t("nav_work")}</NavItem>
                   <NavItem active={false} onClick={handleHowItWorks}>{t("nav_how_it_works")}</NavItem>
                 </>
               )}
@@ -490,10 +509,11 @@ export default function Navbar() {
                     <NotifBell />
                     <UserDropdown user={user} logout={logout} t={t} />
                   </div>
-                  {/* Mobile: bell only */}
-                  <span className="lg:hidden" style={{ display: "flex" }}>
+                  {/* Mobile: bell + avatar pill */}
+                  <div className="lg:hidden flex items-center gap-1.5">
                     <NotifBell size={20} />
-                  </span>
+                    <UserDropdown user={user} logout={logout} t={t} />
+                  </div>
                 </>
               ) : (
                 <>
@@ -529,26 +549,38 @@ export default function Navbar() {
           </div>
         </div>
 
-        {/* ── Row 2 (mobile only): Find Workers | Find Work quick pills ── */}
-        <div className="lg:hidden" style={{ borderTop: `1px solid ${C.border}` }}>
-          <div style={{ display: "flex", alignItems: "stretch" }}>
-            <Link to="/marketplace"
-              style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "13px 16px", fontSize: 14, fontWeight: 600, color: C.accent, textDecoration: "none", transition: "background 0.15s" }}
-              onMouseEnter={e => e.currentTarget.style.background = "#FFF5F2"}
-              onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-              <Users size={16} style={{ color: C.accent }} />
-              {t("nav_workers")}
-            </Link>
-            <div style={{ width: 1, background: C.border, alignSelf: "stretch", margin: "10px 0" }} />
-            <Link to="/find-work"
-              style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "13px 16px", fontSize: 14, fontWeight: 600, color: C.text, textDecoration: "none", transition: "background 0.15s" }}
-              onMouseEnter={e => e.currentTarget.style.background = "#F5F0E8"}
-              onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-              <Briefcase size={16} style={{ color: C.muted }} />
-              {t("nav_work")}
-            </Link>
+        {/* ── Row 2 (mobile only): quick pills — role-aware ── */}
+        {!isWorker && (
+          <div className="lg:hidden" style={{ borderTop: `1px solid ${C.border}` }}>
+            <div style={{ display: "flex", alignItems: "stretch" }}>
+              <Link to="/marketplace"
+                style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "13px 16px", fontSize: 14, fontWeight: 600, color: C.accent, textDecoration: "none", transition: "background 0.15s" }}
+                onMouseEnter={e => e.currentTarget.style.background = "#FFF5F2"}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                <Users size={16} style={{ color: C.accent }} />
+                {t("nav_workers")}
+              </Link>
+              <div style={{ width: 1, background: C.border, alignSelf: "stretch", margin: "10px 0" }} />
+              {user ? (
+                <Link to="/post-job"
+                  style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "13px 16px", fontSize: 14, fontWeight: 600, color: C.text, textDecoration: "none", transition: "background 0.15s" }}
+                  onMouseEnter={e => e.currentTarget.style.background = "#F5F0E8"}
+                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                  <Briefcase size={16} style={{ color: C.muted }} />
+                  Post a Job
+                </Link>
+              ) : (
+                <Link to="/find-work"
+                  style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "13px 16px", fontSize: 14, fontWeight: 600, color: C.text, textDecoration: "none", transition: "background 0.15s" }}
+                  onMouseEnter={e => e.currentTarget.style.background = "#F5F0E8"}
+                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                  <Briefcase size={16} style={{ color: C.muted }} />
+                  {t("nav_work")}
+                </Link>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* ── Row 3 (mobile only): live announcement strip ── */}
         <div className="lg:hidden" style={{ borderTop: `1px solid ${C.border}`, background: "#F5F1EB" }}>

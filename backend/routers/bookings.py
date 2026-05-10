@@ -1,6 +1,9 @@
 import asyncio
+import uuid
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from ..auth import get_current_user
 from ..db import db
@@ -39,6 +42,66 @@ async def create_booking(body: BookingIn, user: dict = Depends(get_current_user)
             asyncio.create_task(
                 asyncio.to_thread(notify_worker_new_booking, worker_user["phone"], booking)
             )
+
+    return booking
+
+
+class DirectHireIn(BaseModel):
+    worker_id: str
+    category: str
+    daily_rate: int
+    job_date: str
+    note: Optional[str] = None
+
+
+@router.post("/direct")
+async def direct_hire(body: DirectHireIn, user: dict = Depends(get_current_user)):
+    """Hire a worker directly without posting a job first.
+    Auto-creates a minimal job + engagement in one step.
+    Worker must accept before booking is confirmed.
+    """
+    if user["role"] != "customer":
+        raise HTTPException(status_code=403, detail="Only customers can hire workers directly")
+
+    worker = await db.workers.find_one({"id": body.worker_id}, {"_id": 0})
+    if not worker:
+        raise HTTPException(status_code=404, detail="Worker not found")
+
+    from ..utils import utc_now_iso
+    job_id = str(uuid.uuid4())
+    job_doc = {
+        "id": job_id,
+        "customer_id": user["id"],
+        "customer_name": user.get("name", ""),
+        "title": f"{body.category.title()} work – Direct hire",
+        "category": body.category,
+        "description": body.note or f"Direct booking request for {body.category} work on {body.job_date}.",
+        "workers_needed": 1,
+        "daily_rate": body.daily_rate,
+        "job_date": body.job_date,
+        "village": (user.get("address") or {}).get("village") or user.get("village") or "",
+        "lat": 22.9734,
+        "lng": 78.6569,
+        "address": user.get("address") or {},
+        "status": "open",
+        "source": "direct_hire",
+        "required_skills": [{"category": body.category, "skill": body.category}],
+        "created_at": utc_now_iso(),
+    }
+    await db.jobs.insert_one(job_doc)
+
+    engagement = await create_engagement_request(
+        job_id=job_id,
+        worker_id=body.worker_id,
+        source="customer_booking",
+        user=user,
+    )
+    booking = engagement_to_booking(engagement)
+
+    # Notify worker
+    worker_user = await db.users.find_one({"id": worker.get("user_id")}, {"_id": 0})
+    if worker_user and worker_user.get("phone"):
+        asyncio.create_task(asyncio.to_thread(notify_worker_new_booking, worker_user["phone"], booking))
 
     return booking
 

@@ -1,14 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import DirectHireModal from "@/components/DirectHireModal";
 import api from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { usePincodeLookup } from "@/lib/usePincode";
-import { MapContainer, TileLayer, Marker, Popup } from "react-leaflet";
-import L from "leaflet";
 import {
   Search, Star, MapPin, ShieldCheck, RefreshCw,
-  ChevronDown, Map, X, CheckCircle, Zap, Briefcase,
+  ChevronDown, X, CheckCircle, Zap, Briefcase,
 } from "lucide-react";
 
 /* ── Palette ─────────────────────────────────────────────────────────────── */
@@ -24,11 +23,6 @@ const C = {
   shadowHov: "0 8px 28px rgba(45,31,24,0.12)",
 };
 
-const MAP_ICON = new L.DivIcon({
-  className: "",
-  html: `<div style="width:26px;height:26px;background:#E56A47;border:3px solid white;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,0.22)"></div>`,
-  iconSize: [26, 26], iconAnchor: [13, 13],
-});
 
 /* ── Skill → category metadata ───────────────────────────────────────────── */
 const SKILL_CATS = [
@@ -153,15 +147,19 @@ function SkeletonCard() {
 }
 
 /* ── Worker card ─────────────────────────────────────────────────────────── */
-function WorkerCard({ w, jobId }) {
+function WorkerCard({ w, jobId, availabilityFilter, onHire }) {
   const [hov, setHov] = useState(false);
   const link = jobId ? `/worker/${w.id}?job=${jobId}` : `/worker/${w.id}`;
   const { label: tLabel, color: tColor, bg: tBg } = trustLabel(w.trust_tier);
-  const topSkills  = (w.skills || []).slice(0, 4);
-  const respondsQ = w.avg_rating >= 4.0 || w.total_jobs >= 10;
-  const aColor    = avatarColor(w.name);
-  /* Location: prefer village; fall back to district/state — single value */
-  const locShort  = w.village || w.district || w.state || "";
+  const allSkills = w.structured_skills?.length
+    ? w.structured_skills.map(s => s.skill).filter(Boolean)
+    : (w.skills || []);
+  const visibleSkills = allSkills.slice(0, 2);
+  const extraSkills   = allSkills.length > 2 ? allSkills.length - 2 : 0;
+  const aColor = avatarColor(w.name);
+  const locShort = w.village || w.district || w.state || "";
+  const availLabel = availabilityFilter === "tomorrow" ? "Tomorrow"
+    : availabilityFilter === "custom" ? "On Date" : "Today";
 
   return (
     <Link to={link} data-testid={`worker-card-${w.id}`} style={{ textDecoration: "none" }}>
@@ -169,101 +167,110 @@ function WorkerCard({ w, jobId }) {
         className="mp-card"
         style={{
           background: "#FFFDFC",
-          borderRadius: 16,
+          borderRadius: 14,
           border: `1px solid ${hov ? "#D4CAC0" : C.border}`,
           boxShadow: hov ? C.shadowHov : C.shadow,
-          transform: hov ? "translateY(-2px)" : "none",
-          padding: "15px 17px",
-          display: "flex", gap: 13, alignItems: "flex-start",
+          transform: hov ? "translateY(-1px)" : "none",
+          padding: "12px 14px",
+          display: "flex", gap: 12, alignItems: "stretch",
+          transition: "box-shadow 0.15s, transform 0.15s",
         }}
         onMouseEnter={() => setHov(true)}
         onMouseLeave={() => setHov(false)}
       >
         {/* Avatar */}
-        <div style={{ position: "relative", flexShrink: 0 }}>
+        <div style={{ position: "relative", flexShrink: 0, alignSelf: "flex-start" }}>
           {w.photo_url ? (
-            <img src={w.photo_url} alt={w.name} className="mp-avatar"
-              style={{ width: 58, height: 58, borderRadius: "50%", objectFit: "cover", border: "2px solid white", boxShadow: `0 0 0 1.5px ${C.border}`, display: "block" }}
+            <img src={w.photo_url.startsWith("http") ? w.photo_url : `${process.env.REACT_APP_BACKEND_URL}${w.photo_url}`} alt={w.name}
+              style={{ width: 54, height: 54, borderRadius: 12, objectFit: "cover", border: "2px solid white", boxShadow: `0 0 0 1.5px ${C.border}`, display: "block" }}
             />
           ) : (
-            <div className="mp-avatar" style={{ width: 58, height: 58, borderRadius: "50%", background: `linear-gradient(135deg, ${aColor}bb, ${aColor})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 21, fontWeight: 800, color: "white", boxShadow: `0 0 0 1.5px ${C.border}`, border: "2px solid white", userSelect: "none" }}>
+            <div style={{ width: 54, height: 54, borderRadius: 12, background: `linear-gradient(135deg, ${aColor}bb, ${aColor})`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 800, color: "white", userSelect: "none" }}>
               {w.name.charAt(0).toUpperCase()}
             </div>
           )}
-          <div className="mp-avatar-badge" style={{ position: "absolute", bottom: 1, right: 1, width: 17, height: 17, borderRadius: "50%", background: C.forest, border: "2px solid white", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <svg width="8" height="8" viewBox="0 0 12 12" fill="none"><polyline points="2 6 5 9 10 3" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+          {/* Verified dot */}
+          <div style={{ position: "absolute", bottom: -2, right: -2, width: 16, height: 16, borderRadius: "50%", background: tColor, border: "2px solid white", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <svg width="7" height="7" viewBox="0 0 12 12" fill="none"><polyline points="2 6 5 9 10 3" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
           </div>
         </div>
 
-        {/* Centre */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {/* Name + skill inline */}
-          <div className="mp-name" style={{ fontWeight: 700, fontSize: 15.5, color: C.brown, lineHeight: 1.25, marginBottom: 1 }}>
+        {/* Centre — all key info */}
+        <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+          {/* Row 1: Name + primary skill */}
+          <div style={{ fontWeight: 700, fontSize: 15, color: C.brown, lineHeight: 1.2, marginBottom: 3 }}>
             {w.name}
-            {topSkills[0] && <span style={{ fontWeight: 500, fontSize: 12, color: C.muted }}> · {topSkills[0].charAt(0).toUpperCase() + topSkills[0].slice(1)}</span>}
+            {visibleSkills[0] && (
+              <span style={{ fontWeight: 500, fontSize: 12, color: C.muted }}> · {visibleSkills[0].charAt(0).toUpperCase() + visibleSkills[0].slice(1)}</span>
+            )}
           </div>
 
-          {/* Compact meta: location + rating inline */}
-          <div className="mp-meta" style={{ display: "flex", flexWrap: "wrap", gap: "3px 10px", marginBottom: 7, fontSize: 11.5 }}>
+          {/* Row 2: Location + Rating — one line */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 11.5, marginBottom: 5 }}>
             {locShort && (
-              <span style={{ display: "flex", alignItems: "center", gap: 3, color: C.muted }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 2, color: C.muted }}>
                 <MapPin size={10} style={{ color: C.accent, flexShrink: 0 }}/> {locShort}
               </span>
             )}
             {w.avg_rating > 0 && (
-              <span style={{ display: "flex", alignItems: "center", gap: 3, fontWeight: 700, color: "#92400E" }}>
+              <span style={{ display: "flex", alignItems: "center", gap: 2, fontWeight: 700, color: "#92400E" }}>
                 <Star size={10} style={{ fill: "#F59E0B", color: "#F59E0B" }}/> {w.avg_rating.toFixed(1)}
                 {w.total_jobs > 0 && <span style={{ fontWeight: 400, color: C.muted }}>({w.total_jobs})</span>}
               </span>
             )}
           </div>
 
-          {/* Trust chips — compact */}
-          <div className="mp-trust-row" style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 7 }}>
-            <span className="mp-trust-chip" style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 700, color: tColor, background: tBg, borderRadius: 5, padding: "2px 7px" }}>
-              <CheckCircle size={9} style={{ flexShrink: 0 }}/> {tLabel}
+          {/* Row 3: Trust + availability — ONE chip row */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 6 }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10.5, fontWeight: 700, color: tColor, background: tBg, borderRadius: 5, padding: "2px 6px" }}>
+              <CheckCircle size={8} style={{ flexShrink: 0 }}/> {tLabel}
             </span>
             {w.available && (
-              <span className="mp-trust-chip" style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 700, color: C.forest, background: "#F0FDF4", borderRadius: 5, padding: "2px 7px" }}>
-                <span style={{ width: 5, height: 5, borderRadius: "50%", background: C.forest, flexShrink: 0 }}/> Available Today
-              </span>
-            )}
-            {respondsQ && (
-              <span className="mp-trust-chip" style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 11, fontWeight: 700, color: "#92400E", background: "#FFFBEB", borderRadius: 5, padding: "2px 7px" }}>
-                <Zap size={8} style={{ flexShrink: 0 }}/> Responds in ~5 mins
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 3, fontSize: 10.5, fontWeight: 700, color: C.forest, background: "#F0FDF4", borderRadius: 5, padding: "2px 6px" }}>
+                <span style={{ width: 5, height: 5, borderRadius: "50%", background: C.forest, flexShrink: 0 }}/>
+                {availLabel}
               </span>
             )}
           </div>
 
-          {/* Skill chips */}
-          <div className="mp-skills" style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-            {topSkills.slice(0, 3).map(s => (
-              <span key={s} className="mp-skill-chip" style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20, background: "#F5F2EE", color: C.muted, border: `1px solid ${C.border}` }}>
+          {/* Row 4: Skill chips — max 2 + overflow */}
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+            {visibleSkills.map(s => (
+              <span key={s} style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: "#F5F2EE", color: C.muted, border: `1px solid ${C.border}` }}>
                 {s.charAt(0).toUpperCase() + s.slice(1)}
               </span>
             ))}
+            {extraSkills > 0 && (
+              <span style={{ fontSize: 10.5, fontWeight: 600, padding: "2px 7px", borderRadius: 20, background: "#F0F0FF", color: "#3f37c9", border: "1px solid #e0e0ff" }}>
+                +{extraSkills} more
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Right: rate + CTA */}
-        <div className="mp-right" style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "space-between", gap: 10, minWidth: 90 }}>
-          <div style={{ textAlign: "right", lineHeight: 1 }}>
-            <div className="mp-rate" style={{ fontWeight: 800, fontSize: 18, color: C.forest }}>₹{w.daily_rate}</div>
+        {/* Right: rate + hire — always visible, vertically centered */}
+        <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "space-between", gap: 8, minWidth: 80 }}>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontWeight: 800, fontSize: 17, color: C.forest, lineHeight: 1 }}>₹{w.daily_rate}</div>
             <div style={{ fontSize: 10, color: C.muted, marginTop: 1 }}>/day</div>
           </div>
-          <div className="mp-hire-btn"
+          <button
+            onClick={e => { e.preventDefault(); e.stopPropagation(); onHire?.(w); }}
             style={{
-              display: "inline-flex", alignItems: "center", gap: 4,
-              padding: "8px 14px", borderRadius: 10,
-              background: hov ? "#CF5535" : C.accent,
-              color: "white", fontWeight: 700, fontSize: 12.5,
-              boxShadow: hov ? "0 4px 16px rgba(229,106,71,0.42)" : "0 2px 8px rgba(229,106,71,0.26)",
-              transition: "background 0.15s, box-shadow 0.15s",
+              display: "inline-flex", alignItems: "center",
+              padding: "8px 12px", borderRadius: 10,
+              background: C.accent,
+              color: "white", fontWeight: 700, fontSize: 12,
+              boxShadow: "0 2px 8px rgba(229,106,71,0.3)",
+              border: "none", cursor: "pointer",
+              transition: "background 0.15s",
               whiteSpace: "nowrap",
             }}
+            onMouseEnter={e => e.currentTarget.style.background = "#CF5535"}
+            onMouseLeave={e => e.currentTarget.style.background = C.accent}
           >
             Hire Now →
-          </div>
+          </button>
         </div>
       </div>
     </Link>
@@ -323,9 +330,10 @@ export default function Marketplace() {
   const [loading, setLoading]         = useState(true);
   const [skill, setSkill]             = useState("all");
   const [q, setQ]                     = useState("");
-  const [availableOnly, setAvailableOnly] = useState(false);
+  const [availability, setAvailability] = useState("any"); // "any" | "today" | "tomorrow" | "custom"
+  const [customDate, setCustomDate]   = useState("");
   const [sortBy, setSortBy]           = useState("relevant");
-  const [showMap, setShowMap]         = useState(false);
+  const [hireWorker, setHireWorker]   = useState(null); // worker being directly hired
 
   /* Customer job matching */
   const [jobs, setJobs]               = useState([]);
@@ -344,49 +352,56 @@ export default function Marketplace() {
       const sel = selectedJobId ? open.find(j => j.id === selectedJobId) : open[0];
       setSelectedJob(sel || null);
       if (!selectedJobId && sel) setSelectedJobId(sel.id);
-      if (sel && !pincode) setPincode(sel.address?.pincode || sel.pincode || "");
     }).catch(() => { setJobs([]); setSelectedJob(null); });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, selectedJobId]);
 
-  /* ── Load workers ── */
-  useEffect(() => {
+  /* ── Search function ── */
+  const runSearch = useCallback((overrides = {}) => {
     setLoading(true);
-    const params = { available_only: availableOnly };
-    if (skill !== "all") params.skills = skill;
-    if (pincode)         params.pincode = pincode;
+    const effectiveSkill   = overrides.skill       ?? skill;
+    const effectivePincode = overrides.pincode      ?? pincode;
+    const effectiveQ       = overrides.q            ?? q;
+    const effectiveAvail   = overrides.availability ?? availability;
+    const params = { available_only: effectiveAvail !== "any" };
+    if (effectiveSkill !== "all")        params.skills = effectiveSkill;
+    if (effectivePincode?.length === 6)  params.pincode = effectivePincode;
+    if (effectiveQ)                      params.q = effectiveQ;
     api.get("/workers/search", { params }).then(r => {
-      let data = r.data;
-      if (q) {
-        const lq = q.toLowerCase();
-        data = data.filter(w =>
-          w.name.toLowerCase().includes(lq) ||
-          w.village.toLowerCase().includes(lq) ||
-          (w.skills || []).some(s => s.toLowerCase().includes(lq))
-        );
-      }
-      setWorkers(data);
+      setWorkers(r.data);
     }).finally(() => setLoading(false));
-  }, [skill, q, availableOnly, pincode]);
+  }, [skill, pincode, q, availability]);
+
+  /* ── Auto-fire on skill change (instant) ── */
+  useEffect(() => { runSearch(); }, [skill]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ── Initial load ── */
+  useEffect(() => { runSearch(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Client-side sort ── */
   const sorted = useMemo(() => {
     const arr = [...workers];
-    if (sortBy === "rating")   return arr.sort((a, b) => b.avg_rating - a.avg_rating);
-    if (sortBy === "rate_asc") return arr.sort((a, b) => a.daily_rate - b.daily_rate);
-    if (sortBy === "rate_desc")return arr.sort((a, b) => b.daily_rate - a.daily_rate);
-    return arr; // "relevant" = API order
+    if (sortBy === "rating")   return arr.sort((a, b) => (b.avg_rating || 0) - (a.avg_rating || 0));
+    if (sortBy === "rate_asc") return arr.sort((a, b) => (a.daily_rate || 0) - (b.daily_rate || 0));
+    if (sortBy === "nearest")  return arr.sort((a, b) => {
+      // workers with lat/lng come first, rest maintain order
+      if (a.lat && b.lat) return 0;
+      if (a.lat) return -1;
+      if (b.lat) return 1;
+      return 0;
+    });
+    if (sortBy === "recent")   return arr.sort((a, b) => {
+      const da = new Date(a.last_active_at || a.created_at || 0);
+      const db = new Date(b.last_active_at || b.created_at || 0);
+      return db - da;
+    });
+    return arr; // "relevant" = API ranked order
   }, [workers, sortBy]);
 
   /* ── Map center ── */
-  const mapCenter = useMemo(() => {
-    const valid = workers.filter(w => w.lat && w.lng);
-    if (!valid.length) return [22.9734, 78.6569];
-    return [valid.reduce((a, w) => a + w.lat, 0) / valid.length, valid.reduce((a, w) => a + w.lng, 0) / valid.length];
-  }, [workers]);
 
   /* ── Handlers ── */
-  const handleReset = () => { resetPincode(); setSkill("all"); setQ(""); setAvailableOnly(false); setSortBy("relevant"); };
+  const handleReset = () => { resetPincode(); setSkill("all"); setQ(""); setAvailability("any"); setCustomDate(""); runSearch({ skill: "all", pincode: "", q: "", availability: "any" }); };
 
   /* ── Location label ── */
   const locLabel = pincodeResult?.name ? `${pincodeResult.name}, ${pincodeResult.district}` : pincode || null;
@@ -491,22 +506,13 @@ export default function Marketplace() {
 
         {/* Filter card */}
         <div style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.border}`, boxShadow: "0 4px 20px rgba(45,31,24,0.07)", padding: "16px 18px", marginBottom: 20 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <span style={{ fontSize: 11.5, fontWeight: 700, color: C.muted, letterSpacing: "0.05em", textTransform: "uppercase" }}>Search Filters</span>
-            <button
-              onClick={() => setShowMap(m => !m)}
-              style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, fontWeight: 600, padding: "5px 12px", borderRadius: 8, border: `1px solid ${showMap ? C.accent : C.border}`, background: showMap ? "#FFF5F2" : C.bg, color: showMap ? C.accent : C.muted, cursor: "pointer", transition: "all 0.15s" }}
-            >
-              <Map size={12}/> {showMap ? "Hide Map" : "Map View"}
-            </button>
-          </div>
+
+          {/* Filter row — 3 fields only: Pincode · Category · Availability */}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "flex-end" }}>
 
             {/* Pincode */}
-            <div style={{ flex: "1 1 130px", minWidth: 110 }}>
-              <label style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: "0.05em", textTransform: "uppercase", display: "block", marginBottom: 5 }}>
-                Location / Pincode
-              </label>
+            <div style={{ flex: "1 1 130px", minWidth: 110, position: "relative" }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: "0.05em", textTransform: "uppercase", display: "block", marginBottom: 5 }}>Pincode</label>
               <div style={{ position: "relative" }}>
                 <MapPin size={13} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: C.accent }} />
                 <input
@@ -514,15 +520,18 @@ export default function Marketplace() {
                   type="text" inputMode="numeric" maxLength={6}
                   value={pincode}
                   onChange={e => setPincode(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  placeholder="e.g. 841219"
+                  placeholder="6-digit"
                   style={{ width: "100%", padding: "9px 28px 9px 30px", borderRadius: 10, border: `1.5px solid ${C.border}`, fontSize: 13.5, color: C.brown, outline: "none", boxSizing: "border-box", fontFamily: "inherit" }}
                   onFocus={e => e.target.style.borderColor = C.accent}
                   onBlur={e => e.target.style.borderColor = C.border}
                 />
                 {pincode && <button onClick={resetPincode} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: C.muted, display: "flex", padding: 2 }}><X size={12} /></button>}
               </div>
+              {/* Absolute dropdown — no layout shift */}
               {pincode.length === 6 && pincodeResult?.name && (
-                <div style={{ marginTop: 4, fontSize: 11.5, color: C.forest, fontWeight: 600 }}>📍 {pincodeResult.name}, {pincodeResult.district}</div>
+                <div style={{ position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 12px", zIndex: 20, boxShadow: "0 4px 12px rgba(0,0,0,0.1)", fontSize: 12, fontWeight: 600, color: C.forest }}>
+                  📍 {pincodeResult.name}, {pincodeResult.district}, {pincodeResult.state}
+                </div>
               )}
             </div>
 
@@ -532,14 +541,12 @@ export default function Marketplace() {
             </FilterSelect>
 
             {/* Availability */}
-            <div style={{ flex: "1 1 130px", minWidth: 110 }}>
-              <label style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: "0.05em", textTransform: "uppercase", display: "block", marginBottom: 5 }}>
-                Availability
-              </label>
+            <div style={{ flex: "1 1 150px", minWidth: 130 }}>
+              <label style={{ fontSize: 11, fontWeight: 700, color: C.muted, letterSpacing: "0.05em", textTransform: "uppercase", display: "block", marginBottom: 5 }}>Availability</label>
               <div style={{ position: "relative" }}>
                 <select
-                  value={availableOnly ? "today" : "any"}
-                  onChange={e => setAvailableOnly(e.target.value === "today")}
+                  value={availability}
+                  onChange={e => setAvailability(e.target.value)}
                   data-testid="available-toggle"
                   style={{ width: "100%", padding: "9px 30px 9px 12px", borderRadius: 10, border: `1.5px solid ${C.border}`, fontSize: 13.5, color: C.brown, outline: "none", appearance: "none", background: C.card, fontFamily: "inherit", boxSizing: "border-box" }}
                   onFocus={e => e.target.style.borderColor = C.accent}
@@ -547,23 +554,26 @@ export default function Marketplace() {
                 >
                   <option value="any">Anytime</option>
                   <option value="today">Available Today</option>
+                  <option value="tomorrow">Available Tomorrow</option>
+                  <option value="custom">Custom Date</option>
                 </select>
                 <ChevronDown size={12} style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", color: C.muted, pointerEvents: "none" }} />
               </div>
+              {availability === "custom" && (
+                <input
+                  type="date"
+                  value={customDate}
+                  onChange={e => setCustomDate(e.target.value)}
+                  min={new Date().toISOString().split("T")[0]}
+                  style={{ marginTop: 6, width: "100%", padding: "8px 10px", borderRadius: 10, border: `1.5px solid ${C.border}`, fontSize: 13, color: C.brown, outline: "none", boxSizing: "border-box", fontFamily: "inherit" }}
+                />
+              )}
             </div>
-
-            {/* Sort */}
-            <FilterSelect label="Sort by" value={sortBy} onChange={setSortBy}>
-              <option value="relevant">Most Relevant</option>
-              <option value="rating">Highest Rated</option>
-              <option value="rate_asc">Rate: Low → High</option>
-              <option value="rate_desc">Rate: High → Low</option>
-            </FilterSelect>
 
             {/* Buttons */}
             <div style={{ display: "flex", gap: 8, alignSelf: "flex-end" }}>
               <button
-                onClick={() => setLoading(l => !l) /* triggers re-render */ || true}
+                onClick={() => runSearch()}
                 style={{ display: "flex", alignItems: "center", gap: 6, padding: "9px 22px", borderRadius: 10, background: C.accent, color: "white", fontWeight: 700, fontSize: 13.5, border: "none", cursor: "pointer", boxShadow: "0 2px 8px rgba(229,106,71,0.3)", whiteSpace: "nowrap" }}
                 onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 4px 16px rgba(229,106,71,0.4)"; }}
                 onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "0 2px 8px rgba(229,106,71,0.3)"; }}
@@ -580,29 +590,30 @@ export default function Marketplace() {
               </button>
             </div>
           </div>
-
-          {/* Name search */}
-          <div style={{ marginTop: 12, position: "relative" }}>
-            <Search size={13} style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: C.muted }} />
-            <input
-              data-testid="search-input"
-              value={q}
-              onChange={e => setQ(e.target.value)}
-              placeholder="Search by name or skill (e.g. Ramesh, Plumber…)"
-              style={{ width: "100%", padding: "9px 12px 9px 34px", borderRadius: 10, border: `1.5px solid ${C.border}`, fontSize: 13.5, color: C.brown, outline: "none", boxSizing: "border-box", fontFamily: "inherit" }}
-              onFocus={e => e.target.style.borderColor = C.accent}
-              onBlur={e => e.target.style.borderColor = C.border}
-            />
-          </div>
         </div>
 
-        {/* Results header + activity strip */}
+        {/* Results header + sort */}
         {!loading && sorted.length > 0 && (
           <>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
               <div style={{ fontSize: 13.5, color: C.muted, fontWeight: 500 }}>
                 Showing <strong style={{ color: C.brown }}>{sorted.length}</strong> workers
                 {locLabel && <> near <strong style={{ color: C.forest }}>{locLabel}</strong></>}
+              </div>
+              <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 12, color: C.muted, whiteSpace: "nowrap" }}>Sort:</span>
+                <select
+                  value={sortBy}
+                  onChange={e => setSortBy(e.target.value)}
+                  style={{ padding: "5px 28px 5px 10px", borderRadius: 8, border: `1px solid ${C.border}`, fontSize: 12.5, color: C.brown, background: C.card, outline: "none", appearance: "none", fontFamily: "inherit", cursor: "pointer" }}
+                >
+                  <option value="relevant">Most Relevant</option>
+                  <option value="nearest">Nearest First</option>
+                  <option value="rate_asc">Lowest Rate</option>
+                  <option value="rating">Highest Rated</option>
+                  <option value="recent">Recently Active</option>
+                </select>
+                <ChevronDown size={11} style={{ position: "absolute", right: 8, top: "50%", transform: "translateY(-50%)", color: C.muted, pointerEvents: "none" }} />
               </div>
             </div>
             {/* Marketplace activity strip — hidden on mobile to save vertical space */}
@@ -621,26 +632,6 @@ export default function Marketplace() {
           </>
         )}
 
-        {/* Map (toggleable) */}
-        {showMap && !loading && workers.length > 0 && (
-          <div style={{ background: C.card, borderRadius: 16, border: `1px solid ${C.border}`, overflow: "hidden", marginBottom: 20, boxShadow: C.shadow, height: 320 }}>
-            <MapContainer center={mapCenter} zoom={5} style={{ height: "100%", width: "100%" }} scrollWheelZoom={false}>
-              <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution='&copy; OpenStreetMap &copy; CARTO'/>
-              {workers.map(w => (
-                <Marker key={w.id} position={[w.lat, w.lng]} icon={MAP_ICON}>
-                  <Popup>
-                    <div style={{ fontSize: 13 }}>
-                      <div style={{ fontWeight: 700 }}>{w.name}</div>
-                      <div style={{ color: C.muted }}>{w.village}, {w.state}</div>
-                      <div style={{ marginTop: 4 }}>₹{w.daily_rate}/day · ⭐ {w.avg_rating.toFixed(1)}</div>
-                      <Link to={selectedJobId ? `/worker/${w.id}?job=${selectedJobId}` : `/worker/${w.id}`} style={{ color: C.accent, fontWeight: 700, fontSize: 12 }}>View profile →</Link>
-                    </div>
-                  </Popup>
-                </Marker>
-              ))}
-            </MapContainer>
-          </div>
-        )}
 
         {/* Worker list */}
         {loading ? (
@@ -652,7 +643,7 @@ export default function Marketplace() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {sorted.map((w, i) => (
-              <WorkerCard key={w.id} w={w} jobId={selectedJobId} />
+              <WorkerCard key={w.id} w={w} jobId={selectedJobId} availabilityFilter={availability} onHire={user?.role === "customer" ? setHireWorker : undefined} />
             ))}
           </div>
         )}
@@ -675,6 +666,12 @@ export default function Marketplace() {
           </div>
         )}
       </div>
+      <DirectHireModal
+        isOpen={!!hireWorker}
+        worker={hireWorker}
+        onClose={() => setHireWorker(null)}
+        onSuccess={() => {}}
+      />
     </>
   );
 }

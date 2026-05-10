@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import api from "@/lib/api";
 import { toast } from "sonner";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Star, MapPin, ShieldCheck, Users, Briefcase, ArrowRight, ChevronDown, ChevronUp, MessageCircle } from "lucide-react";
 
 /* ─── Palette shortcuts ────────────────────────────────────────────────────── */
@@ -92,6 +93,9 @@ function SectionHead({ overline, heading, accent, sub, center }) {
 /* ─── Main Component ───────────────────────────────────────────────────────── */
 export default function Landing() {
   const { t, lang } = useLanguage();
+  const { user } = useAuth();
+  const isCustomer = user?.role === "customer";
+  const isWorker   = user?.role === "worker";
   const [stats, setStats]               = useState({ workers: 0, jobs: 0, villages: 0 });
   const [featuredWorkers, setWorkers]   = useState([]);
   const [featuredJobs, setJobs]         = useState([]);
@@ -123,6 +127,53 @@ export default function Landing() {
 
   const isHi = lang === "hi";
 
+  /* ── Role-based hero config ─────────────────────────────────────────────── */
+  const heroContent = {
+    guest: {
+      tagline: t("hero_guest_tagline"),
+      title: (
+        <>{t("hero_guest_t1")} <span style={{ color: C.terracotta }}>{t("hero_guest_t2")}</span>{" "}
+        <span style={{ color: C.green }}>{t("hero_guest_t3")}</span></>
+      ),
+      subtitle: t("hero_guest_sub"),
+      description: t("hero_guest_desc"),
+      ctas: [
+        { to: "/marketplace",   label: t("cta_find_workers"), icon: <Users size={17} />,       bg: C.terracotta },
+        { to: "/find-work",     label: t("cta_find_work"),    icon: <Briefcase size={17} />,   bg: C.green },
+        { to: "/whatsapp-demo", label: t("hero_cta_demo"),    icon: <MessageCircle size={16} />, bg: "white", color: "#075E54", border: `1.5px solid #9DCDB5` },
+      ],
+    },
+    customer: {
+      tagline: null,
+      title: (
+        <>{t("hero_customer_t1")}{" "}
+        <span style={{ color: C.terracotta }}>{t("hero_customer_t2")}</span></>
+      ),
+      subtitle: t("hero_customer_sub"),
+      description: t("hero_customer_desc"),
+      ctas: [
+        { to: "/marketplace", label: t("cta_find_workers"), icon: <Users size={17} />,     bg: C.terracotta },
+        { to: "/post-job",    label: t("cta_post_job"),     icon: <Briefcase size={17} />, bg: C.green },
+      ],
+    },
+    worker: {
+      tagline: null,
+      title: (
+        <>{t("hero_worker_t1")}{" "}
+        <span style={{ color: C.green }}>{t("hero_worker_t2")}</span></>
+      ),
+      subtitle: t("hero_worker_sub"),
+      description: t("hero_worker_desc"),
+      ctas: [
+        { to: "/worker/job-feed", label: t("cta_find_jobs"),    icon: <Briefcase size={17} />,   bg: C.green },
+        { to: "/whatsapp-demo",   label: t("cta_whatsapp_bot"), icon: <MessageCircle size={16} />, bg: "white", color: "#075E54", border: `1.5px solid #9DCDB5` },
+      ],
+    },
+  };
+
+  const role = isCustomer ? "customer" : isWorker ? "worker" : "guest";
+  const hero = heroContent[role];
+
   return (
     <div data-testid="landing-page"
       style={{ background: C.bg, color: C.dark, fontFamily: isHi ? "'Noto Sans Devanagari','Manrope',sans-serif" : undefined }}>
@@ -133,50 +184,53 @@ export default function Landing() {
       <section style={{ background: "linear-gradient(160deg,#FDF6E3 0%,#F4F1EA 100%)", borderBottom: `1px solid ${C.border}` }}>
         <div className="max-w-5xl mx-auto px-5 pt-12 pb-14">
 
-          {/* Overline */}
-          <div className="text-xs font-bold uppercase tracking-widest mb-4"
-            style={{ color: C.ochre }}>
-            {t("hero_overline")}
-          </div>
+          {/* Overline / tagline */}
+          {hero.tagline ? (
+            <div className="mb-4">
+              <span className="text-sm font-semibold italic px-3 py-1 rounded-full"
+                style={{ background: `${C.ochre}18`, color: C.ochre, border: `1px solid ${C.ochre}33` }}>
+                {hero.tagline}
+              </span>
+            </div>
+          ) : (
+            <div className="text-xs font-bold uppercase tracking-widest mb-4" style={{ color: C.ochre }}>
+              {t("hero_overline")}
+            </div>
+          )}
 
-          {/* Headline — bilingual stacked so non-toggle users still see Hindi */}
+          {/* Headline */}
           <h1 className="font-bold leading-tight"
             style={{ fontSize: "clamp(1.9rem,6vw,3.6rem)", color: C.dark }}>
-            {isHi ? (
-              <>
-                बिना दलाल, सीधे <span style={{ color: C.terracotta }}>मोबाइल से</span><br />
-                <span style={{ color: C.green }}>काम मिलेगा।</span>
-              </>
-            ) : (
-              <>
-                Find work directly —<br />
-                <span style={{ color: C.terracotta }}>no middlemen,</span>{" "}
-                <span style={{ color: C.green }}>right from your mobile.</span>
-              </>
-            )}
+            {hero.title}
           </h1>
 
-          <p className="mt-4 max-w-xl text-base leading-relaxed" style={{ color: "#6B5744" }}>
-            {t("hero_sub")}
+          {/* Subtitle */}
+          <p className="mt-3 max-w-xl text-base font-semibold leading-snug" style={{ color: C.dark }}>
+            {hero.subtitle}
           </p>
 
-          {/* Two big CTAs */}
+          {/* Description */}
+          <p className="mt-2 max-w-xl text-sm leading-relaxed" style={{ color: "#6B5744" }}>
+            {hero.description}
+          </p>
+
+          {/* CTAs */}
           <div className="mt-7 flex flex-wrap gap-3">
-            <Link to="/find-work"
-              className="flex items-center gap-2 font-bold rounded-2xl active:scale-95 transition-all shadow-md"
-              style={{ background: C.green, color: "white", padding: "14px 28px", fontSize: 15, minHeight: 52 }}>
-              <Briefcase size={17} /> {t("hero_cta_worker")}
-            </Link>
-            <Link to="/marketplace"
-              className="flex items-center gap-2 font-bold rounded-2xl active:scale-95 transition-all shadow-md"
-              style={{ background: C.terracotta, color: "white", padding: "14px 28px", fontSize: 15, minHeight: 52 }}>
-              <Users size={17} /> {t("hero_cta_customer")}
-            </Link>
-            <Link to="/whatsapp-demo"
-              className="flex items-center gap-2 font-bold rounded-2xl transition-all"
-              style={{ background: "white", color: "#075E54", border: `1.5px solid #9DCDB5`, padding: "13px 20px", fontSize: 14, minHeight: 52 }}>
-              <MessageCircle size={16} /> {t("hero_cta_demo")}
-            </Link>
+            {hero.ctas.map((cta, i) => (
+              <Link key={i} to={cta.to}
+                className="flex items-center gap-2 font-bold rounded-2xl active:scale-95 transition-all"
+                style={{
+                  background: cta.bg,
+                  color: cta.color || "white",
+                  border: cta.border || "none",
+                  padding: "13px 24px",
+                  fontSize: 15,
+                  minHeight: 50,
+                  boxShadow: cta.border ? "none" : "0 2px 10px rgba(0,0,0,0.12)",
+                }}>
+                {cta.icon} {cta.label}
+              </Link>
+            ))}
           </div>
 
           {/* Stats strip */}
@@ -603,16 +657,20 @@ export default function Landing() {
       ══════════════════════════════════════════════════════════ */}
       <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 flex gap-2 px-4 py-3"
         style={{ background: "rgba(244,241,234,0.96)", backdropFilter: "blur(12px)", borderTop: `1px solid ${C.border}` }}>
-        <Link to="/marketplace"
-          className="flex-1 flex items-center justify-center gap-2 font-bold rounded-xl py-3.5 text-sm text-white active:scale-95 transition"
-          style={{ background: C.terracotta }}>
-          <Users size={15} /> {t("mob_workers")}
-        </Link>
-        <Link to="/find-work"
-          className="flex-1 flex items-center justify-center gap-2 font-bold rounded-xl py-3.5 text-sm text-white active:scale-95 transition"
-          style={{ background: C.green }}>
-          <Briefcase size={15} /> {t("mob_work")}
-        </Link>
+        {!isWorker && (
+          <Link to="/marketplace"
+            className="flex-1 flex items-center justify-center gap-2 font-bold rounded-xl py-3.5 text-sm text-white active:scale-95 transition"
+            style={{ background: C.terracotta }}>
+            <Users size={15} /> {t("mob_workers")}
+          </Link>
+        )}
+        {!isCustomer && (
+          <Link to="/find-work"
+            className="flex-1 flex items-center justify-center gap-2 font-bold rounded-xl py-3.5 text-sm text-white active:scale-95 transition"
+            style={{ background: C.green }}>
+            <Briefcase size={15} /> {t("mob_work")}
+          </Link>
+        )}
       </div>
 
       {/* JSON-LD */}

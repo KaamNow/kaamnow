@@ -160,6 +160,26 @@ async def create_job(body: JobIn, user: dict = Depends(get_current_user)):
     return {k: job_doc.get(k) for k in JobOut.model_fields.keys()}
 
 
+@router.delete("/{job_id}")
+async def delete_job(job_id: str, user: dict = Depends(get_current_user)):
+    """Customer can delete their own job if it's not yet booked/completed."""
+    job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job["customer_id"] != user["id"]:
+        raise HTTPException(status_code=403, detail="You can only delete your own jobs")
+    if job.get("status") in ("booked", "completed"):
+        raise HTTPException(status_code=400, detail="Cannot delete a booked or completed job. Cancel the booking first.")
+
+    # Cancel any pending engagements for this job
+    await db.engagements.update_many(
+        {"job_id": job_id, "status": {"$in": ["requested", "accepted"]}},
+        {"$set": {"status": "cancelled", "cancelled_at": utc_now_iso(), "updated_at": utc_now_iso()}}
+    )
+    await db.jobs.delete_one({"id": job_id})
+    return {"ok": True}
+
+
 async def _alert_matching_workers(job: dict) -> None:
     """
     Find available workers matching job skills/pincode (or within 25km via haversine).
@@ -311,6 +331,14 @@ async def job_feed(
             {"id": {"$in": expired_ids}},
             {"$set": {"status": "expired", "expired_at": _now()}}
         )
+
+    # Strict filters when user explicitly provides params
+    if pincode and len(pincode) == 6:
+        active_jobs = [j for j in active_jobs if _job_pincode(j) == pincode]
+
+    if skills:
+        selected_set = set(selected_skills)
+        active_jobs = [j for j in active_jobs if _job_skill_names(j).intersection(selected_set)]
 
     active_jobs.sort(key=lambda job: _rank_job(job, worker_lat, worker_lng, selected_skills))
     return [_enrich_job_for_feed(job, worker_lat, worker_lng, selected_pincode, selected_skills) for job in active_jobs]
