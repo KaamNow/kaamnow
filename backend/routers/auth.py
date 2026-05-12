@@ -13,13 +13,10 @@ from ..auth import (
     get_current_user,
     hash_password,
     set_auth_cookie,
-    verify_password
 )
 from ..db import db
 from ..schemas import (
     AuthResponse,
-    LoginIn,
-    RegisterIn,
     UserOut,
     SendOTPRequest,
     SendOTPResponse,
@@ -40,7 +37,6 @@ limiter = Limiter(key_func=get_remote_address)
 USER_OUT_FIELDS = [
     "id",
     "phone_primary",
-    "email",
     "phone_verified",
     "name",
     "role",
@@ -54,70 +50,8 @@ USER_OUT_FIELDS = [
 ]
 
 
-def _address_from_register(body: RegisterIn) -> Optional[dict]:
-    if body.address:
-        return body.address.model_dump()
-    if body.village:
-        return {
-            "village": body.village,
-            "post": None,
-            "block": None,
-            "district": None,
-            "state": None,
-            "pincode": None,
-        }
-    return None
-
-
 def _user_out(user_doc: dict) -> dict:
     return {k: user_doc.get(k) for k in USER_OUT_FIELDS}
-
-
-@router.post("/register", response_model=AuthResponse)
-@limiter.limit("3/minute")
-async def register(request: Request, body: RegisterIn, response: Response):
-    """DEPRECATED: Use /send-otp → /verify-otp → /signup-complete for phone-first flow"""
-    email = body.email.lower()
-    if await db.users.find_one({"email": email}):
-        raise HTTPException(status_code=400, detail="Email already registered")
-
-    user_id = str(uuid.uuid4())
-    address = _address_from_register(body)
-    user_doc = {
-        "id": user_id,
-        "email": email,
-        "password_hash": hash_password(body.password),
-        "name": body.name,
-        "role": body.role,
-        "village": body.village or (address or {}).get("village"),
-        "phone_verified": False,
-        "address": address,
-        "photo_url": body.photo_url,
-        "preferred_language": body.preferred_language or "en",
-        "created_at": utc_now_iso(),
-        "migration_status": "email_only"
-    }
-    if body.phone:
-        user_doc["phone"] = body.phone
-    await db.users.insert_one(user_doc)
-    access_token = create_token(user_id, email)
-    set_auth_cookie(response, access_token)
-
-    return {"user": _user_out(user_doc), "access_token": access_token}
-
-
-@router.post("/login", response_model=AuthResponse)
-@limiter.limit("5/minute")
-async def login(request: Request, body: LoginIn, response: Response):
-    """DEPRECATED: Use /send-otp → /verify-otp for phone-first login"""
-    email = body.email.lower()
-    user = await db.users.find_one({"email": email})
-    if not user or not verify_password(body.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="Invalid email or password")
-
-    access_token = create_token(user["id"], email)
-    set_auth_cookie(response, access_token)
-    return {"user": _user_out(user), "access_token": access_token}
 
 
 @router.post("/logout")
@@ -139,16 +73,26 @@ async def update_me(body: dict, user: dict = Depends(get_current_user)):
     if "village" in body:
         update_data["village"] = body["village"]
     unset_data = {}
-    if "phone" in body:
-        if body["phone"]:
-            update_data["phone"] = body["phone"]
+    if "phone_primary" in body:
+        if body["phone_primary"]:
+            update_data["phone_primary"] = body["phone_primary"]
         else:
-            unset_data["phone"] = ""
+            unset_data["phone_primary"] = ""
 
+    address = dict(user.get("address") or {})
+    address_changed = False
+    if "address" in body and isinstance(body["address"], dict):
+        for k, v in body["address"].items():
+            address[k] = v
+        address_changed = True
     if "pincode" in body:
-        address = user.get("address") or {}
+        update_data["pincode"] = body["pincode"]
         address["pincode"] = body["pincode"]
-        address["village"] = body.get("village") or address.get("village") or user.get("village")
+        address_changed = True
+    if "village" in body:
+        address["village"] = body["village"]
+        address_changed = True
+    if address_changed:
         update_data["address"] = address
 
     if not update_data and not unset_data:
@@ -379,7 +323,6 @@ async def signup_complete(
         "id": user_id,
         "phone_primary": phone,
         "phone_verified": True,
-        "email_verified": False,
         "name": body.name,
         "role": body.role,
         "password_hash": hash_password(body.password) if body.password else None,

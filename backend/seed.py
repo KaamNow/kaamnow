@@ -51,8 +51,7 @@ SEED_JOBS = [
 
 async def ensure_indexes() -> None:
     try:
-        await db.users.create_index("email", unique=True)
-        await db.users.create_index("phone", unique=True, sparse=True)
+        await db.users.create_index("phone_primary", unique=True, sparse=True)
         await db.workers.create_index("user_id")
         await db.workers.create_index("skills")
         await db.workers.create_index("structured_skills.skill")
@@ -86,22 +85,23 @@ async def ensure_indexes() -> None:
 async def seed_data() -> None:
     await ensure_indexes()
 
-    admin_email = settings.admin_email.lower()
-    existing_admin = await db.users.find_one({"email": admin_email})
+    admin_phone = settings.admin_phone
+    existing_admin = await db.users.find_one({"phone_primary": admin_phone})
     if not existing_admin:
         await db.users.insert_one(
             {
                 "id": str(uuid.uuid4()),
-                "email": admin_email,
+                "phone_primary": admin_phone,
                 "password_hash": hash_password(settings.admin_password),
                 "name": "Admin",
                 "role": "admin",
                 "village": None,
-                "phone_verified": False,
+                "phone_verified": True,
                 "address": None,
                 "photo_url": None,
                 "preferred_language": "en",
                 "created_at": utc_now_iso(),
+                "migration_status": "phone_primary",
             }
         )
 
@@ -111,12 +111,12 @@ async def seed_data() -> None:
         await db.users.insert_one(
             {
                 "id": customer_id,
-                "email": f"demo-customer-{customer_id[:8]}@kaamnow.local",
-                "password_hash": hash_password(str(uuid.uuid4())),
+                "phone_primary": "+919000000001",
+                "password_hash": None,
                 "name": "Demo customer",
                 "role": "customer",
                 "village": "Hoshangabad",
-                "phone_verified": False,
+                "phone_verified": True,
                 "address": {
                     "village": "Hoshangabad",
                     "post": "Hoshangabad",
@@ -128,6 +128,7 @@ async def seed_data() -> None:
                 "photo_url": None,
                 "preferred_language": "en",
                 "created_at": utc_now_iso(),
+                "migration_status": "phone_primary",
             }
         )
     else:

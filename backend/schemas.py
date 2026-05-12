@@ -1,6 +1,6 @@
 from typing import List, Optional, Literal
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 
 class Address(BaseModel):
@@ -17,27 +17,9 @@ class StructuredSkill(BaseModel):
     skill: str
 
 
-class RegisterIn(BaseModel):
-    email: EmailStr
-    password: str = Field(min_length=6)
-    name: str
-    role: Literal["worker", "customer"] = "customer"
-    village: Optional[str] = None
-    phone: Optional[str] = None
-    address: Optional[Address] = None
-    photo_url: Optional[str] = None
-    preferred_language: Optional[str] = "en"
-
-
-class LoginIn(BaseModel):
-    email: EmailStr
-    password: str
-
-
 class UserOut(BaseModel):
     id: str
     phone_primary: Optional[str] = None
-    email: Optional[EmailStr] = None
     phone_verified: Optional[bool] = False
     name: str
     role: str
@@ -185,7 +167,7 @@ class RatingIn(BaseModel):
 
 
 class WaitlistIn(BaseModel):
-    email: EmailStr
+    phone: str = Field(..., pattern=r'^\+91[0-9]{10}$')
     name: Optional[str] = ""
     role: Optional[str] = "customer"
 

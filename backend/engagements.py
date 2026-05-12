@@ -29,13 +29,13 @@ async def _notify(user_id: str, title: str, body: str, kind: str, ref_id: str = 
     # Fire WhatsApp for events the worker cares about in real-time
     if kind in ("booking_accepted", "booking_rejected", "interest_withdrawn", "booking_request"):
         try:
-            user = await db.users.find_one({"id": user_id}, {"_id": 0, "phone": 1})
-            if user and user.get("phone"):
+            user = await db.users.find_one({"id": user_id}, {"_id": 0, "phone_primary": 1})
+            if user and user.get("phone_primary"):
                 from .whatsapp_notify import _send as _wa_send
                 import threading
                 threading.Thread(
                     target=_wa_send,
-                    args=(user["phone"], f"{title}\n{body}"),
+                    args=(user["phone_primary"], f"{title}\n{body}"),
                     daemon=True,
                 ).start()
         except Exception:
@@ -271,10 +271,10 @@ async def accept_engagement(engagement_id: str, user: dict) -> dict:
     now = utc_now_iso()
 
     # Fetch contact details for sharing
-    worker_user = await db.users.find_one({"id": engagement_worker.get("user_id")}, {"_id": 0, "phone": 1, "name": 1})
-    customer_user = await db.users.find_one({"id": engagement["customer_id"]}, {"_id": 0, "phone": 1, "phone_primary": 1, "name": 1, "village": 1, "address": 1})
+    worker_user = await db.users.find_one({"id": engagement_worker.get("user_id")}, {"_id": 0, "phone_primary": 1, "name": 1})
+    customer_user = await db.users.find_one({"id": engagement["customer_id"]}, {"_id": 0, "phone_primary": 1, "name": 1, "village": 1, "address": 1})
 
-    customer_phone = (customer_user.get("phone_primary") or customer_user.get("phone")) if customer_user else None
+    customer_phone = customer_user.get("phone_primary") if customer_user else None
     customer_village = ((customer_user.get("address") or {}).get("village") or customer_user.get("village")) if customer_user else None
 
     await db.engagements.update_one(
@@ -283,7 +283,7 @@ async def accept_engagement(engagement_id: str, user: dict) -> dict:
             "status": "accepted",
             "accepted_at": now,
             "updated_at": now,
-            "worker_phone": worker_user.get("phone") if worker_user else None,
+            "worker_phone": worker_user.get("phone_primary") if worker_user else None,
             "customer_phone": customer_phone,
             "customer_village": customer_village,
         }},
@@ -311,12 +311,12 @@ async def accept_engagement(engagement_id: str, user: dict) -> dict:
     await _notify(
         engagement_worker.get("user_id", ""),
         f"✅ Booking confirmed: {engagement.get('job_title')}",
-        f"Your interest was approved! Contact the customer at {customer_user.get('phone', 'N/A') if customer_user else 'N/A'}.",
+        f"Your interest was approved! Contact the customer at {customer_user.get('phone_primary', 'N/A') if customer_user else 'N/A'}.",
         "booking_accepted",
         engagement_id,
     )
 
-    return {"ok": True, "worker_phone": worker_user.get("phone") if worker_user else None, "customer_phone": customer_user.get("phone") if customer_user else None}
+    return {"ok": True, "worker_phone": worker_user.get("phone_primary") if worker_user else None, "customer_phone": customer_user.get("phone_primary") if customer_user else None}
 
 
 async def reject_engagement(engagement_id: str, user: dict) -> dict:

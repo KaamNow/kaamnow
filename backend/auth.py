@@ -19,10 +19,10 @@ def verify_password(plain: str, hashed: str) -> bool:
         return False
 
 
-def create_token(user_id: str, email: str) -> str:
+def create_token(user_id: str, phone: str) -> str:
     payload = {
         "sub": user_id,
-        "email": email,
+        "phone": phone,
         "exp": datetime.now(timezone.utc) + timedelta(days=settings.jwt_expiry_days),
     }
     return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")

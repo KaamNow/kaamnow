@@ -86,7 +86,7 @@ def _full_phone(phone: str) -> str:
 
 async def _lookup_user_by_phone(phone: str) -> Optional[dict]:
     normalized = _normalize_phone(phone)
-    return await db.users.find_one({"phone": {"$regex": normalized, "$options": "i"}}, {"_id": 0})
+    return await db.users.find_one({"phone_primary": {"$regex": normalized, "$options": "i"}}, {"_id": 0})
 
 
 def _create_session_id(source: str) -> str:
@@ -743,13 +743,14 @@ async def _handle_select(source_phone: str, selection: str, state: dict) -> tupl
         phone_digits = _normalize_phone(source_phone)
         guest_doc = {
             "id": str(uuid.uuid4()),
-            "email": f"wa_{phone_digits}@kaamnow.com",
+            "phone_primary": phone_digits,
+            "phone_verified": True,
             "name": f"Customer ({phone_digits[-4:]})",
             "role": "customer",
-            "phone": phone_digits,
             "created_at": utc_now_iso(),
             "source": "whatsapp",
             "is_guest": True,
+            "migration_status": "phone_primary",
         }
         await db.users.insert_one(dict(guest_doc))
         customer = guest_doc
