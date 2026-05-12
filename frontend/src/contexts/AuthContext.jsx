@@ -29,22 +29,6 @@ export function AuthProvider({ children }) {
     refreshUser();
   }, [refreshUser]);
 
-  // OLD: Email-based login (DEPRECATED)
-  const login = async (email, password) => {
-    const r = await api.post("/auth/login", { email, password });
-    localStorage.setItem("kn_token", r.data.access_token || r.data.token);
-    setUser(r.data.user);
-    return r.data.user;
-  };
-
-  // OLD: Email-based register (DEPRECATED, use OTP flow instead)
-  const register = async (payload) => {
-    const r = await api.post("/auth/register", payload);
-    localStorage.setItem("kn_token", r.data.access_token || r.data.token);
-    setUser(r.data.user);
-    return r.data.user;
-  };
-
   const logout = async () => {
     try {
       await api.post("/auth/logout");
@@ -130,8 +114,6 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider
       value={{
         user,
-        login,
-        register,
         logout,
         // OTP flow
         otpFlow,

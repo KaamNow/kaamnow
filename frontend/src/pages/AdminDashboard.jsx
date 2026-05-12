@@ -129,7 +129,7 @@ export default function AdminDashboard() {
                 <tr key={u.id} className="hover:bg-gray-50/50 transition-colors">
                   <td className="p-4">
                     <div className="font-bold text-gray-900">{u.name}</div>
-                    <div className="text-gray-500 text-xs">{u.phone || u.email}</div>
+                    <div className="text-gray-500 text-xs">{u.phone_primary || "—"}</div>
                   </td>
                   <td className="p-4">
                     <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${

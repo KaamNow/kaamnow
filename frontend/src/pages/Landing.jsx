@@ -115,7 +115,7 @@ export default function Landing() {
     setSubmitting(true);
     try {
       await api.post("/waitlist", {
-        email: `wa_${waitPhone}@kaamnow.com`,
+        phone: waitPhone.startsWith("+91") ? waitPhone : `+91${waitPhone}`,
         name: waitName,
         role: waitRole,
       });

@@ -9,6 +9,7 @@ export default function CustomerOnboarding() {
   const { user } = useAuth();
   const nav = useNavigate();
   const { pincode, setPincode, status, result, errorMsg, reset } = usePincodeLookup();
+  const [village, setVillage] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handlePincodeChange = (e) => {
@@ -36,16 +37,24 @@ export default function CustomerOnboarding() {
       toast.error("Enter a valid 6-digit pincode");
       return;
     }
+    const villageName = village.trim();
+    if (!villageName) {
+      toast.error("Please enter your village or town name");
+      return;
+    }
 
     setLoading(true);
     try {
       await api.patch("/auth/me", {
         pincode,
+        village: villageName,
         address: {
-          city: result.name,
+          village: villageName,
+          post: result.name,
+          block: result.block || "",
           district: result.district,
           state: result.state,
-          country: "India",
+          pincode,
         },
       });
       toast.success("Location saved!");
@@ -98,7 +107,19 @@ export default function CustomerOnboarding() {
             {result && status === "success" && (
               <div className="space-y-3 p-4 bg-green-50 rounded-lg">
                 <div>
-                  <label className="text-xs font-medium text-gray-600">City</label>
+                  <label className="text-xs font-medium text-gray-600">Village / Town</label>
+                  <input
+                    type="text"
+                    placeholder="Enter your village or town name"
+                    value={village}
+                    onChange={(e) => setVillage(e.target.value)}
+                    className="kn-input mt-1"
+                    disabled={loading}
+                    autoFocus
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-600">Post Office</label>
                   <input
                     type="text"
                     value={result.name}
@@ -106,6 +127,17 @@ export default function CustomerOnboarding() {
                     className="kn-input mt-1 bg-gray-50 cursor-not-allowed"
                   />
                 </div>
+                {result.block && (
+                  <div>
+                    <label className="text-xs font-medium text-gray-600">Block / Tehsil</label>
+                    <input
+                      type="text"
+                      value={result.block}
+                      readOnly
+                      className="kn-input mt-1 bg-gray-50 cursor-not-allowed"
+                    />
+                  </div>
+                )}
                 <div>
                   <label className="text-xs font-medium text-gray-600">District</label>
                   <input
@@ -131,7 +163,7 @@ export default function CustomerOnboarding() {
             <button
               type="submit"
               disabled={
-                loading || status !== "success" || !pincode || pincode.length !== 6
+                loading || status !== "success" || !pincode || pincode.length !== 6 || !village.trim()
               }
               className="btn-saffron w-full disabled:opacity-60 mt-6"
             >

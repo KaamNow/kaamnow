@@ -40,6 +40,7 @@ export function usePincodeLookup() {
           name: headPO.Name,
           district: headPO.District,
           state: headPO.State,
+          block: headPO.Block && headPO.Block !== "NA" ? headPO.Block : "",
           postOffices: pos.map(p => p.Name),
         });
         setStatus("success");

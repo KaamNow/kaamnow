@@ -1,0 +1,650 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>KaamNow — Design Document</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Fraunces:wght@600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root{
+    --bg:#fbfaf7;
+    --card:#ffffff;
+    --ink:#1a1a1a;
+    --muted:#5b5b5b;
+    --line:#e8e6e0;
+    --accent:#3f37c9;
+    --accent-2:#ff6b35;
+    --ok:#16a34a;
+    --warn:#d97706;
+    --soft:#f3f1ec;
+    --shadow: 0 1px 2px rgba(20,20,20,.04), 0 8px 24px rgba(20,20,20,.05);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;line-height:1.55;font-size:16px;-webkit-font-smoothing:antialiased}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  h1,h2,h3,h4{font-family:Fraunces,Inter,serif;letter-spacing:-.01em;color:var(--ink)}
+  h1{font-size:42px;margin:0 0 8px;line-height:1.1}
+  h2{font-size:28px;margin:0 0 6px}
+  h3{font-size:20px;margin:24px 0 8px;font-family:Inter;font-weight:700}
+  h4{font-size:15px;margin:18px 0 4px;font-family:Inter;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+  p{margin:8px 0 14px;color:#2a2a2a}
+  ul,ol{margin:8px 0 14px;padding-left:22px}
+  li{margin:4px 0}
+  code{background:var(--soft);padding:1px 6px;border-radius:4px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+  .container{display:grid;grid-template-columns:260px 1fr;max-width:1280px;margin:0 auto;gap:32px;padding:32px 24px}
+  .toc{position:sticky;top:24px;align-self:start;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;box-shadow:var(--shadow)}
+  .toc h4{margin-top:0;color:var(--ink)}
+  .toc ol{list-style:none;padding:0;margin:0;counter-reset:section}
+  .toc li{counter-increment:section;margin:6px 0;font-size:14px;color:var(--muted)}
+  .toc li::before{content:counter(section) ". ";color:var(--accent);font-weight:600}
+  .toc a{color:var(--muted)}
+  .toc a:hover{color:var(--accent)}
+  main{min-width:0}
+  .hero{background:linear-gradient(135deg,#fff 0%,#f9f7f1 100%);border:1px solid var(--line);border-radius:18px;padding:36px;box-shadow:var(--shadow);margin-bottom:28px}
+  .hero .eyebrow{font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent-2);font-weight:700;margin-bottom:10px}
+  .hero p.lead{font-size:18px;color:#3a3a3a;max-width:62ch}
+  .pill-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+  .pill{font-size:12px;background:var(--soft);color:#3a3a3a;padding:6px 12px;border-radius:999px;border:1px solid var(--line);font-weight:500}
+  section.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:28px;margin:22px 0;box-shadow:var(--shadow);scroll-margin-top:24px}
+  section.card > h2{display:flex;align-items:baseline;gap:12px}
+  section.card > h2 .num{font-family:Inter;font-size:12px;font-weight:700;color:var(--accent-2);letter-spacing:.18em;text-transform:uppercase}
+  .divider{height:1px;background:var(--line);margin:18px 0}
+  .diagram{background:#fafaf7;border:1px solid var(--line);border-radius:12px;padding:18px;margin:14px 0}
+  .diagram .dtitle{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin-bottom:10px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+  .tile{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .tile h4{margin:0 0 6px;color:var(--ink);letter-spacing:0;text-transform:none;font-size:14px}
+  .tile p{margin:0;font-size:14px;color:var(--muted)}
+  table{width:100%;border-collapse:collapse;margin:10px 0 18px;font-size:14px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-weight:700;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.08em;background:#fafaf7}
+  .status-row{display:flex;gap:10px;align-items:center;margin:6px 0}
+  .badge{display:inline-block;font-size:11px;font-weight:700;padding:3px 8px;border-radius:6px;letter-spacing:.04em;text-transform:uppercase}
+  .b-ok{background:#dcfce7;color:#166534}
+  .b-partial{background:#fef3c7;color:#854d0e}
+  .b-todo{background:#e5e7eb;color:#374151}
+  .footer{text-align:center;color:var(--muted);font-size:13px;padding:30px 0}
+  @media (max-width: 980px){
+    .container{grid-template-columns:1fr}
+    .toc{position:static}
+    .grid2,.grid3{grid-template-columns:1fr}
+    h1{font-size:32px}
+  }
+  .mermaid{display:flex;justify-content:center}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <aside class="toc">
+    <h4>Contents</h4>
+    <ol>
+      <li><a href="#exec">Executive Summary</a></li>
+      <li><a href="#arch">Overall Architecture</a></li>
+      <li><a href="#data">Database & ER Diagram</a></li>
+      <li><a href="#components">Component Breakdown</a></li>
+      <li><a href="#journey">End-to-End User Journey</a></li>
+      <li><a href="#stack">Technology Stack</a></li>
+      <li><a href="#status">Implementation Status</a></li>
+    </ol>
+  </aside>
+
+  <main>
+
+    <div class="hero">
+      <div class="eyebrow">Design Document · 2026</div>
+      <h1>KaamNow</h1>
+      <p class="lead">A phone-first marketplace that connects rural and small-town workers in India — masons, farm labour, plumbers, helpers — to nearby customers who need them. Built for low-literacy users, with WhatsApp at its heart.</p>
+      <div class="pill-row">
+        <span class="pill">Phone-first OTP auth</span>
+        <span class="pill">WhatsApp-native UX</span>
+        <span class="pill">FastAPI + React + MongoDB</span>
+        <span class="pill">Bilingual (Hindi / English)</span>
+      </div>
+    </div>
+
+    <!-- 1. EXECUTIVE SUMMARY -->
+    <section class="card" id="exec">
+      <h2><span class="num">01</span> Executive Summary</h2>
+      <div class="divider"></div>
+
+      <h3>What KaamNow does</h3>
+      <p>KaamNow is a two-sided marketplace that helps people in India's villages and small towns find local work, and helps small employers (families, farmers, shopkeepers, contractors) find reliable workers nearby. A customer can post a job — "need 4 people for cotton harvesting on Friday" — and workers in the area get matched, can express interest, and the customer picks who to hire.</p>
+
+      <h3>The problem we solve</h3>
+      <ul>
+        <li><strong>For workers:</strong> Daily-wage work in rural India is found through word-of-mouth and middlemen who skim earnings. Workers have no way to advertise their skills or rates beyond their village.</li>
+        <li><strong>For customers:</strong> Finding even one trustworthy mason, electrician, or farmhand can take days of asking around. There is no visibility into who is available, what they charge, or their reputation.</li>
+        <li><strong>For both:</strong> Most existing apps assume smartphones, good internet, email addresses, and basic English literacy — none of which can be assumed in our target market.</li>
+      </ul>
+
+      <h3>Target users</h3>
+      <div class="grid2">
+        <div class="tile">
+          <h4>Workers</h4>
+          <p>Blue-collar service providers in semi-urban and rural India — construction labour, farm workers, drivers, domestic help, tradespeople. Often low-literacy. Mobile-only (mostly entry-level Android, some feature phones).</p>
+        </div>
+        <div class="tile">
+          <h4>Customers</h4>
+          <p>Small employers in the same areas — farmers needing harvest help, families needing a plumber, small contractors needing crew. They are not businesses with procurement teams; they are individuals making one-off hires.</p>
+        </div>
+      </div>
+
+      <h3>High-level technical summary</h3>
+      <p>KaamNow is a web and mobile application powered by a Python (FastAPI) backend and a MongoDB Atlas database. The entire authentication system is phone-number based — no email is ever collected. We use WhatsApp (via Gupshup) both as a notification channel and as a parallel access path for users who prefer chat over a web app. The product is built and ready to deploy on Oracle Cloud (Kubernetes), and runs locally for development without paid third-party services.</p>
+    </section>
+
+    <!-- 2. OVERALL ARCHITECTURE -->
+    <section class="card" id="arch">
+      <h2><span class="num">02</span> Overall Architecture</h2>
+      <div class="divider"></div>
+      <p>The system has four major layers: the apps users interact with, the backend that runs the business logic, the database, and the third-party services we rely on for messaging.</p>
+
+      <div class="diagram">
+        <div class="dtitle">Figure 2.1 — System Architecture</div>
+        <div class="mermaid">
+flowchart TB
+  subgraph Users["End Users"]
+    direction LR
+    U1["Customer<br/>(employer)"]
+    U2["Worker<br/>(job seeker)"]
+    U3["Admin"]
+  end
+
+  subgraph Apps["Client Apps"]
+    direction LR
+    Web["Web App<br/>React + Tailwind"]
+    Mob["Mobile App<br/>React Native (Expo)"]
+    WA["WhatsApp Bot<br/>(no app needed)"]
+  end
+
+  subgraph API["Backend (FastAPI)"]
+    direction TB
+    Auth["Auth & OTP"]
+    Core["Marketplace Core<br/>Jobs · Workers · Engagements"]
+    Admin["Admin Panel API"]
+    Notify["Notifications"]
+    Bot["WhatsApp Webhook"]
+  end
+
+  DB[("MongoDB Atlas<br/>Cloud Database")]
+
+  subgraph Third["Third-party Services"]
+    direction LR
+    Gup["Gupshup<br/>(WhatsApp)"]
+    MSG["MSG91 · Exotel<br/>(SMS / OTP) – mocked"]
+    Pin["api.postalpincode.in<br/>(Pincode lookup)"]
+  end
+
+  U1 --> Web
+  U2 --> Web
+  U2 --> Mob
+  U1 --> WA
+  U2 --> WA
+  U3 --> Web
+
+  Web --> Auth
+  Web --> Core
+  Web --> Admin
+  Mob --> Auth
+  Mob --> Core
+  WA --> Bot
+
+  Auth --> DB
+  Core --> DB
+  Admin --> DB
+  Notify --> DB
+  Bot --> DB
+
+  Notify --> Gup
+  Bot --> Gup
+  Auth -.->|future| MSG
+  Web -.->|address autofill| Pin
+        </div>
+      </div>
+
+      <h3>How the pieces fit together</h3>
+      <ul>
+        <li><strong>End users</strong> are customers, workers and admins. They never talk to the database directly — they always go through one of the client apps.</li>
+        <li><strong>Client apps</strong> are the web app, the mobile app, and the WhatsApp bot. The web and mobile apps are visual; the WhatsApp bot is a text-message conversation. All three talk to the same backend.</li>
+        <li><strong>Backend (FastAPI)</strong> is the brain. It validates every request, runs the business rules (who can book whom, when, for what price), and reads/writes the database. It is organised into logical modules — Auth, Marketplace Core, Admin, Notifications, WhatsApp Webhook — but it is a single deployed service.</li>
+        <li><strong>MongoDB Atlas</strong> is the single source of truth: every user, job, booking and message log lives here.</li>
+        <li><strong>Third-party services</strong> handle the things we deliberately don't build ourselves: Gupshup sends WhatsApp messages; MSG91/Exotel will send SMS OTPs in production (currently mocked for development); a public Indian Postal API auto-fills address fields from pincode.</li>
+      </ul>
+    </section>
+
+    <!-- 3. DATABASE -->
+    <section class="card" id="data">
+      <h2><span class="num">03</span> Database & Entity Relationships</h2>
+      <div class="divider"></div>
+      <p>We use MongoDB, which stores data as flexible JSON-like documents rather than rigid tables. Each "collection" below is what a traditional database would call a table.</p>
+
+      <h3>Main collections</h3>
+      <table>
+        <thead><tr><th>Collection</th><th>What it holds</th></tr></thead>
+        <tbody>
+          <tr><td><code>users</code></td><td>Every account — customers, workers, and admins. Identified by phone number, never email.</td></tr>
+          <tr><td><code>workers</code></td><td>The worker profile (skills, rate, bio, location). Linked to a row in <code>users</code>.</td></tr>
+          <tr><td><code>jobs</code></td><td>Jobs that customers have posted (e.g. "need 4 harvest workers Friday").</td></tr>
+          <tr><td><code>engagements</code></td><td>The interest / accept / decline flow between a worker and a job — the heart of the matchmaking.</td></tr>
+          <tr><td><code>bookings</code></td><td>Confirmed hires that resulted from an accepted engagement.</td></tr>
+          <tr><td><code>notifications</code></td><td>In-app messages shown to users ("your booking was accepted").</td></tr>
+          <tr><td><code>otps</code></td><td>One-time codes sent during phone login, with expiry timers.</td></tr>
+          <tr><td><code>waitlist</code></td><td>People who signed up for early access before the public launch.</td></tr>
+          <tr><td><code>wa_notif_log</code></td><td>Audit log of WhatsApp messages sent, used to prevent sending the same alert twice.</td></tr>
+          <tr><td><code>bot_sessions</code></td><td>State of an in-progress WhatsApp conversation (what step the user is on).</td></tr>
+        </tbody>
+      </table>
+
+      <div class="diagram">
+        <div class="dtitle">Figure 3.1 — Entity Relationship Diagram</div>
+        <div class="mermaid">
+erDiagram
+  USERS ||--o| WORKERS : "is (if role=worker)"
+  USERS ||--o{ JOBS : "posts (if customer)"
+  USERS ||--o{ NOTIFICATIONS : "receives"
+  USERS ||--o{ OTPS : "verifies via"
+  USERS ||--o{ WA_NOTIF_LOG : "addressed in"
+  WORKERS ||--o{ ENGAGEMENTS : "applies to"
+  JOBS ||--o{ ENGAGEMENTS : "receives"
+  ENGAGEMENTS ||--o| BOOKINGS : "becomes"
+  USERS ||--o{ BOOKINGS : "as customer or worker"
+  USERS ||--o{ BOT_SESSIONS : "owns chat state"
+
+  USERS {
+    string id PK
+    string phone_primary
+    string name
+    string role "worker | customer | admin"
+    bool   phone_verified
+    object address
+    string preferred_language
+    string created_at
+  }
+  WORKERS {
+    string id PK
+    string user_id FK
+    array  skills
+    int    daily_rate
+    string bio
+    string village
+    float  lat
+    float  lng
+    float  avg_rating
+    int    total_jobs
+  }
+  JOBS {
+    string id PK
+    string customer_id FK
+    string title
+    string category
+    string description
+    int    workers_needed
+    int    daily_rate
+    string job_date
+    object address
+    string status "open | booked | done"
+    array  accepted_worker_ids
+  }
+  ENGAGEMENTS {
+    string id PK
+    string job_id FK
+    string worker_id FK
+    string customer_id FK
+    string status "requested | accepted | rejected | cancelled | completed"
+    string requested_at
+    string accepted_at
+  }
+  BOOKINGS {
+    string id PK
+    string engagement_id FK
+    string job_id FK
+    string worker_id FK
+    string customer_id FK
+    string status
+    int    rating
+    string comment
+  }
+  NOTIFICATIONS {
+    string id PK
+    string user_id FK
+    string kind
+    string title
+    string body
+    bool   read
+  }
+  OTPS {
+    string phone PK
+    string otp
+    int    verification_attempts
+    string token_expires_at
+  }
+        </div>
+      </div>
+
+      <h3>How the entities connect — in plain English</h3>
+      <ul>
+        <li>A <strong>user</strong> is the basic account. Every account has a phone number and a role: customer, worker, or admin.</li>
+        <li>If the user is a worker, they have one extra <strong>worker profile</strong> record holding their skills, rate, and location.</li>
+        <li>A customer can post any number of <strong>jobs</strong>.</li>
+        <li>When a worker expresses interest in a job, an <strong>engagement</strong> record is created. This is the matchmaking thread — it tracks "requested", "accepted", "rejected", "cancelled" or "completed".</li>
+        <li>When the customer accepts an engagement, it converts into a <strong>booking</strong> — the formal hire record, where ratings and reviews eventually attach.</li>
+        <li>Every state change (interest received, booking accepted, booking cancelled) creates a <strong>notification</strong> for the relevant user, and optionally fires a WhatsApp message logged in <strong>wa_notif_log</strong> so we never spam the same person twice.</li>
+        <li><strong>OTPs</strong> are short-lived rows used only during phone login; they self-expire.</li>
+      </ul>
+    </section>
+
+    <!-- 4. COMPONENTS -->
+    <section class="card" id="components">
+      <h2><span class="num">04</span> Component Breakdown</h2>
+      <div class="divider"></div>
+      <p>Each major capability of the product is a self-contained module on the backend, with matching pages on the frontend. Below is each one.</p>
+
+      <!-- AUTH -->
+      <h3>4.1 — Authentication (Phone + OTP)</h3>
+      <p><strong>Purpose:</strong> Sign users up and let them log in using only their mobile number. No email, no password mandatory.</p>
+      <h4>Key files</h4>
+      <ul>
+        <li><code>backend/routers/auth.py</code> — the three-step OTP API</li>
+        <li><code>backend/auth.py</code> — JWT and temporary-token utilities</li>
+        <li><code>backend/otp_service.py</code> — multi-channel delivery (WhatsApp → SMS → Voice)</li>
+        <li><code>frontend/src/contexts/AuthContext.jsx</code> — client-side OTP flow state</li>
+        <li><code>frontend/src/pages/PhoneSignup.jsx</code>, <code>frontend/src/pages/Login.jsx</code></li>
+      </ul>
+
+      <div class="diagram">
+        <div class="dtitle">Figure 4.1 — OTP signup sequence</div>
+        <div class="mermaid">
+sequenceDiagram
+  autonumber
+  participant U as User (phone)
+  participant FE as Web/Mobile App
+  participant API as Backend
+  participant DB as MongoDB
+  participant WA as Gupshup (WhatsApp)
+
+  U->>FE: Enter mobile number
+  FE->>API: POST /auth/send-otp
+  API->>DB: Save OTP + expiry
+  API->>WA: Deliver code (with SMS fallback)
+  WA-->>U: "Your KaamNow code: 1234"
+  U->>FE: Type code
+  FE->>API: POST /auth/verify-otp
+  API->>DB: Match code, check attempts
+  API-->>FE: temporary signup token
+  alt New user
+    FE->>API: POST /auth/signup-complete (name, role)
+    API->>DB: Create user with phone_primary
+    API-->>FE: Auth token + profile
+  else Existing user
+    FE->>API: POST /auth/login-complete
+    API-->>FE: Auth token + profile
+  end
+        </div>
+      </div>
+
+      <h4>Step by step</h4>
+      <ol>
+        <li>User types their phone number and asks for a code.</li>
+        <li>The backend generates a 6-digit code, stores it with a short expiry, and asks Gupshup to deliver it via WhatsApp (falling back to SMS later).</li>
+        <li>The user types the code into the app.</li>
+        <li>The backend checks it matches and isn't expired, and returns a short-lived "signup token".</li>
+        <li>If this phone is new, the app asks for a name and role (worker or customer) and creates the account. If the phone already exists, it logs them in directly.</li>
+      </ol>
+      <p><strong>External integration:</strong> Gupshup (WhatsApp). MSG91 and Exotel are wired in as fallbacks but currently mocked for development.</p>
+
+      <!-- ONBOARDING -->
+      <h3>4.2 — Onboarding (Customer & Worker)</h3>
+      <p><strong>Purpose:</strong> Collect just enough profile information to make matchmaking work — without overwhelming a low-literacy user.</p>
+      <h4>Key files</h4>
+      <ul>
+        <li><code>frontend/src/pages/CustomerOnboarding.jsx</code> — pincode + village location</li>
+        <li><code>frontend/src/pages/WorkerOnboarding.jsx</code> — name, address, skills, daily rate, photo</li>
+        <li><code>frontend/src/lib/usePincode.js</code> — auto-fills district/state/block from Indian Post API</li>
+        <li><code>backend/routers/auth.py</code> (<code>PATCH /auth/me</code>) — saves profile changes</li>
+      </ul>
+      <p>The user types only their <em>pincode</em> and <em>village name</em>; district, state, post office, and block fill in automatically. This was a deliberate choice: rural users know their village name but rarely know their administrative block.</p>
+
+      <!-- MARKETPLACE / JOBS -->
+      <h3>4.3 — Marketplace (Workers + Jobs)</h3>
+      <p><strong>Purpose:</strong> Let customers search for workers and let workers see relevant jobs.</p>
+      <h4>Key files</h4>
+      <ul>
+        <li><code>backend/routers/workers.py</code> — worker search, profile photo upload, availability toggle</li>
+        <li><code>backend/routers/jobs.py</code> — job posting and feed</li>
+        <li><code>frontend/src/pages/Marketplace.jsx</code> — worker grid (customer view)</li>
+        <li><code>frontend/src/pages/PostJob.jsx</code> — job posting form</li>
+        <li><code>frontend/src/pages/WorkerJobFeed.jsx</code> — nearby jobs (worker view)</li>
+      </ul>
+
+      <div class="diagram">
+        <div class="dtitle">Figure 4.3 — Job posting flow</div>
+        <div class="mermaid">
+flowchart LR
+  A["Customer fills form<br/>title · category · date · pay"] --> B["POST /jobs"]
+  B --> C{"Validate fields"}
+  C -->|ok| D["Save to jobs collection"]
+  D --> E["Find matching workers<br/>(skills + nearby pincode)"]
+  E --> F["WhatsApp alert to each<br/>(deduped via wa_notif_log)"]
+  F --> G["Workers see job in feed"]
+        </div>
+      </div>
+
+      <h4>Step by step</h4>
+      <ol>
+        <li>The customer fills out a short job form (title, category, daily rate, date, pincode).</li>
+        <li>The backend stores the job and immediately looks up workers whose skills and area match.</li>
+        <li>A WhatsApp alert goes out to those workers. The deduplication log makes sure no worker receives the same alert twice.</li>
+        <li>Workers see the job appear in their feed and can express interest with one tap.</li>
+      </ol>
+
+      <!-- ENGAGEMENT -->
+      <h3>4.4 — Engagement (Match → Hire)</h3>
+      <p><strong>Purpose:</strong> The actual matchmaking — worker expresses interest, customer accepts or rejects, hire is locked in.</p>
+      <h4>Key files</h4>
+      <ul>
+        <li><code>backend/engagements.py</code> — core state machine (request, accept, reject, cancel, complete)</li>
+        <li><code>backend/routers/engagements.py</code> — HTTP endpoints</li>
+        <li><code>frontend/src/pages/Dashboard.jsx</code> — customer's "interested workers" list</li>
+        <li><code>frontend/src/pages/WorkerDashboard.jsx</code> — worker's active engagements</li>
+      </ul>
+
+      <div class="diagram">
+        <div class="dtitle">Figure 4.4 — Engagement state machine</div>
+        <div class="mermaid">
+stateDiagram-v2
+  [*] --> Requested: Worker taps "Interested"
+  Requested --> Accepted: Customer accepts
+  Requested --> Rejected: Customer declines
+  Requested --> Cancelled: Worker withdraws
+  Accepted --> Completed: Job done & rated
+  Accepted --> Cancelled: Either party cancels
+  Rejected --> [*]
+  Cancelled --> [*]
+  Completed --> [*]
+        </div>
+      </div>
+
+      <p>When an engagement moves to <em>Accepted</em>, the system unlocks contact details (phone numbers) for both sides, fills the job's accepted-worker count, and marks the job as booked once it is fully staffed. Every state change writes a notification and, where relevant, a WhatsApp message.</p>
+
+      <!-- WHATSAPP -->
+      <h3>4.5 — WhatsApp Bot & Notifications</h3>
+      <p><strong>Purpose:</strong> Let users who cannot or will not use the app still find work or workers — entirely inside WhatsApp.</p>
+      <h4>Key files</h4>
+      <ul>
+        <li><code>backend/routers/whatsapp.py</code> — webhook handler + conversational bot</li>
+        <li><code>backend/whatsapp_notify.py</code> — outbound message helper</li>
+      </ul>
+      <p>Gupshup forwards every incoming WhatsApp message to our webhook. The backend identifies the user by their phone number, looks up where they are in the conversation (stored in <code>bot_sessions</code>), and replies with the next step — show workers, confirm a booking, give a number to call. New users who message the bot are auto-created as guest customers without ever opening the app.</p>
+
+      <!-- ADMIN -->
+      <h3>4.6 — Admin Panel</h3>
+      <p><strong>Purpose:</strong> Internal tool for the founding team to inspect users, jobs, and platform health.</p>
+      <h4>Key files</h4>
+      <ul>
+        <li><code>backend/routers/admin.py</code> — protected admin endpoints (user list, edit, deactivate)</li>
+        <li><code>frontend/src/pages/AdminDashboard.jsx</code> — admin UI</li>
+        <li><code>backend/routers/stats.py</code> — aggregate counts shown on the landing page</li>
+      </ul>
+      <p>The admin role is granted only to the seeded admin account. From the admin panel, the team can search users, change their role, deactivate problematic accounts, and see live counts of jobs, workers, and bookings.</p>
+    </section>
+
+    <!-- 5. JOURNEY -->
+    <section class="card" id="journey">
+      <h2><span class="num">05</span> End-to-End User Journey</h2>
+      <div class="divider"></div>
+      <p>To show how all the parts come together, here is the most important complete flow: <strong>a customer posts a job and successfully hires a worker.</strong></p>
+
+      <div class="diagram">
+        <div class="dtitle">Figure 5.1 — Post job → hire worker (end to end)</div>
+        <div class="mermaid">
+sequenceDiagram
+  autonumber
+  participant C as Customer
+  participant W as Worker
+  participant FE as Web App
+  participant API as Backend (FastAPI)
+  participant DB as MongoDB
+  participant WA as WhatsApp (Gupshup)
+
+  C->>FE: Open app, tap "Sign up"
+  FE->>API: Phone OTP flow (send → verify → signup-complete)
+  API->>DB: Create user (role=customer)
+  C->>FE: Fill village + pincode (auto-fills district/state)
+  FE->>API: PATCH /auth/me
+  API->>DB: Save address on user
+
+  C->>FE: Post job (title, date, rate, pincode)
+  FE->>API: POST /jobs
+  API->>DB: Insert job (status=open)
+  API->>DB: Find nearby workers matching skills
+  API->>WA: Notify each matched worker
+  WA-->>W: "New job near you: ..."
+
+  W->>FE: Open feed, tap "I'm interested"
+  FE->>API: POST /engagements
+  API->>DB: Insert engagement (status=requested)
+  API->>DB: Write notification for customer
+
+  C->>FE: See interested workers, accept one
+  FE->>API: POST /engagements/{id}/accept
+  API->>DB: Engagement → accepted, job.filled_count +1
+  API->>DB: Mark job booked if fully staffed
+  API->>WA: Send contact details to worker
+  WA-->>W: "Accepted! Customer phone: ..."
+
+  Note over C,W: Both parties have phone numbers,<br/>job happens offline
+
+  W->>FE: After job: mark complete
+  C->>FE: Rate the worker
+  FE->>API: POST /bookings/{id}/rate
+  API->>DB: Update worker.avg_rating, total_jobs
+        </div>
+      </div>
+
+      <h3>Narrative walkthrough</h3>
+      <ol>
+        <li><strong>Sign-up:</strong> The customer downloads the app and signs in with their mobile number using a one-time code. No email, no password.</li>
+        <li><strong>Profile:</strong> They enter their village and pincode. The system fills in district, state, post office and block automatically.</li>
+        <li><strong>Posting:</strong> They post a job — say, "Need a mason for boundary wall, ₹500/day, starting Monday in Pratapgarh."</li>
+        <li><strong>Matching:</strong> The backend finds workers who (a) have masonry as a skill and (b) are in or near that pincode, and sends each one a WhatsApp message.</li>
+        <li><strong>Interest:</strong> A worker taps "Interested" in the app. An engagement is created in the database, and the customer sees them appear in their dashboard.</li>
+        <li><strong>Hire:</strong> The customer accepts one of the interested workers. Both phone numbers are now shared with each other so they can coordinate offline. The job is marked as booked.</li>
+        <li><strong>Work happens offline:</strong> The worker shows up; the customer pays cash on the day. KaamNow currently does not handle payments.</li>
+        <li><strong>Closeout:</strong> When the work is done, both parties confirm completion and the customer rates the worker. The worker's average rating and job count update.</li>
+      </ol>
+      <p>This entire flow can also happen <em>without the app</em>: the customer can send "Hi" on WhatsApp and the same bot will walk them through booking a worker.</p>
+    </section>
+
+    <!-- 6. STACK -->
+    <section class="card" id="stack">
+      <h2><span class="num">06</span> Technology Stack & Rationale</h2>
+      <div class="divider"></div>
+      <table>
+        <thead><tr><th>Layer</th><th>Technology</th><th>Why this choice</th></tr></thead>
+        <tbody>
+          <tr><td>Web frontend</td><td>React 18 + Tailwind CSS + Radix UI</td><td>Fast to build, huge talent pool, and the largest ecosystem of accessible UI components — accessibility matters when our users have low literacy.</td></tr>
+          <tr><td>Mobile app</td><td>React Native (Expo)</td><td>One codebase for iOS and Android, and Expo lets non-technical testers install pre-release builds on their phones without app-store review.</td></tr>
+          <tr><td>Backend</td><td>Python 3.12 + FastAPI</td><td>Modern, async, very fast to ship; FastAPI's built-in input validation cuts a class of bugs before they hit production.</td></tr>
+          <tr><td>Database</td><td>MongoDB Atlas (cloud)</td><td>Document model fits flexible user profiles (workers, customers, admins have overlapping but different fields); Atlas handles backups and scale-out for us.</td></tr>
+          <tr><td>Auth</td><td>Phone-only JWT + OTP</td><td>Email is irrelevant to our users. Phone numbers are universal in our target market and tie naturally to WhatsApp.</td></tr>
+          <tr><td>Messaging</td><td>Gupshup (WhatsApp Business)</td><td>India's leading WhatsApp BSP; supports template messages, two-way conversation, and bulk notifications at low per-message cost.</td></tr>
+          <tr><td>OTP fallbacks</td><td>MSG91 (SMS), Exotel (Voice)</td><td>Built into the OTP service as fallbacks for users whose WhatsApp delivery fails — important for feature-phone-only users.</td></tr>
+          <tr><td>Pincode lookup</td><td>api.postalpincode.in (India Post)</td><td>Free, official, and removes a major source of data-entry errors during onboarding.</td></tr>
+          <tr><td>Hosting</td><td>Oracle Cloud Kubernetes (planned)</td><td>Oracle's free tier gives a real production VM at zero cost during early stages; Kubernetes is the industry standard once we scale.</td></tr>
+          <tr><td>Reverse proxy / TLS</td><td>NGINX Ingress + cert-manager</td><td>Free TLS via Let's Encrypt; the same pattern used by virtually every modern Kubernetes deployment.</td></tr>
+          <tr><td>Tests</td><td>Pytest + custom DummyDb</td><td>Tests run without a real MongoDB instance, so any developer can clone the repo and run the whole suite in seconds.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- 7. STATUS -->
+    <section class="card" id="status">
+      <h2><span class="num">07</span> Current Implementation Status</h2>
+      <div class="divider"></div>
+      <p>Based on the code in the repository today, here is what's done, what's partially done, and what is still ahead.</p>
+
+      <h3>Fully built</h3>
+      <ul>
+        <li><span class="badge b-ok">Done</span> &nbsp; Phone-first OTP signup and login (both web and mobile)</li>
+        <li><span class="badge b-ok">Done</span> &nbsp; Worker and customer onboarding with pincode-based address autofill (including Block / Tehsil)</li>
+        <li><span class="badge b-ok">Done</span> &nbsp; Worker search and worker profile pages, with photo upload</li>
+        <li><span class="badge b-ok">Done</span> &nbsp; Job posting and the worker job feed</li>
+        <li><span class="badge b-ok">Done</span> &nbsp; Engagement state machine (interest → accept → complete), including contact-detail sharing on accept</li>
+        <li><span class="badge b-ok">Done</span> &nbsp; Notifications (in-app) and WhatsApp message dispatch with deduplication</li>
+        <li><span class="badge b-ok">Done</span> &nbsp; Admin dashboard (user list, role edit, deactivate)</li>
+        <li><span class="badge b-ok">Done</span> &nbsp; WhatsApp conversational bot — full booking flow without opening the app</li>
+        <li><span class="badge b-ok">Done</span> &nbsp; Bilingual UI (Hindi / English)</li>
+        <li><span class="badge b-ok">Done</span> &nbsp; Kubernetes deployment manifests and one-command deploy script for Oracle Cloud</li>
+        <li><span class="badge b-ok">Done</span> &nbsp; Comprehensive backend test suite using an in-process MongoDB stand-in</li>
+      </ul>
+
+      <h3>Partially built</h3>
+      <ul>
+        <li><span class="badge b-partial">Partial</span> &nbsp; <strong>OTP delivery</strong> — the multi-channel service (WhatsApp → SMS → Voice) is fully implemented but MSG91, Exotel and Voice providers are mocked. Real keys need to be plugged in for production.</li>
+        <li><span class="badge b-partial">Partial</span> &nbsp; <strong>Mobile app</strong> — mirrors the web app's core flows but has not been hardened against feature-phone constraints (memory, intermittent network).</li>
+        <li><span class="badge b-partial">Partial</span> &nbsp; <strong>Ratings &amp; reviews</strong> — the booking model supports ratings and the worker profile shows average rating, but the end-to-end "rate after completion" UX is minimal.</li>
+        <li><span class="badge b-partial">Partial</span> &nbsp; <strong>Waitlist</strong> — backend endpoint and landing-page form work, but there is no admin export of the list yet.</li>
+      </ul>
+
+      <h3>Not yet started</h3>
+      <ul>
+        <li><span class="badge b-todo">Todo</span> &nbsp; <strong>Payments</strong> — KaamNow currently does not collect or move money. The product plan calls for a ₹30 per-booking fee from customers, which will need a payments provider (Razorpay or similar).</li>
+        <li><span class="badge b-todo">Todo</span> &nbsp; <strong>Trust &amp; verification tiers</strong> — the worker schema reserves a <code>trust_tier</code> field, but the verification process (SHG vouching, ID upload) is not yet implemented.</li>
+        <li><span class="badge b-todo">Todo</span> &nbsp; <strong>Dispute resolution</strong> — there is no formal "report a worker / customer" or chargeback flow.</li>
+        <li><span class="badge b-todo">Todo</span> &nbsp; <strong>Analytics &amp; growth instrumentation</strong> — no event pipeline yet; the admin stats endpoint shows totals but not funnel data.</li>
+        <li><span class="badge b-todo">Todo</span> &nbsp; <strong>SMS-only feature-phone path</strong> — designed in the redesign plan, partially scaffolded, but the full IVR / SMS-based booking flow is not built.</li>
+      </ul>
+    </section>
+
+    <div class="footer">
+      KaamNow · Design Document · Confidential. Generated from the live codebase.
+    </div>
+
+  </main>
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      fontFamily: 'Inter, system-ui, sans-serif',
+      primaryColor: '#ffffff',
+      primaryTextColor: '#1a1a1a',
+      primaryBorderColor: '#3f37c9',
+      lineColor: '#9ca3af',
+      secondaryColor: '#f3f1ec',
+      tertiaryColor: '#fafaf7'
+    },
+    flowchart: { curve: 'basis', useMaxWidth: true },
+    sequence: { useMaxWidth: true, mirrorActors: false }
+  });
+</script>
+</body>
+</html>

@@ -117,7 +117,8 @@ export default function WorkerOnboarding() {
         district: pinResult.district,
         state: pinResult.state,
         pincode: pincodeVal,
-        village: prev.village || pinResult.name,
+        post: prev.post || pinResult.name,
+        block: prev.block || pinResult.block || "",
       }));
     }
   }, [pinResult, pincodeVal]);
@@ -260,7 +261,7 @@ export default function WorkerOnboarding() {
         {/* ─── Step 1: Address ─── */}
         {step === 1 && (
           <div className="fade-up kn-card p-8">
-            <StepHeader icon={MapPin} label="Your Address" desc="Enter your pincode — village, district, and state will fill automatically." />
+            <StepHeader icon={MapPin} label="Your Address" desc="Enter your pincode — district, state, and post office fill automatically. Type your village name." />
             <div className="space-y-3">
 
               {/* Pincode first — auto-fills the rest */}
@@ -302,7 +303,7 @@ export default function WorkerOnboarding() {
                   data-testid="onboard-village"
                   value={address.village}
                   onChange={(e) => setAddress({ ...address, village: e.target.value })}
-                  placeholder={pinStatus === "loading" ? "Fetching from pincode…" : "e.g. Ramnagar"}
+                  placeholder="e.g. Ramnagar"
                   className="kn-input"
                 />
               </div>
