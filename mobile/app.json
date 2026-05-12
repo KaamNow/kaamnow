@@ -14,7 +14,23 @@
     "scheme": "kaamnow",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.kaamnow.app"
+      "bundleIdentifier": "com.kaamnow.app",
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": false,
+          "NSAllowsLocalNetworking": true,
+          "NSExceptionDomains": {
+            "192.168.1.6": {
+              "NSExceptionAllowsInsecureHTTPLoads": true,
+              "NSIncludesSubdomains": false
+            },
+            "localhost": {
+              "NSExceptionAllowsInsecureHTTPLoads": true,
+              "NSIncludesSubdomains": false
+            }
+          }
+        }
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -27,7 +43,18 @@
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "apiUrl": "https://adb859de-82e2-4ac1-9d9b-f64456df6b58.preview.emergentagent.com"
-    }
+      "apiUrl": "http://192.168.1.6:8000"
+    },
+    "plugins": [
+      "expo-font",
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "KaamNow needs access to your photos to set a profile picture.",
+          "cameraPermission": "KaamNow needs camera access to take a profile photo."
+        }
+      ]
+    ]
   }
 }

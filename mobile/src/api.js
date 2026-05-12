@@ -2,9 +2,11 @@ import axios from "axios";
 import Constants from "expo-constants";
 import * as SecureStore from "expo-secure-store";
 
+// Resolution: EXPO_PUBLIC_API_URL env var → app.json extra.apiUrl → localhost fallback.
 export const API_URL =
-  (Constants?.expoConfig?.extra?.apiUrl) ||
-  "https://adb859de-82e2-4ac1-9d9b-f64456df6b58.preview.emergentagent.com";
+  process.env.EXPO_PUBLIC_API_URL ||
+  Constants?.expoConfig?.extra?.apiUrl ||
+  "http://localhost:8000";
 
 const api = axios.create({
   baseURL: `${API_URL}/api`,

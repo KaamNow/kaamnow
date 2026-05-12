@@ -10,7 +10,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import api, { formatApiError } from "../api";
+import api, { formatApiError, API_URL } from "../api";
+const fullUrl = (url) => !url ? null : url.startsWith("http") ? url : `${API_URL}${url}`;
 import { useAuth } from "../contexts/AuthContext";
 import { colors, fonts, radius, spacing } from "../theme";
 import Overline from "../components/Overline";
@@ -74,12 +75,20 @@ export default function WorkerProfileScreen({ route, navigation }) {
       <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }}>
         <View style={styles.card}>
           <View style={styles.headerRow}>
-            <Image source={{ uri: worker.photo_url }} style={styles.photo} />
+            {worker.photo_url ? (
+              <Image source={{ uri: fullUrl(worker.photo_url) }} style={styles.photo} />
+            ) : (
+              <View style={[styles.photo, { alignItems: "center", justifyContent: "center" }]}>
+                <Ionicons name="person" size={42} color={colors.textMuted} />
+              </View>
+            )}
             <View style={{ flex: 1 }}>
-              <Text style={styles.name}>{worker.name}</Text>
+              <Text style={styles.name}>{worker.name || "Worker"}</Text>
               <View style={styles.metaRow}>
                 <Ionicons name="location-outline" size={12} color={colors.textMuted} />
-                <Text style={styles.meta}>{worker.village}, {worker.state}</Text>
+                <Text style={styles.meta}>
+                  {[worker.village, worker.state].filter(Boolean).join(", ") || "—"}
+                </Text>
               </View>
               <View style={{ marginTop: 8 }}>
                 <TrustBadge tier={worker.trust_tier} />
@@ -95,7 +104,7 @@ export default function WorkerProfileScreen({ route, navigation }) {
 
           <Overline style={{ marginTop: spacing.lg }}>Skills</Overline>
           <View style={styles.skillsRow}>
-            {worker.skills.map((s) => (
+            {(worker.skills || []).map((s) => (
               <View key={s} style={styles.skillChip}>
                 <Text style={styles.skillText}>{s}</Text>
               </View>
@@ -113,7 +122,7 @@ export default function WorkerProfileScreen({ route, navigation }) {
         </View>
 
         <View style={[styles.card, { marginTop: 16 }]}>
-          <Text style={styles.sectionH}>Book {worker.name.split(" ")[0]}</Text>
+          <Text style={styles.sectionH}>Book {(worker.name || "this worker").split(" ")[0]}</Text>
 
           {!user && (
             <Button

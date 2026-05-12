@@ -11,12 +11,17 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import api, { formatApiError } from "../api";
+import { useAuth } from "../contexts/AuthContext";
 import { colors, fonts, radius, sizes, spacing } from "../theme";
 import Button from "../components/Button";
 import Input from "../components/Input";
 import Overline from "../components/Overline";
 
 export default function LandingScreen({ navigation }) {
+  const { user } = useAuth();
+  const isWorker = user?.role === "worker";
+  const isCustomer = user?.role === "customer";
+  const isGuest = !user;
   const [stats, setStats] = useState({ workers: 0, jobs: 0, completed_bookings: 0, villages: 0 });
   const [waitForm, setWaitForm] = useState({ name: "", email: "", role: "customer" });
   const [submitting, setSubmitting] = useState(false);
@@ -62,12 +67,49 @@ export default function LandingScreen({ navigation }) {
           </Text>
 
           <View style={styles.ctas}>
-            <Button
-              testID="hero-find-workers"
-              title="Find Workers"
-              onPress={() => navigation.navigate("Tabs", { screen: "Workers" })}
-              icon={<Ionicons name="arrow-forward" size={16} color="#fff" />}
-            />
+            {/* Worker */}
+            {isWorker && (
+              <Button
+                title="Find Jobs Near Me"
+                onPress={() => navigation.navigate("Tabs", { screen: "Jobs" })}
+                icon={<Ionicons name="briefcase-outline" size={16} color="#fff" />}
+              />
+            )}
+
+            {/* Customer */}
+            {isCustomer && (
+              <>
+                <Button
+                  title="Find Workers"
+                  onPress={() => navigation.navigate("Tabs", { screen: "Workers" })}
+                  icon={<Ionicons name="people-outline" size={16} color="#fff" />}
+                />
+                <Button
+                  title="Post a Job"
+                  variant="outline"
+                  onPress={() => navigation.navigate("PostJob")}
+                  icon={<Ionicons name="add-circle-outline" size={16} color={colors.text} />}
+                />
+              </>
+            )}
+
+            {/* Guest */}
+            {isGuest && (
+              <>
+                <Button
+                  title="Find Workers"
+                  onPress={() => navigation.navigate("Tabs", { screen: "Workers" })}
+                  icon={<Ionicons name="people-outline" size={16} color="#fff" />}
+                />
+                <Button
+                  title="Find Work"
+                  variant="outline"
+                  onPress={() => navigation.navigate("Tabs", { screen: "Jobs" })}
+                  icon={<Ionicons name="briefcase-outline" size={14} color={colors.text} />}
+                />
+              </>
+            )}
+
             <Button
               testID="hero-whatsapp-demo"
               title="WhatsApp bot demo"

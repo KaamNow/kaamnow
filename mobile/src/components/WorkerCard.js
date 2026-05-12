@@ -2,6 +2,9 @@ import { View, Text, Image, StyleSheet, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, fonts, radius } from "../theme";
 import TrustBadge from "./TrustBadge";
+import { API_URL } from "../api";
+
+const fullUrl = (url) => !url ? null : url.startsWith("http") ? url : `${API_URL}${url}`;
 
 export default function WorkerCard({ worker, onPress, testID }) {
   return (
@@ -13,7 +16,7 @@ export default function WorkerCard({ worker, onPress, testID }) {
       <Image
         source={{
           uri:
-            worker.photo_url ||
+            fullUrl(worker.photo_url) ||
             "https://images.pexels.com/photos/16476333/pexels-photo-16476333.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=400&w=400",
         }}
         style={styles.photo}
