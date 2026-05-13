@@ -67,3 +67,4 @@ dump.rdb
 .vercel
 .cache/
 dist/
+mobile/.expo/
