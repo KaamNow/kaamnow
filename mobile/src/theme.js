@@ -1,19 +1,37 @@
+// Color palette: ONE primary color — Deep Teal
+// Clean, professional, zero political/religious associations
+// Amber used ONLY for ₹ money/rate display
 export const colors = {
-  saffron: "#FF6B35",
-  saffronDark: "#E85A25",
-  indigo: "#3F37C9",
-  indigoDark: "#2F28A8",
-  bg: "#FCFBF9",
+  // ── Primary: Deep Teal ────────────────────────────────────────
+  saffron: "#0F766E",      // primary — buttons, active tabs, key CTAs
+  saffronDark: "#0D5F59",  // pressed/hover state
+  saffronTint: "#F0FDFA",  // light teal bg for chips, selected rows
+
+  // ── Secondary: Medium Teal (for less prominent selected states) ──
+  indigo: "#0F766E",       // unified with primary — chips, links, icons
+  indigoDark: "#0D5F59",
+  indigoTint: "#F0FDFA",   // same tint — consistent
+
+  // ── Money color — Amber (ONLY for ₹ amounts, rates, earnings) ──
+  money: "#B45309",        // dark amber — use ONLY on ₹ numbers/rates
+
+  // ── Neutrals ──────────────────────────────────────────────────
+  bg: "#F8F7F4",           // warm off-white background
   surface: "#FFFFFF",
+  soft: "#F3F2EF",         // subtle card / secondary bg
+
+  // ── Text ──────────────────────────────────────────────────────
   text: "#111827",
-  textSecondary: "#4B5563",
+  textSecondary: "#374151",
   textMuted: "#6B7280",
+
+  // ── Borders ───────────────────────────────────────────────────
   border: "#E5E7EB",
   borderStrong: "#D1D5DB",
-  success: "#10B981",
-  danger: "#A32D2D",
-  saffronTint: "#FFF7F3",
-  indigoTint: "#EEEDFE",
+
+  // ── Semantic (use sparingly) ───────────────────────────────────
+  success: "#16A34A",      // green — confirmed/hired states only
+  danger: "#DC2626",       // red — errors, destructive actions
 };
 
 export const spacing = {

@@ -95,6 +95,17 @@ async def update_me(body: dict, user: dict = Depends(get_current_user)):
     if address_changed:
         update_data["address"] = address
 
+    if "photo_url" in body:
+        if body["photo_url"]:
+            update_data["photo_url"] = body["photo_url"]
+        else:
+            # Delete from Cloudinary before clearing
+            from ..cloudinary_service import delete_image
+            delete_image(user.get("photo_url"))
+            update_data["photo_url"] = None
+        if user.get("role") == "worker":
+            await db.workers.update_one({"user_id": user["id"]}, {"$set": {"photo_url": body.get("photo_url")}})
+
     if not update_data and not unset_data:
         return _user_out(user)
 
@@ -381,14 +392,18 @@ async def deactivate_account(user: dict = Depends(get_current_user)):
 
 @router.post("/me/photo")
 async def upload_user_photo(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
-    """Upload profile photo for any user (customer or worker). Syncs to worker profile too."""
-    os.makedirs("static/uploads", exist_ok=True)
-    ext = os.path.splitext(file.filename or "photo.jpg")[1] or ".jpg"
-    filename = f"user_{user['id']}_{uuid.uuid4().hex[:8]}{ext}"
-    file_path = os.path.join("static/uploads", filename)
-    with open(file_path, "wb") as f:
-        f.write(await file.read())
-    photo_url = f"/static/uploads/{filename}"
+    """Upload profile photo — stored on Cloudinary CDN."""
+    from ..cloudinary_service import upload_image, delete_image
+
+    file_bytes = await file.read()
+    public_id = f"user_{user['id']}"
+
+    # Delete old photo from Cloudinary if it exists
+    old_url = user.get("photo_url")
+    if old_url:
+        delete_image(old_url)
+
+    photo_url = upload_image(file_bytes, public_id)
     await db.users.update_one({"id": user["id"]}, {"$set": {"photo_url": photo_url}})
     if user.get("role") == "worker":
         await db.workers.update_one({"user_id": user["id"]}, {"$set": {"photo_url": photo_url}})

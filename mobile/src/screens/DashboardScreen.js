@@ -8,7 +8,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import api, { formatApiError } from "../api";
 import { useAuth } from "../contexts/AuthContext";
-import { colors, fonts, radius, spacing, sizes } from "../theme";
+import { colors, fonts, spacing } from "../theme";
 import Button from "../components/Button";
 
 const CAT_ICONS = { construction:"🏗️", farm:"🌾", electrical:"⚡", cleaning:"✨", transport:"🚛", mechanical:"🔧", tailoring:"✂️", home:"🏠", other:"📦" };
@@ -26,12 +26,17 @@ function greeting() {
   return h < 12 ? "Suprabhat 🙏" : h < 17 ? "Namaste 🙏" : "Shubh Sandhya 🙏";
 }
 
-export default function DashboardScreen({ navigation }) {
+export default function DashboardScreen({ navigation, route }) {
   const { user, logout, refreshUser } = useAuth();
   const [engagements, setEngagements]   = useState([]);
   const [jobs, setJobs]                 = useState([]);
   const [nearbyCount, setNearbyCount]   = useState(null);
-  const [tab, setTab]                   = useState("overview");
+  const isWorkerRole = user?.role !== "customer";
+  const [tab, setTab] = useState(route?.params?.initialTab || (isWorkerRole ? "active" : "overview"));
+
+  useEffect(() => {
+    if (route?.params?.initialTab) setTab(route.params.initialTab);
+  }, [route?.params?.initialTab]);
   const [refreshing, setRefreshing]     = useState(false);
   const [ratingModal, setRatingModal]   = useState(null);
   const [ratingVal, setRatingVal]       = useState("5");
@@ -101,9 +106,11 @@ export default function DashboardScreen({ navigation }) {
   const isCustomer = user.role === "customer";
 
   // Derived data
-  const pendingEngs  = engagements.filter(e => (e.engagement_status || e.status) === "requested");
-  const activeEngs   = engagements.filter(e => (e.engagement_status || e.status) === "accepted");
-  const pastEngs     = engagements.filter(e => ["completed","cancelled","rejected"].includes(e.engagement_status || e.status));
+  const pendingEngs   = engagements.filter(e => (e.engagement_status || e.status) === "requested");
+  const activeEngs    = engagements.filter(e => (e.engagement_status || e.status) === "accepted");
+  const completedEngs = engagements.filter(e => (e.engagement_status || e.status) === "completed");
+  const cancelledEngs = engagements.filter(e => ["cancelled","rejected"].includes(e.engagement_status || e.status));
+  const pastEngs      = engagements.filter(e => ["completed","cancelled","rejected"].includes(e.engagement_status || e.status));
   const openJobs     = jobs.filter(j => j.status === "open" || j.status === "booked");
   const responsesFor = (jobId) => pendingEngs.filter(e => e.job_id === jobId).length;
 
@@ -120,7 +127,12 @@ export default function DashboardScreen({ navigation }) {
 
   const TABS = isCustomer
     ? [{ id:"overview", label:"Overview" }, { id:"pending", label:`Responses${pendingEngs.length ? ` (${pendingEngs.length})` : ""}` }, { id:"jobs", label:"My Jobs" }, { id:"history", label:"History" }]
-    : [{ id:"overview", label:"Overview" }, { id:"active",  label:`Active${activeEngs.length ? ` (${activeEngs.length})` : ""}` },  { id:"pending", label:`Pending${pendingEngs.length ? ` (${pendingEngs.length})` : ""}` }, { id:"history", label:"History" }];
+    : [
+        { id:"active",    label:`Active${activeEngs.length ? ` (${activeEngs.length})` : ""}` },
+        { id:"pending",   label:`Pending${pendingEngs.length ? ` (${pendingEngs.length})` : ""}` },
+        { id:"completed", label:`Completed${completedEngs.length ? ` (${completedEngs.length})` : ""}` },
+        { id:"cancelled", label:"Cancelled" },
+      ];
 
   return (
     <SafeAreaView edges={["top"]} style={styles.safe}>
@@ -131,67 +143,74 @@ export default function DashboardScreen({ navigation }) {
       >
         {/* ══ HERO ════════════════════════════════════════════════════════ */}
         <LinearGradient
-          colors={isCustomer ? ["#3f37c9", "#2f28a8"] : ["#FF6B35", "#E85A25"]}
+          colors={["#0F766E", "#0D5F59"]}
           start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
           style={styles.hero}
         >
-          {/* Decorative circle */}
           <View style={styles.heroCircle} />
           <View style={styles.heroCircle2} />
 
           <View style={styles.heroTop}>
+            {/* Left: greeting + name + status pills */}
             <View style={{ flex: 1 }}>
               <Text style={styles.heroGreeting}>{greeting()}</Text>
               <Text style={styles.heroName}>{firstName}</Text>
-              <Text style={styles.heroSub}>
-                {isCustomer ? "What work do you need today?" : "Find work near you"}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.heroCTAs}>
-            {isCustomer ? (
-              <>
-                <Pressable style={styles.heroCtaPrimary} onPress={() => navigation.navigate("PostJob")}>
-                  <Ionicons name="add" size={16} color="#fff" />
-                  <Text style={styles.heroCtaPrimaryText}>Post a Job</Text>
-                </Pressable>
-                <Pressable style={styles.heroCtaSecondary} onPress={() => navigation.navigate("Tabs", { screen: "Workers" })}>
-                  <Text style={styles.heroCtaSecondaryText}>Find Workers →</Text>
-                </Pressable>
-                <Pressable style={styles.heroCtaSecondary} onPress={() => navigation.navigate("CustomerProfile")}>
-                  <Ionicons name="person-outline" size={14} color="#fff" />
-                  <Text style={styles.heroCtaSecondaryText}>My Profile</Text>
-                </Pressable>
-              </>
-            ) : (
-              <>
-                <Pressable style={styles.heroCtaPrimary} onPress={() => navigation.navigate("Tabs", { screen: "Jobs" })}>
-                  <Ionicons name="briefcase-outline" size={16} color="#fff" />
-                  <Text style={styles.heroCtaPrimaryText}>Browse Jobs</Text>
-                </Pressable>
-                {activeEngs.length > 0 && (
-                  <View style={styles.heroCtaSecondary}>
-                    <Text style={styles.heroCtaSecondaryText}>{activeEngs.length} active hire{activeEngs.length > 1 ? "s" : ""}</Text>
-                  </View>
+              <View style={styles.heroPillRow}>
+                {isCustomer ? (
+                  <>
+                    {openJobs.length > 0 && (
+                      <View style={styles.heroPill}>
+                        <Ionicons name="briefcase-outline" size={10} color="rgba(255,255,255,0.9)" />
+                        <Text style={styles.heroPillTxt}>{openJobs.length} open job{openJobs.length > 1 ? "s" : ""}</Text>
+                      </View>
+                    )}
+                    {nearbyCount !== null && (
+                      <View style={styles.heroPill}>
+                        <View style={styles.nearbyDot} />
+                        <Text style={styles.heroPillTxt}>{nearbyCount} workers near</Text>
+                      </View>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {activeEngs.length > 0 && (
+                      <View style={[styles.heroPill, styles.heroPillGreen]}>
+                        <View style={styles.nearbyDot} />
+                        <Text style={styles.heroPillTxt}>{activeEngs.length} active job{activeEngs.length > 1 ? "s" : ""}</Text>
+                      </View>
+                    )}
+                    {nearbyCount !== null && (
+                      <View style={styles.heroPill}>
+                        <Ionicons name="search-outline" size={10} color="rgba(255,255,255,0.9)" />
+                        <Text style={styles.heroPillTxt}>{nearbyCount} jobs near you</Text>
+                      </View>
+                    )}
+                  </>
                 )}
-              </>
-            )}
-          </View>
-
-          {nearbyCount !== null && (
-            <View style={styles.nearbyRow}>
-              <View style={styles.nearbyDot} />
-              <Text style={styles.nearbyText}>
-                {isCustomer
-                  ? `${nearbyCount} verified workers available near you`
-                  : `${nearbyCount} open jobs near you`}
-              </Text>
+              </View>
             </View>
-          )}
+
+            {/* Right: initials avatar (tappable → profile) + optional CTA */}
+            <View style={styles.heroRight}>
+              <Pressable
+                style={styles.heroAvatar}
+                onPress={() => navigation.navigate(isCustomer ? "CustomerProfile" : "Tabs", isCustomer ? undefined : { screen: "Account" })}
+              >
+                <Text style={styles.heroAvatarTxt}>
+                  {(user?.name || "?").split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase()}
+                </Text>
+              </Pressable>
+              {isCustomer && (
+                <Pressable style={styles.heroCtaPrimary} onPress={() => navigation.navigate("PostJob")}>
+                  <Ionicons name="add" size={14} color="#fff" />
+                  <Text style={styles.heroCtaPrimaryText}>Post Job</Text>
+                </Pressable>
+              )}
+            </View>
+          </View>
         </LinearGradient>
 
-        <View style={{ padding: spacing.lg }}>
+        <View style={{ paddingHorizontal: spacing.lg, paddingTop: 10, paddingBottom: spacing.lg }}>
 
           {/* ══ PROFILE COMPLETION (customer) ═══════════════════════════ */}
           {isCustomer && completion && completion.pct < 100 && (
@@ -201,14 +220,14 @@ export default function DashboardScreen({ navigation }) {
                   <Text style={styles.cardTitle}>Complete your profile</Text>
                   <Text style={styles.cardMeta}>Workers trust complete profiles more</Text>
                 </View>
-                <Text style={[styles.completionPct, { color: completion.pct >= 75 ? colors.success : completion.pct >= 50 ? colors.saffron : colors.indigo }]}>
+                <Text style={[styles.completionPct, { color: completion.pct >= 75 ? colors.success : completion.pct >= 50 ? colors.saffron : colors.saffron }]}>
                   {completion.pct}%
                 </Text>
               </View>
               <View style={styles.progressBg}>
                 <View style={[styles.progressFill, {
                   width: `${completion.pct}%`,
-                  backgroundColor: completion.pct >= 75 ? colors.success : completion.pct >= 50 ? colors.saffron : colors.indigo,
+                  backgroundColor: completion.pct >= 75 ? colors.success : completion.pct >= 50 ? colors.saffron : colors.saffron,
                 }]} />
               </View>
               {completion.steps.map((s, i) => (
@@ -224,15 +243,16 @@ export default function DashboardScreen({ navigation }) {
             </View>
           )}
 
-          {/* ══ WORKER: active jobs preview above tabs ═══════════════════ */}
-          {!isCustomer && activeEngs.length > 0 && (
-            <View style={{ marginBottom: 16 }}>
-              <Text style={styles.sectionTitle}>Your active jobs</Text>
-              {activeEngs.map(e => (
-                <WorkerActiveCard key={e.id} e={e}
-                  onComplete={() => completeEng(e.id)}
-                  onCancel={() => cancelEng(e.id)} />
-              ))}
+          {/* ══ WORKER: stats strip above tabs ════════════════════════ */}
+          {!isCustomer && (
+            <View style={styles.workerStatsStrip}>
+              <WorkerStat val={activeEngs.length}    label="Active"    color={colors.success} onPress={() => setTab("active")}    active={tab === "active"} />
+              <View style={styles.wStatSep} />
+              <WorkerStat val={pendingEngs.length}   label="Pending"   color="#F59E0B"         onPress={() => setTab("pending")}   active={tab === "pending"} />
+              <View style={styles.wStatSep} />
+              <WorkerStat val={completedEngs.length} label="Completed" color={colors.saffron}  onPress={() => setTab("completed")} active={tab === "completed"} />
+              <View style={styles.wStatSep} />
+              <WorkerStat val={cancelledEngs.length} label="Cancelled" color={colors.textMuted} onPress={() => setTab("cancelled")} active={tab === "cancelled"} />
             </View>
           )}
 
@@ -265,38 +285,35 @@ export default function DashboardScreen({ navigation }) {
                   {openJobs.map(j => {
                     const resp = responsesFor(j.id);
                     return (
-                      <View key={j.id} style={styles.jobCard}>
-                        {resp > 0 && (
-                          <View style={styles.responseBanner}>
-                            <View style={styles.responseDot} />
-                            <Text style={styles.responseBannerText}>{resp} worker{resp > 1 ? "s" : ""} interested — tap to review</Text>
-                          </View>
-                        )}
+                      <View key={j.id} style={[styles.jobCard, resp > 0 && styles.jobCardActive]}>
                         <View style={styles.jobCardBody}>
                           <View style={styles.jobCardHeader}>
-                            <Text style={styles.jobCatIcon}>{CAT_ICONS[j.category] || "📦"}</Text>
-                            <View style={{ flex: 1 }}>
-                              <Text style={styles.jobTitle} numberOfLines={2}>{j.title}</Text>
-                              <Text style={styles.jobCat}>{j.category || "General"}</Text>
+                            <View style={styles.jobCatBadge}>
+                              <Text style={styles.jobCatIcon}>{CAT_ICONS[j.category] || "📦"}</Text>
                             </View>
-                            <StatusPill status={j.status === "open" ? "open" : "booked"} />
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.jobTitle} numberOfLines={1}>{j.title}</Text>
+                              <Text style={styles.jobCat}>{j.job_date} · {j.village || "—"}</Text>
+                            </View>
+                            <Text style={styles.jobRate}>₹{j.daily_rate}<Text style={{ fontSize: 10, color: colors.textMuted }}>/day</Text></Text>
                           </View>
                           <View style={styles.jobStats}>
                             <MiniStat label="Workers" val={j.workers_needed} />
-                            <MiniStat label="Rate" val={`₹${j.daily_rate}`} />
                             <MiniStat label="Date" val={j.job_date} />
-                            <MiniStat label="Area" val={j.village || "—"} />
+                            <MiniStat label="Status" val={j.status} />
                           </View>
-                          <View style={{ flexDirection: "row", gap: 8, marginTop: 2 }}>
-                            {resp > 0 && (
-                              <Pressable style={styles.btnSaffron} onPress={() => setTab("pending")}>
-                                <Text style={styles.btnSaffronText}>See {resp} Response{resp > 1 ? "s" : ""}</Text>
-                              </Pressable>
-                            )}
-                            <Pressable style={[styles.btnIndigo, { flex: 1 }]} onPress={() => navigation.navigate("Tabs", { screen: "Workers" })}>
-                              <Text style={styles.btnIndigoText}>Find Workers →</Text>
+                          {resp > 0 ? (
+                            <Pressable style={styles.responseCtaBtn} onPress={() => setTab("pending")}>
+                              <View style={styles.responseDot} />
+                              <Text style={styles.responseCtaTxt}>{resp} worker{resp > 1 ? "s" : ""} interested — Review now</Text>
+                              <Ionicons name="chevron-forward" size={14} color="#fff" />
                             </Pressable>
-                          </View>
+                          ) : (
+                            <Pressable style={styles.findWorkersBtn} onPress={() => navigation.navigate("Tabs", { screen: "Workers" })}>
+                              <Ionicons name="search-outline" size={13} color={colors.saffron} />
+                              <Text style={styles.findWorkersBtnTxt}>Find Workers →</Text>
+                            </Pressable>
+                          )}
                         </View>
                       </View>
                     );
@@ -306,57 +323,48 @@ export default function DashboardScreen({ navigation }) {
             </View>
           )}
 
-          {/* Worker overview */}
-          {tab === "overview" && !isCustomer && (
-            <View style={{ gap: 12 }}>
-              <View style={styles.statGrid}>
-                <StatCard icon="briefcase-outline"    label="Active Jobs"   val={activeEngs.length}  color={colors.indigo} />
-                <StatCard icon="time-outline"          label="Pending"       val={pendingEngs.length} color={colors.saffron} />
-                <StatCard icon="checkmark-circle-outline" label="Completed" val={pastEngs.filter(e => (e.engagement_status||e.status)==="completed").length} color={colors.success} />
-              </View>
-              {activeEngs.length === 0 && pendingEngs.length === 0 ? (
-                <View style={styles.emptyHero}>
-                  <Text style={styles.emptyEmoji}>💼</Text>
-                  <Text style={styles.emptyTitle}>No active work yet</Text>
-                  <Text style={styles.emptySubtitle}>Browse open jobs nearby and express interest.</Text>
-                  <Button title="Find Jobs" icon={<Ionicons name="briefcase-outline" size={16} color="#fff" />} onPress={() => navigation.navigate("Tabs", { screen: "Jobs" })} style={{ marginTop: 14 }} />
-                </View>
-              ) : (
-                <>
-                  {activeEngs.map(e => <WorkerActiveCard key={e.id} e={e} onComplete={() => completeEng(e.id)} onCancel={() => cancelEng(e.id)} onPress={() => setDetailItem(e)} />)}
-                  {pendingEngs.map(e => <WorkerPendingCard key={e.id} e={e} onCancel={() => cancelEng(e.id)} onPress={() => setDetailItem(e)} />)}
-                </>
-              )}
-            </View>
-          )}
-
           {/* ══ PENDING (customer: accept/reject) ═══════════════════════ */}
           {tab === "pending" && isCustomer && (
             <View style={{ gap: 12 }}>
               {pendingEngs.length === 0 ? (
-                <Empty msg="No pending responses." sub="Workers who express interest in your jobs will appear here." />
-              ) : pendingEngs.map(e => (
-                <Pressable key={e.id} onPress={() => setDetailItem(e)} style={styles.card}>
-                  <View style={styles.workerRow}>
-                    <View style={[styles.workerAvatar, { backgroundColor: colors.indigoTint }]}>
-                      <Ionicons name="person" size={22} color={colors.indigo} />
+                <Empty msg="No responses yet." sub="Workers who express interest in your jobs will appear here." />
+              ) : pendingEngs.map(e => {
+                const workerInitials = (e.worker_name || "W").split(" ").map(w => w[0]).slice(0,2).join("").toUpperCase();
+                return (
+                  <Pressable key={e.id} onPress={() => setDetailItem(e)} style={styles.responseCard}>
+                    {/* Worker info */}
+                    <View style={styles.responseWorkerRow}>
+                      <View style={styles.responseAvatar}>
+                        <Text style={styles.responseAvatarTxt}>{workerInitials}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.responseWorkerName}>{e.worker_name || "Worker"}</Text>
+                        <Text style={styles.responseJobTitle} numberOfLines={1}>{e.job_title}</Text>
+                      </View>
+                      <View style={styles.responseDateBadge}>
+                        <Text style={styles.responseDateTxt}>{e.job_date}</Text>
+                      </View>
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.cardTitle}>{e.worker_name || "Worker"}</Text>
-                      <Text style={styles.cardMeta}>{e.job_title} · ₹{e.daily_rate}/day · {e.job_date}</Text>
+                    {/* Rate row */}
+                    <View style={styles.responseRateRow}>
+                      <Ionicons name="cash-outline" size={13} color={colors.textMuted} />
+                      <Text style={styles.responseRateTxt}>
+                        Offering <Text style={{ color: colors.money, fontFamily: fonts.bodyBold }}>₹{e.daily_rate}/day</Text>
+                      </Text>
                     </View>
-                  </View>
-                  <View style={styles.actionRow}>
-                    <Pressable style={[styles.btnGreen, { flex: 1 }]} onPress={() => acceptEng(e.id)}>
-                      <Ionicons name="checkmark" size={16} color="#fff" />
-                      <Text style={styles.btnGreenText}>Accept</Text>
-                    </Pressable>
-                    <Pressable style={[styles.btnOutline, { flex: 1 }]} onPress={() => rejectEng(e.id, e.worker_name)}>
-                      <Text style={styles.btnOutlineText}>Reject</Text>
-                    </Pressable>
-                  </View>
-                </Pressable>
-              ))}
+                    {/* Accept / Reject */}
+                    <View style={styles.actionRow}>
+                      <Pressable style={[styles.btnGreen, { flex: 1 }]} onPress={() => acceptEng(e.id)}>
+                        <Ionicons name="checkmark" size={16} color="#fff" />
+                        <Text style={styles.btnGreenText}>Accept</Text>
+                      </Pressable>
+                      <Pressable style={[styles.btnOutline, { flex: 1 }]} onPress={() => rejectEng(e.id, e.worker_name)}>
+                        <Text style={styles.btnOutlineText}>Decline</Text>
+                      </Pressable>
+                    </View>
+                  </Pressable>
+                );
+              })}
             </View>
           )}
 
@@ -384,7 +392,7 @@ export default function DashboardScreen({ navigation }) {
               {jobs.length === 0 ? (
                 <Empty msg="No jobs posted yet." />
               ) : jobs.map(j => (
-                <View key={j.id} style={styles.card}>
+                <Pressable key={j.id} onPress={() => setDetailItem(j)} style={styles.card}>
                   <View style={{ flexDirection: "row", gap: 10, alignItems: "flex-start" }}>
                     <Text style={{ fontSize: 24 }}>{CAT_ICONS[j.category] || "📦"}</Text>
                     <View style={{ flex: 1 }}>
@@ -393,13 +401,14 @@ export default function DashboardScreen({ navigation }) {
                     </View>
                     <StatusPill status={j.status} />
                   </View>
-                </View>
+                  <Text style={styles.tapHint}>Tap for details →</Text>
+                </Pressable>
               ))}
             </View>
           )}
 
-          {/* ══ HISTORY ══════════════════════════════════════════════════ */}
-          {tab === "history" && (
+          {/* ══ HISTORY (customer only) ══════════════════════════════════ */}
+          {tab === "history" && isCustomer && (
             <View style={{ gap: 12 }}>
               {pastEngs.length === 0 ? (
                 <Empty msg="No history yet." />
@@ -412,14 +421,14 @@ export default function DashboardScreen({ navigation }) {
                       <View style={{ flex: 1 }}>
                         <Text style={styles.cardTitle}>{e.job_title}</Text>
                         <Text style={styles.cardMeta}>
-                          {e.job_date} · ₹{e.daily_rate}/day · {isCustomer ? `👷 ${e.worker_name}` : `🤝 ${e.customer_name}`}
+                          {e.job_date} · ₹{e.daily_rate}/day · 👷 {e.worker_name}
                         </Text>
                       </View>
                       <View style={[styles.statusBadge, { backgroundColor: st.bg }]}>
                         <Text style={[styles.statusText, { color: st.fg }]}>{st.label}</Text>
                       </View>
                     </View>
-                    {isCustomer && status === "completed" && !e.rating && (
+                    {status === "completed" && !e.rating && (
                       <Pressable style={[styles.btnSaffron, { marginTop: 10 }]} onPress={() => setRatingModal({ id: e.id, workerName: e.worker_name })}>
                         <Text style={styles.btnSaffronText}>⭐ Rate Worker</Text>
                       </Pressable>
@@ -436,9 +445,93 @@ export default function DashboardScreen({ navigation }) {
             </View>
           )}
 
+          {/* ══ COMPLETED (worker) ═══════════════════════════════════════ */}
+          {tab === "completed" && !isCustomer && (
+            <View style={{ gap: 12 }}>
+              {completedEngs.length === 0 ? (
+                <Empty msg="No completed jobs yet." sub="Finished jobs will appear here with your earnings." />
+              ) : (
+                <>
+                  {/* Earnings summary */}
+                  <View style={styles.earningsSummary}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.earningsLabel}>Total earned</Text>
+                      <Text style={styles.earningsVal}>
+                        ₹{completedEngs.reduce((sum, e) => sum + (e.daily_rate || 0), 0)}
+                      </Text>
+                    </View>
+                    <View style={styles.wStatSep} />
+                    <View style={{ flex: 1, alignItems: "center" }}>
+                      <Text style={styles.earningsLabel}>Jobs done</Text>
+                      <Text style={styles.earningsVal}>{completedEngs.length}</Text>
+                    </View>
+                    <View style={styles.wStatSep} />
+                    <View style={{ flex: 1, alignItems: "flex-end" }}>
+                      <Text style={styles.earningsLabel}>Avg rating</Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                        <Ionicons name="star" size={14} color="#F59E0B" />
+                        <Text style={styles.earningsVal}>
+                          {completedEngs.filter(e => e.rating).length > 0
+                            ? (completedEngs.filter(e => e.rating).reduce((s, e) => s + e.rating, 0) / completedEngs.filter(e => e.rating).length).toFixed(1)
+                            : "—"}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {completedEngs.map(e => (
+                    <Pressable key={e.id} onPress={() => setDetailItem(e)} style={styles.completedCard}>
+                      <View style={styles.completedCardTop}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.cardTitle}>{e.job_title}</Text>
+                          <Text style={styles.cardMeta}>🤝 {e.customer_name} · {e.job_date}</Text>
+                        </View>
+                        <Text style={styles.completedRate}>₹{e.daily_rate}</Text>
+                      </View>
+                      {e.rating ? (
+                        <View style={styles.ratingChip}>
+                          <Ionicons name="star" size={12} color="#F59E0B" />
+                          <Text style={styles.ratingChipText}>{e.rating}/5</Text>
+                          {e.comment ? <Text style={styles.ratingComment} numberOfLines={1}>"{e.comment}"</Text> : null}
+                        </View>
+                      ) : (
+                        <Text style={styles.awaitingRating}>Awaiting customer rating</Text>
+                      )}
+                    </Pressable>
+                  ))}
+                </>
+              )}
+            </View>
+          )}
+
+          {/* ══ CANCELLED (worker) ═══════════════════════════════════════ */}
+          {tab === "cancelled" && !isCustomer && (
+            <View style={{ gap: 12 }}>
+              {cancelledEngs.length === 0 ? (
+                <Empty msg="No cancelled jobs." sub="Withdrawn or rejected applications appear here." />
+              ) : cancelledEngs.map(e => {
+                const status = e.engagement_status || e.status;
+                const st = STATUS_STYLE[status] || { bg:"#f3f4f6", fg:"#374151", label: status };
+                return (
+                  <Pressable key={e.id} onPress={() => setDetailItem(e)} style={styles.card}>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.cardTitle}>{e.job_title}</Text>
+                        <Text style={styles.cardMeta}>{e.job_date} · ₹{e.daily_rate}/day</Text>
+                      </View>
+                      <View style={[styles.statusBadge, { backgroundColor: st.bg }]}>
+                        <Text style={[styles.statusText, { color: st.fg }]}>{st.label}</Text>
+                      </View>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          )}
+
           {/* Support link */}
           <Pressable onPress={() => navigation.navigate("ContactSupport")} style={styles.supportLink}>
-            <Ionicons name="help-circle-outline" size={15} color={colors.indigo} />
+            <Ionicons name="help-circle-outline" size={15} color={colors.saffron} />
             <Text style={styles.supportText}>Help & Support</Text>
           </Pressable>
 
@@ -486,7 +579,7 @@ export default function DashboardScreen({ navigation }) {
                       onPress={r.link ? () => Linking.openURL(`tel:${r.val}`) : undefined}
                     >
                       <View style={styles.detailIconWrap}>
-                        <Ionicons name={r.icon} size={16} color={colors.indigo} />
+                        <Ionicons name={r.icon} size={16} color={colors.saffron} />
                       </View>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.detailRowLabel}>{r.label}</Text>
@@ -535,7 +628,7 @@ export default function DashboardScreen({ navigation }) {
                   </View>
 
                   <Pressable onPress={() => setDetailItem(null)} style={{ alignItems: "center", marginTop: 20, paddingBottom: 8 }}>
-                    <Text style={{ fontFamily: fonts.bodySemi, color: colors.indigo }}>Close</Text>
+                    <Text style={{ fontFamily: fonts.bodySemi, color: colors.saffron }}>Close</Text>
                   </Pressable>
                 </ScrollView>
               );
@@ -564,7 +657,7 @@ export default function DashboardScreen({ navigation }) {
             />
             <Button title="Submit" onPress={submitRating} style={{ marginTop: 8 }} />
             <Pressable onPress={() => setRatingModal(null)} style={{ marginTop: 12, alignItems: "center" }}>
-              <Text style={{ fontFamily: fonts.bodySemi, color: colors.indigo }}>Cancel</Text>
+              <Text style={{ fontFamily: fonts.bodySemi, color: colors.saffron }}>Cancel</Text>
             </Pressable>
           </View>
         </View>
@@ -659,13 +752,22 @@ function WorkerPendingCard({ e, onCancel, onPress }) {
   );
 }
 
-function StatCard({ icon, label, val, color }) {
+function WorkerStat({ val, label, color, onPress, active }) {
   return (
-    <View style={[styles.statCard, { borderTopColor: color }]}>
+    <Pressable onPress={onPress} style={[styles.wStat, active && { backgroundColor: color + "15" }]}>
+      <Text style={[styles.wStatVal, { color }]}>{val}</Text>
+      <Text style={styles.wStatLabel}>{label}</Text>
+    </Pressable>
+  );
+}
+
+function StatCard({ icon, label, val, color, onPress }) {
+  return (
+    <Pressable onPress={onPress} style={[styles.statCard, { borderTopColor: color }]}>
       <Ionicons name={icon} size={20} color={color} />
       <Text style={styles.statVal}>{val}</Text>
       <Text style={styles.statLabel}>{label}</Text>
-    </View>
+    </Pressable>
   );
 }
 
@@ -680,7 +782,7 @@ function MiniStat({ label, val }) {
 
 function StatusPill({ status }) {
   const map = {
-    open:      { bg:"#fff4f0", fg:"#ff6b35", label:"Open" },
+    open:      { bg:"#fff4f0", fg:"#0F766E", label:"Open" },
     booked:    { bg:"#d1fae5", fg:"#065f46", label:"Filled" },
     waiting:   { bg:"#fef3c7", fg:"#92400e", label:"Waiting" },
     accepted:  { bg:"#d1fae5", fg:"#065f46", label:"Hired ✓" },
@@ -707,24 +809,24 @@ function Empty({ msg, sub }) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   // Hero
-  hero: { padding: spacing.xl, paddingTop: spacing.md, paddingBottom: spacing.xl, position: "relative", overflow: "hidden" },
-  heroCircle: { position: "absolute", width: 180, height: 180, borderRadius: 90, backgroundColor: "rgba(255,255,255,0.08)", top: -40, right: -40 },
-  heroCircle2: { position: "absolute", width: 100, height: 100, borderRadius: 50, backgroundColor: "rgba(255,255,255,0.06)", bottom: -20, left: 60 },
-  heroTop: { flexDirection: "row", alignItems: "flex-start", marginBottom: 16 },
-  heroGreeting: { fontFamily: fonts.body, fontSize: 13, color: "rgba(255,255,255,0.7)", marginBottom: 2 },
-  heroName: { fontFamily: fonts.display, fontSize: 28, color: "#fff" },
-  heroSub: { fontFamily: fonts.body, fontSize: 13, color: "rgba(255,255,255,0.75)", marginTop: 2 },
-  logoutBtn: { padding: 8, backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 10 },
-  heroCTAs: { flexDirection: "row", gap: 10, marginBottom: 14 },
-  heroCtaPrimary: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(0,0,0,0.25)", paddingVertical: 10, paddingHorizontal: 16, borderRadius: 12 },
-  heroCtaPrimaryText: { fontFamily: fonts.bodyBold, fontSize: 14, color: "#fff" },
-  heroCtaSecondary: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.18)", paddingVertical: 10, paddingHorizontal: 14, borderRadius: 12 },
-  heroCtaSecondaryText: { fontFamily: fonts.bodyBold, fontSize: 14, color: "#fff" },
-  nearbyRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  nearbyDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#4ade80" },
-  nearbyText: { fontFamily: fonts.body, fontSize: 12, color: "rgba(255,255,255,0.65)" },
+  hero: { paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: spacing.lg, position: "relative", overflow: "hidden" },
+  heroCircle: { position: "absolute", width: 180, height: 180, borderRadius: 90, backgroundColor: "rgba(255,255,255,0.07)", top: -50, right: -40 },
+  heroCircle2: { position: "absolute", width: 90, height: 90, borderRadius: 45, backgroundColor: "rgba(255,255,255,0.05)", bottom: -20, left: 40 },
+  heroTop: { flexDirection: "row", alignItems: "flex-start", gap: 14 },
+  heroGreeting: { fontFamily: fonts.body, fontSize: 12, color: "rgba(255,255,255,0.7)", marginBottom: 2 },
+  heroName: { fontFamily: fonts.display, fontSize: 24, color: "#fff", marginBottom: 10 },
+  heroPillRow: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
+  heroPill: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(255,255,255,0.18)", paddingVertical: 5, paddingHorizontal: 10, borderRadius: 20 },
+  heroPillGreen: { backgroundColor: "rgba(74,222,128,0.25)" },
+  heroPillTxt: { fontFamily: fonts.bodyBold, fontSize: 11, color: "#fff" },
+  heroRight: { alignItems: "center", gap: 10 },
+  heroAvatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: "rgba(255,255,255,0.2)", borderWidth: 2, borderColor: "rgba(255,255,255,0.35)", alignItems: "center", justifyContent: "center" },
+  heroAvatarTxt: { fontFamily: fonts.display, fontSize: 20, color: "#fff" },
+  heroCtaPrimary: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(0,0,0,0.2)", paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12 },
+  heroCtaPrimaryText: { fontFamily: fonts.bodyBold, fontSize: 12, color: "#fff" },
+  nearbyDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#4ade80" },
   // Cards
-  card: { backgroundColor: "#fff", borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: 16, marginBottom: 2 },
+  card: { backgroundColor: "#fff", borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: 14, marginBottom: 10 },
   cardTitle: { fontFamily: fonts.display, fontSize: 16, color: colors.text },
   cardMeta: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginTop: 3 },
   // Profile completion
@@ -741,20 +843,36 @@ const styles = StyleSheet.create({
   // Tabs
   tabRow: { flexDirection: "row", gap: 8, paddingBottom: 4 },
   tab: { paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20, backgroundColor: "#fff", borderWidth: 1.5, borderColor: colors.border },
-  tabActive: { backgroundColor: colors.indigo, borderColor: colors.indigo },
+  tabActive: { backgroundColor: colors.saffron, borderColor: colors.saffron },
   tabText: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.textSecondary },
   tabTextActive: { color: "#fff" },
   // Job cards
   jobCard: { backgroundColor: "#fff", borderRadius: 14, borderWidth: 1, borderColor: colors.border, overflow: "hidden" },
-  responseBanner: { backgroundColor: "#fff4f0", flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 8 },
-  responseDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.saffron },
-  responseBannerText: { fontFamily: fonts.bodyBold, fontSize: 12, color: "#ff6b35" },
+  jobCardActive: { borderColor: colors.saffron, borderLeftWidth: 3, borderLeftColor: colors.saffron },
   jobCardBody: { padding: 14 },
-  jobCardHeader: { flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 10 },
-  jobCatIcon: { fontSize: 28 },
-  jobTitle: { fontFamily: fonts.display, fontSize: 16, color: colors.text },
-  jobCat: { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1.2, textTransform: "uppercase", color: colors.textMuted, marginTop: 2 },
-  jobStats: { flexDirection: "row", backgroundColor: colors.soft || "#f9f8f4", borderRadius: 10, padding: 10, marginBottom: 12, gap: 4 },
+  jobCardHeader: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
+  jobCatBadge: { width: 44, height: 44, borderRadius: 12, backgroundColor: colors.saffronTint, alignItems: "center", justifyContent: "center" },
+  jobCatIcon: { fontSize: 22 },
+  jobTitle: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.text },
+  jobCat: { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted, marginTop: 1 },
+  jobRate: { fontFamily: fonts.display, fontSize: 16, color: colors.money },
+  jobStats: { flexDirection: "row", backgroundColor: "#f9f8f5", borderRadius: 10, padding: 10, marginBottom: 10, gap: 4 },
+  responseDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#fff" },
+  responseCtaBtn: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.saffron, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 10 },
+  responseCtaTxt: { flex: 1, fontFamily: fonts.bodyBold, fontSize: 13, color: "#fff" },
+  findWorkersBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderWidth: 1.5, borderColor: colors.border, paddingVertical: 11, borderRadius: 10 },
+  findWorkersBtnTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.saffron },
+  // Response cards (Responses tab)
+  responseCard: { backgroundColor: "#fff", borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: 14 },
+  responseWorkerRow: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 10 },
+  responseAvatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: colors.saffron, alignItems: "center", justifyContent: "center" },
+  responseAvatarTxt: { fontFamily: fonts.display, fontSize: 18, color: "#fff" },
+  responseWorkerName: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.text },
+  responseJobTitle: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  responseDateBadge: { backgroundColor: colors.saffronTint, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
+  responseDateTxt: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.saffron },
+  responseRateRow: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#f9f8f5", borderRadius: 8, padding: 10, marginBottom: 12 },
+  responseRateTxt: { fontFamily: fonts.body, fontSize: 13, color: colors.textSecondary },
   miniStatLabel: { fontFamily: fonts.bodyBold, fontSize: 9, letterSpacing: 1, textTransform: "uppercase", color: colors.textMuted },
   miniStatVal: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.text, marginTop: 2 },
   // Worker row
@@ -774,8 +892,8 @@ const styles = StyleSheet.create({
   btnGreenText: { fontFamily: fonts.bodyBold, fontSize: 13, color: "#fff" },
   btnSaffron: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: colors.saffron, paddingVertical: 11, paddingHorizontal: 14, borderRadius: 10 },
   btnSaffronText: { fontFamily: fonts.bodyBold, fontSize: 13, color: "#fff" },
-  btnIndigo: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: colors.indigoTint, paddingVertical: 11, paddingHorizontal: 14, borderRadius: 10 },
-  btnIndigoText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.indigo },
+  btnIndigo: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: colors.saffronTint, paddingVertical: 11, paddingHorizontal: 14, borderRadius: 10 },
+  btnIndigoText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.saffron },
   btnOutline: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, borderWidth: 1.5, borderColor: colors.border, paddingVertical: 11, paddingHorizontal: 14, borderRadius: 10, backgroundColor: "#fff" },
   btnOutlineText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.textSecondary },
   // Status
@@ -792,10 +910,26 @@ const styles = StyleSheet.create({
   emptyCard: { backgroundColor: "#fff", borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: 24, alignItems: "center" },
   emptyCardMsg: { fontFamily: fonts.bodySemi, fontSize: 15, color: colors.text },
   emptyCardSub: { fontFamily: fonts.body, fontSize: 13, color: colors.textMuted, marginTop: 6, textAlign: "center" },
+  // Completed tab
+  earningsSummary: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: 16, marginBottom: 4 },
+  earningsLabel: { fontFamily: fonts.bodyBold, fontSize: 9, letterSpacing: 1.2, textTransform: "uppercase", color: colors.textMuted, marginBottom: 4 },
+  earningsVal: { fontFamily: fonts.display, fontSize: 22, color: colors.text },
+  completedCard: { backgroundColor: "#fff", borderRadius: 14, borderWidth: 1, borderColor: colors.border, borderLeftWidth: 4, borderLeftColor: colors.success, padding: 14 },
+  completedCardTop: { flexDirection: "row", alignItems: "flex-start", marginBottom: 10 },
+  completedRate: { fontFamily: fonts.display, fontSize: 20, color: colors.money },
+  awaitingRating: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, fontStyle: "italic" },
+  ratingComment: { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted, flex: 1 },
+  // Worker stats strip
+  workerStatsStrip: { flexDirection: "row", backgroundColor: "#fff", borderRadius: 14, borderWidth: 1, borderColor: colors.border, marginBottom: 16, overflow: "hidden" },
+  wStat: { flex: 1, alignItems: "center", paddingVertical: 14 },
+  wStatVal: { fontFamily: fonts.display, fontSize: 26, color: colors.text },
+  wStatLabel: { fontFamily: fonts.bodyBold, fontSize: 9, letterSpacing: 1.2, textTransform: "uppercase", color: colors.textMuted, marginTop: 2 },
+  wStatSep: { width: 1, backgroundColor: colors.border },
   // Support
   sectionTitle: { fontFamily: fonts.bodyBold, fontSize: 12, letterSpacing: 1.2, textTransform: "uppercase", color: colors.textSecondary, marginBottom: 10 },
+  tapHint: { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted, marginTop: 8, textAlign: "right" },
   supportLink: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 24, alignSelf: "center" },
-  supportText: { fontFamily: fonts.bodySemi, fontSize: 13, color: colors.indigo },
+  supportText: { fontFamily: fonts.bodySemi, fontSize: 13, color: colors.saffron },
   // Modal
   modalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   detailSheet: { backgroundColor: "#fff", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40, maxHeight: "85%" },
@@ -803,7 +937,7 @@ const styles = StyleSheet.create({
   detailEmoji: { fontSize: 40 },
   detailTitle: { fontFamily: fonts.display, fontSize: 20, color: colors.text },
   detailRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
-  detailIconWrap: { width: 34, height: 34, borderRadius: 10, backgroundColor: colors.indigoTint, alignItems: "center", justifyContent: "center" },
+  detailIconWrap: { width: 34, height: 34, borderRadius: 10, backgroundColor: colors.saffronTint, alignItems: "center", justifyContent: "center" },
   detailRowLabel: { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: colors.textMuted },
   detailRowVal: { fontFamily: fonts.bodySemi, fontSize: 14, color: colors.text, marginTop: 2 },
   detailDesc: { backgroundColor: "#f9f8f5", borderRadius: 12, padding: 14, marginTop: 16 },

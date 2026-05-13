@@ -8,10 +8,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import api from "../api";
 import { useAuth } from "../contexts/AuthContext";
-import { colors, fonts, radius, spacing, sizes } from "../theme";
+import { useLanguage } from "../contexts/LanguageContext";
+import { colors, fonts, spacing } from "../theme";
 
-const DAY_LABELS = ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"];
-const MONTH_NAMES = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const DAY_LABELS    = { en: ["Su","Mo","Tu","We","Th","Fr","Sa"], hi: ["र","सो","मं","बु","गु","शु","श"] };
+const MONTH_NAMES   = {
+  en: ["January","February","March","April","May","June","July","August","September","October","November","December"],
+  hi: ["जनवरी","फरवरी","मार्च","अप्रैल","मई","जून","जुलाई","अगस्त","सितंबर","अक्टूबर","नवंबर","दिसंबर"],
+};
 
 function toDateStr(y, m, d) {
   return `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
@@ -24,7 +28,10 @@ function todayStr() {
 
 export default function CalendarScreen({ navigation }) {
   const { user } = useAuth();
+  const { lang } = useLanguage();
   const isWorker = user?.role === "worker";
+  const months = MONTH_NAMES[lang] || MONTH_NAMES.en;
+  const days   = DAY_LABELS[lang]  || DAY_LABELS.en;
   const now = new Date();
 
   const [year, setYear]     = useState(now.getFullYear());
@@ -109,16 +116,16 @@ export default function CalendarScreen({ navigation }) {
   const STATUS_DOT = {
     requested: "#f59e0b",
     accepted:  "#16a34a",
-    completed: "#3f37c9",
+    completed: "#0F766E",
     rejected:  "#ef4444",
     cancelled: "#9ca3af",
-    open:      "#ff6b35",
+    open:      "#0F766E",
     booked:    "#16a34a",
   };
 
   if (loading) return (
     <SafeAreaView style={s.safe}>
-      <View style={s.center}><ActivityIndicator color={colors.indigo} size="large" /></View>
+      <View style={s.center}><ActivityIndicator color={colors.saffron} size="large" /></View>
     </SafeAreaView>
   );
 
@@ -131,33 +138,31 @@ export default function CalendarScreen({ navigation }) {
       >
         {/* ── Hero stats ──────────────────────────────────────────────── */}
         <LinearGradient
-          colors={isWorker ? ["#3f37c9", "#6366f1"] : ["#ff6b35", "#e85a25"]}
+          colors={isWorker ? ["#0F766E", "#0D9488"] : ["#0F766E", "#0D5F59"]}
           start={{ x:0, y:0 }} end={{ x:1, y:1 }}
           style={s.hero}
         >
           <View style={s.heroCircle} />
           <Text style={s.heroTitle}>
-            {isWorker ? "My Work Calendar" : "Job Schedule"}
+            {isWorker ? (lang === "hi" ? "मेरा काम कैलेंडर" : "My Work Calendar") : (lang === "hi" ? "Job Schedule" : "Job Schedule")}
           </Text>
-          <Text style={s.heroSub}>
-            {MONTH_NAMES[month]} {year}
-          </Text>
+          <Text style={s.heroSub}>{months[month]} {year}</Text>
           <View style={s.heroStats}>
             {isWorker ? (
               <>
-                <HeroStat icon="briefcase-outline" val={completedThisMonth.length} label="Jobs done" />
+                <HeroStat icon="briefcase-outline" val={completedThisMonth.length} label={lang === "hi" ? "काम हुए" : "Jobs done"} />
                 <View style={s.heroDivider} />
-                <HeroStat icon="cash-outline" val={earnedThisMonth > 0 ? `₹${earnedThisMonth}` : "—"} label="Earned" />
+                <HeroStat icon="cash-outline" val={earnedThisMonth > 0 ? `₹${earnedThisMonth}` : "—"} label={lang === "hi" ? "कमाई" : "Earned"} />
                 <View style={s.heroDivider} />
-                <HeroStat icon="time-outline" val={monthEngs.filter(e => (e.engagement_status||e.status)==="accepted").length} label="Upcoming" />
+                <HeroStat icon="time-outline" val={monthEngs.filter(e => (e.engagement_status||e.status)==="accepted").length} label={lang === "hi" ? "आने वाले" : "Upcoming"} />
               </>
             ) : (
               <>
-                <HeroStat icon="hammer-outline" val={monthJobs.length} label="Jobs posted" />
+                <HeroStat icon="hammer-outline" val={monthJobs.length} label={lang === "hi" ? "Jobs पोस्ट" : "Jobs posted"} />
                 <View style={s.heroDivider} />
-                <HeroStat icon="people-outline" val={monthEngs.filter(e => (e.engagement_status||e.status)==="accepted").length} label="Hired" />
+                <HeroStat icon="people-outline" val={monthEngs.filter(e => (e.engagement_status||e.status)==="accepted").length} label={lang === "hi" ? "Hired" : "Hired"} />
                 <View style={s.heroDivider} />
-                <HeroStat icon="checkmark-circle-outline" val={completedThisMonth.length} label="Completed" />
+                <HeroStat icon="checkmark-circle-outline" val={completedThisMonth.length} label={lang === "hi" ? "पूरे हुए" : "Completed"} />
               </>
             )}
           </View>
@@ -169,18 +174,18 @@ export default function CalendarScreen({ navigation }) {
             {/* Month nav */}
             <View style={s.calNav}>
               <Pressable onPress={prevMonth} style={s.navBtn}>
-                <Ionicons name="chevron-back" size={20} color={colors.indigo} />
+                <Ionicons name="chevron-back" size={20} color={colors.saffron} />
               </Pressable>
-              <Text style={s.calMonth}>{MONTH_NAMES[month]} {year}</Text>
+              <Text style={s.calMonth}>{months[month]} {year}</Text>
               <Pressable onPress={nextMonth} style={s.navBtn}>
-                <Ionicons name="chevron-forward" size={20} color={colors.indigo} />
+                <Ionicons name="chevron-forward" size={20} color={colors.saffron} />
               </Pressable>
             </View>
 
             {/* Day headers */}
             <View style={s.dayHeaders}>
-              {DAY_LABELS.map(d => (
-                <Text key={d} style={s.dayHeader}>{d}</Text>
+              {days.map((d, i) => (
+                <Text key={i} style={s.dayHeader}>{d}</Text>
               ))}
             </View>
 
@@ -214,7 +219,7 @@ export default function CalendarScreen({ navigation }) {
                       <View style={s.dotsRow}>
                         {dots.slice(0, 3).map((item, di) => {
                           const status = item.engagement_status || item.status || "open";
-                          return <View key={di} style={[s.dot, { backgroundColor: STATUS_DOT[status] || colors.indigo }]} />;
+                          return <View key={di} style={[s.dot, { backgroundColor: STATUS_DOT[status] || colors.saffron }]} />;
                         })}
                       </View>
                     )}
@@ -229,14 +234,14 @@ export default function CalendarScreen({ navigation }) {
             {/* Legend */}
             <View style={s.legend}>
               {[
-                { color: "#16a34a", label: "Accepted/Hired" },
-                { color: "#f59e0b", label: "Pending" },
-                { color: "#3f37c9", label: "Completed" },
-                { color: "#ff6b35", label: "Open" },
+                { color: "#16a34a", en: "Accepted", hi: "मिला" },
+                { color: "#f59e0b", en: "Pending",  hi: "बाकी" },
+                { color: "#0F766E", en: "Completed", hi: "पूरा" },
+                { color: "#9ca3af", en: "Cancelled", hi: "रद्द" },
               ].map(l => (
-                <View key={l.label} style={s.legendItem}>
+                <View key={l.en} style={s.legendItem}>
                   <View style={[s.legendDot, { backgroundColor: l.color }]} />
-                  <Text style={s.legendText}>{l.label}</Text>
+                  <Text style={s.legendText}>{lang === "hi" ? l.hi : l.en}</Text>
                 </View>
               ))}
             </View>
@@ -246,12 +251,14 @@ export default function CalendarScreen({ navigation }) {
           {selected && (
             <View>
               <Text style={s.selectedDate}>
-                {new Date(selected + "T00:00:00").toLocaleDateString("en-IN", { weekday:"long", day:"numeric", month:"long" })}
+                {new Date(selected + "T00:00:00").toLocaleDateString(lang === "hi" ? "hi-IN" : "en-IN", { weekday:"long", day:"numeric", month:"long" })}
               </Text>
 
               {selectedItems.length === 0 ? (
                 <View style={s.emptyDay}>
-                  <Text style={s.emptyDayText}>No {isWorker ? "jobs" : "activity"} on this day</Text>
+                  <Text style={s.emptyDayText}>
+                    {lang === "hi" ? "इस दिन कोई काम नहीं" : `No ${isWorker ? "jobs" : "activity"} on this day`}
+                  </Text>
                 </View>
               ) : (
                 <View style={{ gap: 10 }}>
@@ -259,7 +266,7 @@ export default function CalendarScreen({ navigation }) {
                     const isJob = !!item.title; // jobs have title, engagements have job_title
                     const title = item.title || item.job_title || "Job";
                     const status = item.engagement_status || item.status || "open";
-                    const dotColor = STATUS_DOT[status] || colors.indigo;
+                    const dotColor = STATUS_DOT[status] || colors.saffron;
                     return (
                       <View key={i} style={[s.itemCard, { borderLeftColor: dotColor }]}>
                         <View style={s.itemHeader}>
@@ -320,17 +327,17 @@ const s = StyleSheet.create({
   // Calendar card
   calCard: { backgroundColor: "#fff", borderRadius: 18, borderWidth: 1, borderColor: colors.border, padding: 18, marginBottom: 20, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
   calNav: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
-  navBtn: { padding: 8, borderRadius: 10, backgroundColor: colors.indigoTint },
+  navBtn: { padding: 8, borderRadius: 10, backgroundColor: colors.saffronTint },
   calMonth: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.text },
   dayHeaders: { flexDirection: "row", marginBottom: 8 },
   dayHeader: { flex: 1, textAlign: "center", fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 0.5, textTransform: "uppercase", color: colors.textMuted },
   grid: { flexDirection: "row", flexWrap: "wrap" },
   gridCell: { width: "14.28%", aspectRatio: 1, alignItems: "center", justifyContent: "center" },
   gridBtn: { borderRadius: 10 },
-  gridToday: { borderWidth: 2, borderColor: colors.indigo },
-  gridSelected: { backgroundColor: colors.indigo },
+  gridToday: { borderWidth: 2, borderColor: colors.saffron },
+  gridSelected: { backgroundColor: colors.saffron },
   gridDayText: { fontFamily: fonts.bodySemi, fontSize: 13, color: colors.text },
-  gridTodayText: { color: colors.indigo, fontFamily: fonts.bodyBold },
+  gridTodayText: { color: colors.saffron, fontFamily: fonts.bodyBold },
   gridSelectedText: { color: "#fff", fontFamily: fonts.bodyBold },
   dotsRow: { flexDirection: "row", gap: 2, marginTop: 2 },
   dot: { width: 5, height: 5, borderRadius: 3 },

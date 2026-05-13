@@ -1,5 +1,5 @@
 # Production-only deps for the deployment image.
-# Excludes dev tools (pytest, black, mypy etc) and Emergent-internal libs.
+# Excludes dev tools (pytest, black, mypy etc)
 fastapi==0.110.1
 uvicorn==0.25.0
 python-dotenv>=1.0.1
@@ -13,3 +13,6 @@ tzdata>=2024.2
 requests>=2.31.0
 python-multipart>=0.0.18
 slowapi>=0.1.9
+cloudinary>=1.40.0
+cryptography>=42.0.8
+python-jose>=3.3.0

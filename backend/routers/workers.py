@@ -308,25 +308,23 @@ async def toggle_availability(
 
 @router.post("/me/photo")
 async def upload_photo(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
-    """Upload worker profile photo to local storage."""
+    """Upload worker profile photo to Cloudinary CDN."""
     if user["role"] != "worker":
         raise HTTPException(status_code=403, detail="Only workers can upload photos")
-    
-    # Ensure directory exists
-    os.makedirs("static/uploads", exist_ok=True)
-    
-    file_ext = file.filename.split(".")[-1]
-    filename = f"{user['id']}_{uuid.uuid4().hex[:8]}.{file_ext}"
-    file_path = os.path.join("static/uploads", filename)
-    
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    
-    photo_url = f"/static/uploads/{filename}"
-    await db.workers.update_one(
-        {"user_id": user["id"]},
-        {"$set": {"photo_url": photo_url}}
-    )
+
+    from ..cloudinary_service import upload_image, delete_image
+
+    file_bytes = await file.read()
+    public_id = f"worker_{user['id']}"
+
+    # Delete old photo from Cloudinary
+    worker = await db.workers.find_one({"user_id": user["id"]}, {"_id": 0, "photo_url": 1})
+    if worker and worker.get("photo_url"):
+        delete_image(worker["photo_url"])
+
+    photo_url = upload_image(file_bytes, public_id)
+    await db.workers.update_one({"user_id": user["id"]}, {"$set": {"photo_url": photo_url}})
+    await db.users.update_one({"id": user["id"]}, {"$set": {"photo_url": photo_url}})
     return {"ok": True, "photo_url": photo_url}
 
 

@@ -201,7 +201,13 @@ apply_manifests() {
       --from-literal=DB_NAME="kaamnow_db" \
       --from-literal=JWT_SECRET="${JWT_SECRET}" \
       --from-literal=ADMIN_EMAIL="admin@kaamnow.com" \
-      --from-literal=ADMIN_PASSWORD="${ADMIN_PASSWORD}"
+      --from-literal=ADMIN_PASSWORD="${ADMIN_PASSWORD}" \
+      --from-literal=CLOUDINARY_CLOUD_NAME="dztrzwvee" \
+      --from-literal=CLOUDINARY_API_KEY="455385769148981" \
+      --from-literal=CLOUDINARY_API_SECRET="KdYmM68W8Z3TlsGauG_iQTtdwfE" \
+      --from-literal=GUPSHUP_API_KEY="sk_376ba99b7f584e659b35f7cbf92d4286" \
+      --from-literal=GUPSHUP_SOURCE="917834811114" \
+      --from-literal=GUPSHUP_VERIFY_TOKEN="my_secure_token_123"
   fi
 
   kubectl apply -f "${SCRIPT_DIR}/k8s/20-backend.yaml"

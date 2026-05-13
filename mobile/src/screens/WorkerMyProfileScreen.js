@@ -118,8 +118,15 @@ export default function WorkerMyProfileScreen({ navigation }) {
     catch (e) { Alert.alert("Upload failed", formatApiError(e)); }
   };
 
+  const removePhoto = async () => {
+    try {
+      await api.patch("/auth/me", { photo_url: null });
+      await load();
+    } catch (e) { Alert.alert("Error", formatApiError(e)); }
+  };
+
   const pickPhoto = () => {
-    Alert.alert("Profile photo", "Choose how to add your photo", [
+    const options = [
       {
         text: "Take a photo",
         onPress: async () => {
@@ -138,12 +145,14 @@ export default function WorkerMyProfileScreen({ navigation }) {
           if (!r.canceled && r.assets?.[0]) await uploadAsset(r.assets[0]);
         },
       },
+      ...(profile?.photo_url ? [{ text: "Remove photo", style: "destructive", onPress: removePhoto }] : []),
       { text: "Cancel", style: "cancel" },
-    ]);
+    ];
+    Alert.alert("Profile photo", "Choose an option", options);
   };
 
   if (loading) return (
-    <SafeAreaView style={s.safe}><View style={s.center}><ActivityIndicator color={colors.indigo} size="large" /></View></SafeAreaView>
+    <SafeAreaView style={s.safe}><View style={s.center}><ActivityIndicator color={colors.saffron} size="large" /></View></SafeAreaView>
   );
   if (!profile) return (
     <SafeAreaView style={s.safe}>
@@ -161,161 +170,241 @@ export default function WorkerMyProfileScreen({ navigation }) {
   return (
     <SafeAreaView edges={["top"]} style={s.safe}>
       <ScrollView
-        contentContainerStyle={{ paddingBottom: 80 }}
+        contentContainerStyle={{ paddingBottom: editing ? 100 : 40 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
         showsVerticalScrollIndicator={false}
       >
         {/* ── Gradient Header ──────────────────────────────────────────── */}
-        <LinearGradient colors={["#3f37c9", "#6366f1"]} start={{ x:0, y:0 }} end={{ x:1, y:1 }} style={s.heroGrad}>
-          <View style={s.heroCircle} />
+        <LinearGradient colors={["#0A5C56", "#0F766E", "#0D9488"]} start={{ x:0, y:0 }} end={{ x:1, y:1 }} style={s.heroGrad}>
+          {/* Decorative blobs */}
+          <View style={s.blob1} />
+          <View style={s.blob2} />
+          <View style={s.blob3} />
 
-          {/* Photo */}
-          <Pressable onPress={pickPhoto} style={s.photoWrap}>
-            {profile.photo_url
-              ? <Image source={{ uri: profile.photo_url.startsWith("http") ? profile.photo_url : `${API_URL}${profile.photo_url}` }} style={s.photo} />
-              : <View style={[s.photo, s.photoEmpty]}>
-                  <Ionicons name="person" size={44} color="rgba(255,255,255,0.6)" />
-                </View>}
-            <View style={s.cameraBadge}>
-              <Ionicons name="camera" size={14} color="#fff" />
+          {/* Top row: availability toggle */}
+          <View style={s.heroTopRow}>
+            <View style={s.workerBadge}>
+              <Ionicons name="hammer-outline" size={11} color="#fff" />
+              <Text style={s.workerBadgeTxt}>Worker</Text>
             </View>
-          </Pressable>
-
-          {/* Name + location */}
-          <Text style={s.heroName}>{user?.name || profile.name}</Text>
-          <Text style={s.heroLocation}>
-            {[profile.village, profile.state].filter(Boolean).join(", ") || "Location not set"}
-          </Text>
-          <Text style={s.heroPhone}>{user?.phone_primary || "—"}</Text>
-
-          {/* Role pill + availability toggle */}
-          <View style={s.heroPillRow}>
-            <View style={s.rolePill}>
-              <Ionicons name="hammer-outline" size={12} color={colors.indigo} />
-              <Text style={s.rolePillText}>Worker</Text>
-            </View>
-            <View style={[s.availPill, !available && s.availPillOff]}>
+            <Pressable
+              style={[s.availToggleBtn, available ? s.availToggleBtnOn : s.availToggleBtnOff]}
+              onPress={() => toggleAvailability(!available)}
+              disabled={togglingAvail}
+            >
+              <View style={[s.availDot, available ? s.availDotOn : s.availDotOff]} />
+              <Text style={s.availToggleTxt}>
+                {available ? "Available" : "Busy"}
+              </Text>
               <Switch
                 value={available}
                 onValueChange={toggleAvailability}
                 disabled={togglingAvail}
                 trackColor={{ false: "rgba(255,255,255,0.2)", true: "#4ade80" }}
                 thumbColor="#fff"
-                style={{ transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }] }}
+                style={{ transform: [{ scaleX: 0.75 }, { scaleY: 0.75 }] }}
               />
-              <Text style={s.availText}>{available ? "Available" : "Unavailable"}</Text>
+            </Pressable>
+          </View>
+
+          {/* Photo + name block */}
+          <View style={s.heroCenter}>
+            <Pressable onPress={pickPhoto} style={s.photoRing}>
+              {profile.photo_url
+                ? <Image source={{ uri: profile.photo_url.startsWith("http") ? profile.photo_url : `${API_URL}${profile.photo_url}` }} style={s.photo} />
+                : <View style={[s.photo, s.photoFallback]}>
+                    <Text style={s.photoInitials}>
+                      {(user?.name || profile.name || "?").split(" ").map(w => w[0]).slice(0,2).join("").toUpperCase()}
+                    </Text>
+                  </View>}
+              <View style={s.cameraBadge}>
+                <Ionicons name="camera" size={13} color="#fff" />
+              </View>
+            </Pressable>
+
+            <Text style={s.heroName}>{user?.name || profile.name}</Text>
+
+            {/* Star rating */}
+            <View style={s.heroStars}>
+              {[1,2,3,4,5].map(n => (
+                <Ionicons
+                  key={n}
+                  name={parseFloat(avgRating) >= n ? "star" : parseFloat(avgRating) >= n - 0.5 ? "star-half" : "star-outline"}
+                  size={14}
+                  color="#FCD34D"
+                />
+              ))}
+              <Text style={s.heroRatingTxt}>{avgRating}</Text>
+              {totalJobs > 0 && <Text style={s.heroJobsTxt}>· {totalJobs} jobs</Text>}
+            </View>
+
+            {/* Location */}
+            <View style={s.heroLocRow}>
+              <Ionicons name="location-outline" size={12} color="rgba(255,255,255,0.7)" />
+              <Text style={s.heroLocation}>
+                {[profile.village, profile.state].filter(Boolean).join(", ") || "Location not set"}
+              </Text>
             </View>
           </View>
 
-          {/* Stats strip */}
-          <View style={s.statsStrip}>
-            <StatItem icon="star" val={avgRating} label="Rating" />
-            <View style={s.statDivider} />
-            <StatItem icon="checkmark-circle" val={totalJobs} label="Jobs done" />
-            <View style={s.statDivider} />
-            <StatItem icon="cash" val={`₹${profile.daily_rate || 0}`} label="Per day" />
-            <View style={s.statDivider} />
-            <StatItem icon="ribbon" val={`T${profile.trust_tier || 1}`} label="Trust" />
+          {/* Stats cards row */}
+          <View style={s.statsRow}>
+            <View style={s.statCard}>
+              <Text style={s.statCardVal}>₹{profile.daily_rate || 0}</Text>
+              <Text style={s.statCardLabel}>Per day</Text>
+            </View>
+            <View style={s.statCard}>
+              <Text style={s.statCardVal}>{totalJobs}</Text>
+              <Text style={s.statCardLabel}>Jobs done</Text>
+            </View>
+            <View style={s.statCard}>
+              <Text style={s.statCardVal}>{avgRating}</Text>
+              <Text style={s.statCardLabel}>Rating</Text>
+            </View>
+            <View style={[s.statCard, { borderRightWidth: 0 }]}>
+              <Text style={s.statCardVal}>T{profile.trust_tier || 1}</Text>
+              <Text style={s.statCardLabel}>Trust</Text>
+            </View>
           </View>
         </LinearGradient>
 
-        <View style={{ padding: spacing.lg }}>
-          {/* Edit / Save */}
-          {!editing ? (
+        <View style={{ padding: spacing.lg, paddingBottom: 40 }}>
+
+          {/* ── Edit button (view mode only) ─────────────────────────── */}
+          {!editing && (
             <Button
               title="Edit Profile"
               variant="outline"
               icon={<Ionicons name="create-outline" size={15} color={colors.text} />}
               onPress={() => setEditing(true)}
             />
-          ) : (
-            <View style={{ flexDirection:"row", gap:10 }}>
-              <Button title="Cancel" variant="outline" onPress={() => { setEditing(false); load(); }} style={{ flex:1 }} />
-              <Button title={saving ? "Saving…" : "Save changes"} onPress={save} loading={saving} style={{ flex:2 }} />
-            </View>
           )}
 
-          {/* ── Skills ───────────────────────────────────────────────── */}
-          <SectionHeader icon="hammer-outline" title="Skills" />
           {editing ? (
-            SKILL_CATEGORIES.map(cat => (
-              <View key={cat.category} style={{ marginBottom: 14 }}>
-                <Text style={s.catLabel}>{cat.category}</Text>
-                <View style={s.chipRow}>
-                  {cat.skills.map(sk => {
-                    const on = skills.includes(sk);
-                    return (
-                      <Pressable key={sk} onPress={() => toggleSkill(sk)} style={[s.chip, on && s.chipOn]}>
-                        <Text style={[s.chipTxt, on && s.chipTxtOn]}>{sk}</Text>
-                      </Pressable>
-                    );
-                  })}
+            /* ── EDIT MODE: full form ────────────────────────────────── */
+            <>
+              <SectionHeader icon="hammer-outline" title="Skills" />
+              {SKILL_CATEGORIES.map(cat => (
+                <View key={cat.category} style={{ marginBottom: 14 }}>
+                  <Text style={s.catLabel}>{cat.category}</Text>
+                  <View style={s.chipRow}>
+                    {cat.skills.map(sk => {
+                      const on = skills.includes(sk);
+                      return (
+                        <Pressable key={sk} onPress={() => toggleSkill(sk)} style={[s.chip, on && s.chipOn]}>
+                          <Text style={[s.chipTxt, on && s.chipTxtOn]}>{sk}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              ))}
+              <SectionHeader icon="cash-outline" title="Daily Rate" />
+              <TextInput
+                style={s.input}
+                value={dailyRate}
+                onChangeText={v => setDailyRate(v.replace(/\D/g,""))}
+                keyboardType="number-pad"
+                placeholder="e.g. 500"
+                placeholderTextColor={colors.textMuted}
+              />
+              <SectionHeader icon="document-text-outline" title="About me" />
+              <TextInput
+                style={[s.input, { minHeight: 90, textAlignVertical: "top" }]}
+                value={bio}
+                onChangeText={setBio}
+                multiline
+                placeholder="Describe your experience and availability…"
+                placeholderTextColor={colors.textMuted}
+              />
+            </>
+          ) : (
+            /* ── VIEW MODE: compact one-screen ──────────────────────── */
+            <>
+              {/* Skills — horizontal scroll row */}
+              <View style={s.compactSection}>
+                <Text style={s.compactLabel}>Skills</Text>
+                {(profile.skills || []).length === 0 ? (
+                  <Text style={s.emptySub}>No skills — tap Edit to add.</Text>
+                ) : (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <View style={{ flexDirection:"row", gap:8, paddingVertical:4 }}>
+                      {profile.skills.map(sk => (
+                        <View key={sk} style={s.skillTag}>
+                          <Text style={s.skillTagTxt}>{sk}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </ScrollView>
+                )}
+              </View>
+
+              {/* Rate + Bio in one band */}
+              <View style={s.infoBand}>
+                <View style={s.infoBandLeft}>
+                  <Text style={s.infoBandLabel}>Daily Rate</Text>
+                  <Text style={s.infoBandRate}>₹{profile.daily_rate || "—"}</Text>
+                  <Text style={s.infoBandSub}>/day</Text>
+                </View>
+                <View style={s.infoBandSep} />
+                <View style={s.infoBandRight}>
+                  <Text style={s.infoBandLabel}>About</Text>
+                  <Text style={s.infoBandBio} numberOfLines={3}>
+                    {profile.bio || "No bio yet — tap Edit to add."}
+                  </Text>
                 </View>
               </View>
-            ))
-          ) : (
-            <View style={s.chipRow}>
-              {(profile.skills || []).length === 0
-                ? <Text style={s.emptySub}>No skills set — tap Edit.</Text>
-                : (profile.skills || []).map(sk => (
-                    <View key={sk} style={[s.chip, s.chipOn]}>
-                      <Text style={s.chipTxtOn}>{sk}</Text>
-                    </View>
-                  ))}
-            </View>
+
+              {/* Location — single line */}
+              {(profile.address?.village || profile.village) && (
+                <View style={s.locLine}>
+                  <Ionicons name="location-outline" size={13} color={colors.textMuted} />
+                  <Text style={s.locLineTxt} numberOfLines={1}>
+                    {[profile.address?.village || profile.village, profile.address?.district, profile.address?.state].filter(Boolean).join(", ")}
+                  </Text>
+                </View>
+              )}
+            </>
           )}
 
-          {/* ── Daily Rate ───────────────────────────────────────────── */}
-          <SectionHeader icon="cash-outline" title="Daily Rate" />
-          {editing
-            ? <TextInput style={s.input} value={dailyRate} onChangeText={v => setDailyRate(v.replace(/\D/g,""))} keyboardType="number-pad" placeholder="e.g. 500" placeholderTextColor={colors.textMuted} />
-            : <View style={s.valueCard}>
-                <Text style={s.valueBig}>₹{profile.daily_rate || "—"}</Text>
-                <Text style={s.valueSub}>per day</Text>
-              </View>}
-
-          {/* ── Bio ──────────────────────────────────────────────────── */}
-          <SectionHeader icon="document-text-outline" title="About me" />
-          {editing
-            ? <TextInput style={[s.input, { minHeight: 90, textAlignVertical: "top" }]} value={bio} onChangeText={setBio} multiline placeholder="Describe your experience and availability…" placeholderTextColor={colors.textMuted} />
-            : <Text style={s.bioText}>{profile.bio || "No bio yet — tap Edit to add one."}</Text>}
-
-          {/* ── Location ─────────────────────────────────────────────── */}
-          <SectionHeader icon="location-outline" title="Location" />
-          <View style={s.locationCard}>
-            {[
-              { label: "Village",  val: profile.address?.village || profile.village },
-              { label: "Block",    val: profile.address?.block },
-              { label: "District", val: profile.address?.district },
-              { label: "State",    val: profile.address?.state },
-              { label: "Pincode",  val: profile.address?.pincode },
-            ].filter(r => r.val).map(r => (
-              <View key={r.label} style={s.locRow}>
-                <Text style={s.locLabel}>{r.label}</Text>
-                <Text style={s.locVal}>{r.val}</Text>
-              </View>
-            ))}
+          {/* ── Actions row ─────────────────────────────────────────── */}
+          <View style={s.actionsRow}>
+            <Pressable style={s.actionBtn} onPress={() => navigation.navigate("ContactSupport")}>
+              <Ionicons name="help-circle-outline" size={22} color={colors.saffron} />
+              <Text style={s.actionBtnTxt}>Help</Text>
+            </Pressable>
+            <View style={s.actionSep} />
+            <Pressable style={s.actionBtn} onPress={doLogout}>
+              <Ionicons name="log-out-outline" size={22} color={colors.danger} />
+              <Text style={[s.actionBtnTxt, { color: colors.danger }]}>Logout</Text>
+            </Pressable>
+            <View style={s.actionSep} />
+            <Pressable style={s.actionBtn} onPress={doDeactivate}>
+              <Ionicons name="warning-outline" size={22} color={colors.textMuted} />
+              <Text style={[s.actionBtnTxt, { color: colors.textMuted }]}>Deactivate</Text>
+            </Pressable>
           </View>
 
-          {/* Support */}
-          <Pressable onPress={() => navigation.navigate("ContactSupport")} style={s.supportLink}>
-            <Ionicons name="help-circle-outline" size={15} color={colors.indigo} />
-            <Text style={s.supportText}>Help & Support</Text>
-          </Pressable>
-
-          {/* Logout */}
-          <Pressable onPress={doLogout} style={s.logoutBtn}>
-            <Ionicons name="log-out-outline" size={16} color={colors.danger} />
-            <Text style={s.logoutText}>Log out</Text>
-          </Pressable>
-
-          {/* Deactivate */}
-          <Pressable onPress={doDeactivate} style={{ flexDirection:"row", alignItems:"center", gap:6, marginTop:12, alignSelf:"center" }}>
-            <Ionicons name="warning-outline" size={14} color={colors.danger} />
-            <Text style={{ fontFamily:fonts.bodySemi, fontSize:12, color:colors.danger }}>Deactivate account</Text>
-          </Pressable>
         </View>
       </ScrollView>
+
+      {/* ── Sticky save footer (edit mode only) ──────────────────── */}
+      {editing && (
+        <View style={s.saveFooter}>
+          <Button
+            title="Cancel"
+            variant="outline"
+            onPress={() => { setEditing(false); load(); }}
+            style={{ flex: 1 }}
+          />
+          <Button
+            title={saving ? "Saving…" : "Save changes"}
+            onPress={save}
+            loading={saving}
+            style={{ flex: 2 }}
+          />
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -323,21 +412,12 @@ export default function WorkerMyProfileScreen({ navigation }) {
 function SectionHeader({ icon, title }) {
   return (
     <View style={{ flexDirection:"row", alignItems:"center", gap:7, marginTop:22, marginBottom:10 }}>
-      <Ionicons name={icon} size={16} color={colors.indigo} />
+      <Ionicons name={icon} size={16} color={colors.saffron} />
       <Text style={{ fontFamily:fonts.bodyBold, fontSize:12, letterSpacing:1.2, textTransform:"uppercase", color:colors.textSecondary }}>{title}</Text>
     </View>
   );
 }
 
-function StatItem({ icon, val, label }) {
-  return (
-    <View style={{ flex:1, alignItems:"center" }}>
-      <Ionicons name={`${icon}-outline`} size={14} color="rgba(255,255,255,0.7)" />
-      <Text style={{ fontFamily:fonts.display, fontSize:18, color:"#fff", marginTop:3 }}>{val}</Text>
-      <Text style={{ fontFamily:fonts.body, fontSize:10, color:"rgba(255,255,255,0.6)", marginTop:1 }}>{label}</Text>
-    </View>
-  );
-}
 
 const s = StyleSheet.create({
   safe: { flex:1, backgroundColor:colors.bg },
@@ -345,41 +425,74 @@ const s = StyleSheet.create({
   emptyTitle: { fontFamily:fonts.display, fontSize:22, color:colors.text, textAlign:"center", marginBottom:8 },
   emptySub: { fontFamily:fonts.body, fontSize:13, color:colors.textMuted, textAlign:"center" },
   // Hero
-  heroGrad: { paddingTop:spacing.lg, paddingBottom:spacing.xl, paddingHorizontal:spacing.xl, alignItems:"center", position:"relative", overflow:"hidden" },
-  heroCircle: { position:"absolute", width:220, height:220, borderRadius:110, backgroundColor:"rgba(255,255,255,0.07)", top:-60, right:-60 },
-  photoWrap: { position:"relative", marginBottom:12 },
-  photo: { width:100, height:100, borderRadius:50, borderWidth:3, borderColor:"rgba(255,255,255,0.4)" },
-  photoEmpty: { alignItems:"center", justifyContent:"center", backgroundColor:"rgba(255,255,255,0.15)" },
+  heroGrad: { paddingTop:spacing.md, paddingBottom:0, paddingHorizontal:spacing.lg, position:"relative", overflow:"hidden" },
+  blob1: { position:"absolute", width:240, height:240, borderRadius:120, backgroundColor:"rgba(255,255,255,0.06)", top:-80, right:-60 },
+  blob2: { position:"absolute", width:140, height:140, borderRadius:70, backgroundColor:"rgba(255,255,255,0.05)", bottom:40, left:-40 },
+  blob3: { position:"absolute", width:80, height:80, borderRadius:40, backgroundColor:"rgba(255,255,255,0.07)", top:30, left:30 },
+  heroTopRow: { flexDirection:"row", justifyContent:"space-between", alignItems:"center", marginBottom:spacing.md },
+  workerBadge: { flexDirection:"row", alignItems:"center", gap:5, backgroundColor:"rgba(255,255,255,0.15)", paddingVertical:6, paddingHorizontal:12, borderRadius:20 },
+  workerBadgeTxt: { fontFamily:fonts.bodyBold, fontSize:11, color:"#fff" },
+  availToggleBtn: { flexDirection:"row", alignItems:"center", gap:4, paddingVertical:5, paddingHorizontal:10, borderRadius:20 },
+  availToggleBtnOn: { backgroundColor:"rgba(74,222,128,0.25)", borderWidth:1, borderColor:"rgba(74,222,128,0.4)" },
+  availToggleBtnOff: { backgroundColor:"rgba(255,255,255,0.12)", borderWidth:1, borderColor:"rgba(255,255,255,0.2)" },
+  availDot: { width:7, height:7, borderRadius:4 },
+  availDotOn: { backgroundColor:"#4ADE80" },
+  availDotOff: { backgroundColor:"rgba(255,255,255,0.4)" },
+  availToggleTxt: { fontFamily:fonts.bodyBold, fontSize:11, color:"#fff" },
+  heroCenter: { alignItems:"center", marginBottom:spacing.lg },
+  photoRing: { width:108, height:108, borderRadius:54, borderWidth:3, borderColor:"rgba(255,255,255,0.35)", alignItems:"center", justifyContent:"center", marginBottom:14, position:"relative" },
+  photo: { width:102, height:102, borderRadius:51 },
+  photoFallback: { backgroundColor:"rgba(255,255,255,0.2)", alignItems:"center", justifyContent:"center" },
+  photoInitials: { fontFamily:fonts.display, fontSize:38, color:"#fff" },
   cameraBadge: { position:"absolute", bottom:2, right:2, backgroundColor:colors.saffron, borderRadius:14, padding:5, borderWidth:2, borderColor:"#fff" },
-  heroName: { fontFamily:fonts.display, fontSize:24, color:"#fff", marginBottom:4 },
-  heroLocation: { fontFamily:fonts.body, fontSize:13, color:"rgba(255,255,255,0.75)", marginBottom:2 },
-  heroPhone: { fontFamily:fonts.bodySemi, fontSize:12, color:"rgba(255,255,255,0.55)", marginBottom:20 },
-  statsStrip: { flexDirection:"row", backgroundColor:"rgba(255,255,255,0.12)", borderRadius:14, paddingVertical:14, paddingHorizontal:10, width:"100%", gap:4 },
-  statDivider: { width:1, backgroundColor:"rgba(255,255,255,0.2)" },
+  heroName: { fontFamily:fonts.display, fontSize:26, color:"#fff", marginBottom:8 },
+  heroStars: { flexDirection:"row", alignItems:"center", gap:3, marginBottom:8 },
+  heroRatingTxt: { fontFamily:fonts.bodyBold, fontSize:13, color:"#FCD34D", marginLeft:4 },
+  heroJobsTxt: { fontFamily:fonts.body, fontSize:12, color:"rgba(255,255,255,0.65)" },
+  heroLocRow: { flexDirection:"row", alignItems:"center", gap:4 },
+  heroLocation: { fontFamily:fonts.body, fontSize:12, color:"rgba(255,255,255,0.75)" },
+  statsRow: { flexDirection:"row", backgroundColor:"rgba(255,255,255,0.12)", borderTopLeftRadius:14, borderTopRightRadius:14, overflow:"hidden" },
+  statCard: { flex:1, alignItems:"center", paddingVertical:14, borderRightWidth:1, borderRightColor:"rgba(255,255,255,0.15)" },
+  statCardVal: { fontFamily:fonts.display, fontSize:20, color:"#fff" },
+  statCardLabel: { fontFamily:fonts.bodyBold, fontSize:9, letterSpacing:1, textTransform:"uppercase", color:"rgba(255,255,255,0.6)", marginTop:2 },
   // Form
   catLabel: { fontFamily:fonts.bodyBold, fontSize:11, letterSpacing:1.2, textTransform:"uppercase", color:colors.textSecondary, marginBottom:8 },
   chipRow: { flexDirection:"row", flexWrap:"wrap", gap:8 },
   chip: { paddingVertical:8, paddingHorizontal:14, borderRadius:20, backgroundColor:"#fff", borderWidth:1.5, borderColor:colors.border },
-  chipOn: { backgroundColor:colors.indigoTint, borderColor:colors.indigo },
+  chipOn: { backgroundColor:colors.saffronTint, borderColor:colors.saffron },
   chipTxt: { fontFamily:fonts.bodySemi, fontSize:12, color:colors.textSecondary },
-  chipTxtOn: { fontFamily:fonts.bodySemi, fontSize:12, color:colors.indigo },
-  input: { backgroundColor:"#fff", borderWidth:1.5, borderColor:colors.indigo, borderRadius:12, paddingVertical:13, paddingHorizontal:14, fontFamily:fonts.body, fontSize:15, color:colors.text },
+  chipTxtOn: { fontFamily:fonts.bodySemi, fontSize:12, color:colors.saffron },
+  input: { backgroundColor:"#fff", borderWidth:1.5, borderColor:colors.saffron, borderRadius:12, paddingVertical:13, paddingHorizontal:14, fontFamily:fonts.body, fontSize:15, color:colors.text },
   valueCard: { flexDirection:"row", alignItems:"baseline", gap:6, backgroundColor:"#fff", borderRadius:12, borderWidth:1, borderColor:colors.border, padding:16 },
-  valueBig: { fontFamily:fonts.display, fontSize:32, color:colors.indigo },
+  valueBig: { fontFamily:fonts.display, fontSize:32, color:colors.saffron },
   valueSub: { fontFamily:fonts.body, fontSize:13, color:colors.textMuted },
   bioText: { fontFamily:fonts.body, fontSize:14, color:colors.textSecondary, lineHeight:22 },
   locationCard: { backgroundColor:"#fff", borderRadius:12, borderWidth:1, borderColor:colors.border, overflow:"hidden" },
   locRow: { flexDirection:"row", justifyContent:"space-between", paddingVertical:12, paddingHorizontal:16, borderBottomWidth:1, borderBottomColor:colors.border },
   locLabel: { fontFamily:fonts.bodyBold, fontSize:11, letterSpacing:1, textTransform:"uppercase", color:colors.textMuted },
   locVal: { fontFamily:fonts.bodySemi, fontSize:13, color:colors.text },
-  supportLink: { flexDirection:"row", alignItems:"center", gap:6, marginTop:28, alignSelf:"center" },
-  supportText: { fontFamily:fonts.bodySemi, fontSize:13, color:colors.indigo },
-  logoutBtn: { flexDirection:"row", alignItems:"center", justifyContent:"center", gap:8, marginTop:14, marginBottom:8, paddingVertical:13, borderRadius:12, borderWidth:1.5, borderColor:"#fee2e2", backgroundColor:"#fff5f5" },
-  logoutText: { fontFamily:fonts.bodyBold, fontSize:14, color:colors.danger },
-  heroPillRow: { flexDirection:"row", gap:10, marginBottom:20, alignItems:"center" },
-  rolePill: { flexDirection:"row", alignItems:"center", gap:5, backgroundColor:"#fff", paddingVertical:6, paddingHorizontal:12, borderRadius:20 },
-  rolePillText: { fontFamily:fonts.bodyBold, fontSize:12, color:colors.indigo },
-  availPill: { flexDirection:"row", alignItems:"center", gap:4, backgroundColor:"rgba(74,222,128,0.2)", paddingVertical:4, paddingHorizontal:10, borderRadius:20 },
-  availPillOff: { backgroundColor:"rgba(255,255,255,0.15)" },
-  availText: { fontFamily:fonts.bodyBold, fontSize:12, color:"#fff" },
+
+  // Compact view mode
+  compactSection: { marginTop: 18, marginBottom: 4 },
+  compactLabel: { fontFamily:fonts.bodyBold, fontSize:10, letterSpacing:1.3, textTransform:"uppercase", color:colors.textSecondary, marginBottom:8 },
+  skillTag: { backgroundColor:colors.saffronTint, borderWidth:1, borderColor:colors.border, paddingHorizontal:12, paddingVertical:6, borderRadius:20 },
+  skillTagTxt: { fontFamily:fonts.bodySemi, fontSize:12, color:colors.saffron },
+
+  infoBand: { flexDirection:"row", marginTop:14, backgroundColor:"#fff", borderRadius:14, borderWidth:1, borderColor:colors.border, overflow:"hidden" },
+  infoBandLeft: { flex:1, padding:14, alignItems:"center" },
+  infoBandSep: { width:1, backgroundColor:colors.border },
+  infoBandRight: { flex:2, padding:14 },
+  infoBandLabel: { fontFamily:fonts.bodyBold, fontSize:9, letterSpacing:1.2, textTransform:"uppercase", color:colors.textMuted, marginBottom:4 },
+  infoBandRate: { fontFamily:fonts.display, fontSize:28, color:colors.money },
+  infoBandSub: { fontFamily:fonts.body, fontSize:11, color:colors.textMuted },
+  infoBandBio: { fontFamily:fonts.body, fontSize:13, color:colors.textSecondary, lineHeight:19 },
+
+  locLine: { flexDirection:"row", alignItems:"center", gap:5, marginTop:12, paddingHorizontal:4 },
+  locLineTxt: { fontFamily:fonts.body, fontSize:12, color:colors.textMuted, flex:1 },
+
+  saveFooter: { flexDirection:"row", gap:10, padding:spacing.lg, paddingBottom:spacing.xl, backgroundColor:"#fff", borderTopWidth:1, borderTopColor:colors.border },
+  actionsRow: { flexDirection:"row", marginTop:24, backgroundColor:"#fff", borderRadius:14, borderWidth:1, borderColor:colors.border, overflow:"hidden" },
+  actionBtn: { flex:1, alignItems:"center", paddingVertical:16, gap:5 },
+  actionBtnTxt: { fontFamily:fonts.bodyBold, fontSize:11, color:colors.saffron },
+  actionSep: { width:1, backgroundColor:colors.border },
 });

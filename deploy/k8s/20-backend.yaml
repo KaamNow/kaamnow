@@ -19,6 +19,10 @@ stringData:
   GUPSHUP_SOURCE: "917834811114"
   GUPSHUP_APP_ID: "KaamNow"
   GUPSHUP_VERIFY_TOKEN: "my_secure_token_123"
+  # Cloudinary — profile photo storage
+  CLOUDINARY_CLOUD_NAME: "dztrzwvee"
+  CLOUDINARY_API_KEY: "455385769148981"
+  CLOUDINARY_API_SECRET: "KdYmM68W8Z3TlsGauG_iQTtdwfE"
 ---
 apiVersion: v1
 kind: ConfigMap

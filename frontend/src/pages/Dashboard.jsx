@@ -75,6 +75,17 @@ function ProfileSection({ user, onUpdate }) {
     }
   };
 
+  const handleRemovePhoto = async () => {
+    if (!window.confirm("Remove your profile photo?")) return;
+    try {
+      await api.patch("/auth/me", { photo_url: null });
+      await refreshUser();
+      toast.success("Photo removed.");
+    } catch {
+      toast.error("Could not remove photo.");
+    }
+  };
+
   const save = async (e) => {
     e.preventDefault();
     try {
@@ -119,9 +130,17 @@ function ProfileSection({ user, onUpdate }) {
                   style={{ background: "#f0f0ff", color: "#3f37c9" }}>Customer</span>
                 <span className="text-xs text-gray-400">{user.phone_primary || user.phone}</span>
               </div>
-              <button className="text-xs text-[#ff6b35] font-semibold mt-1.5 hover:underline">
-                {photoUrl ? "Change photo" : "Add photo"}
-              </button>
+              <div className="flex items-center gap-3 mt-1.5">
+                <label className="text-xs text-[#ff6b35] font-semibold hover:underline cursor-pointer">
+                  <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} disabled={uploadingPhoto} />
+                  {photoUrl ? "Change photo" : "Add photo"}
+                </label>
+                {photoUrl && (
+                  <button onClick={handleRemovePhoto} className="text-xs text-gray-400 hover:text-red-500 font-semibold hover:underline transition">
+                    Remove photo
+                  </button>
+                )}
+              </div>
             </div>
         </div>
         {/* Edit button — full width below avatar row */}
@@ -660,32 +679,47 @@ export default function Dashboard() {
     <div data-testid="customer-dashboard" className="max-w-6xl mx-auto px-6 py-10">
       <div className="flex flex-wrap items-center justify-between gap-6 mb-8">
         <div className="flex items-center gap-4">
-          {/* Always-visible photo upload */}
-          <label className="relative cursor-pointer group shrink-0" title="Upload profile photo">
-            <input type="file" accept="image/*" capture="user" className="hidden"
-              onChange={async (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
-                const fd = new FormData();
-                fd.append("file", file);
-                try {
-                  await api.post("/auth/me/photo", fd, { headers: { "Content-Type": "multipart/form-data" } });
-                  await refreshUser();
-                  toast.success("Profile photo updated!");
-                } catch { toast.error("Failed to upload photo."); }
-              }}
-            />
-            {user.photo_url ? (
-              <img src={user.photo_url.startsWith("http") ? user.photo_url : `${BACKEND_URL}${user.photo_url}`} alt={user.name} className="w-14 h-14 rounded-full object-cover border-2 border-gray-100" />
-            ) : (
-              <div className="w-14 h-14 rounded-full bg-[#f0f0ff] flex items-center justify-center text-[#3f37c9] text-xl font-display border-2 border-dashed border-[#c7c4f0]">
-                {user.name?.[0]}
+          {/* Always-visible photo upload + remove */}
+          <div className="flex flex-col items-center gap-1">
+            <label className="relative cursor-pointer group shrink-0" title="Upload profile photo">
+              <input type="file" accept="image/*" capture="user" className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const fd = new FormData();
+                  fd.append("file", file);
+                  try {
+                    await api.post("/auth/me/photo", fd, { headers: { "Content-Type": "multipart/form-data" } });
+                    await refreshUser();
+                    toast.success("Profile photo updated!");
+                  } catch { toast.error("Failed to upload photo."); }
+                }}
+              />
+              {user.photo_url ? (
+                <img src={user.photo_url.startsWith("http") ? user.photo_url : `${BACKEND_URL}${user.photo_url}`} alt={user.name} className="w-14 h-14 rounded-full object-cover border-2 border-gray-100" />
+              ) : (
+                <div className="w-14 h-14 rounded-full bg-[#f0f0ff] flex items-center justify-center text-[#3f37c9] text-xl font-display border-2 border-dashed border-[#c7c4f0]">
+                  {user.name?.[0]}
+                </div>
+              )}
+              <div className="absolute inset-0 rounded-full bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+                <Camera size={16} className="text-white" />
               </div>
+            </label>
+            {user.photo_url && (
+              <button
+                onClick={async () => {
+                  if (!window.confirm("Remove your profile photo?")) return;
+                  try {
+                    await api.patch("/auth/me", { photo_url: null });
+                    await refreshUser();
+                    toast.success("Photo removed.");
+                  } catch { toast.error("Could not remove photo."); }
+                }}
+                className="text-[10px] text-gray-400 hover:text-red-500 font-semibold transition"
+              >Remove photo</button>
             )}
-            <div className="absolute inset-0 rounded-full bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
-              <Camera size={16} className="text-white" />
-            </div>
-          </label>
+          </div>
           <div>
             <div className="kn-overline mb-0.5">Customer Dashboard</div>
             <h1 className="font-display text-3xl tracking-tight">

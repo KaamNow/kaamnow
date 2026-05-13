@@ -51,20 +51,27 @@ export default function CustomerProfileScreen({ navigation }) {
     }
   };
 
+  const uploadPhoto = async (asset) => {
+    const form = new FormData();
+    form.append("file", { uri: asset.uri, name: "photo.jpg", type: "image/jpeg" });
+    try { await api.post("/auth/me/photo", form, { headers: { "Content-Type": "multipart/form-data" } }); await refreshUser(); }
+    catch (e) { Alert.alert("Upload failed", formatApiError(e)); }
+  };
+
+  const removePhoto = async () => {
+    try { await api.patch("/auth/me", { photo_url: null }); await refreshUser(); }
+    catch (e) { Alert.alert("Error", formatApiError(e)); }
+  };
+
   const pickPhoto = () => {
-    Alert.alert("Profile photo", "Choose how to add your photo", [
+    const options = [
       {
         text: "Take a photo",
         onPress: async () => {
           const p = await ImagePicker.requestCameraPermissionsAsync();
           if (!p.granted) return Alert.alert("Camera permission needed");
           const r = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1,1], quality: 0.7, mediaTypes: ["images"] });
-          if (!r.canceled && r.assets?.[0]) {
-            const form = new FormData();
-            form.append("file", { uri: r.assets[0].uri, name: "photo.jpg", type: "image/jpeg" });
-            try { await api.post("/auth/me/photo", form, { headers: { "Content-Type": "multipart/form-data" } }); await refreshUser(); }
-            catch (e) { Alert.alert("Upload failed", formatApiError(e)); }
-          }
+          if (!r.canceled && r.assets?.[0]) await uploadPhoto(r.assets[0]);
         },
       },
       {
@@ -73,16 +80,13 @@ export default function CustomerProfileScreen({ navigation }) {
           const p = await ImagePicker.requestMediaLibraryPermissionsAsync();
           if (!p.granted) return Alert.alert("Photo library permission needed");
           const r = await ImagePicker.launchImageLibraryAsync({ allowsEditing: true, aspect: [1,1], quality: 0.7, mediaTypes: ["images"] });
-          if (!r.canceled && r.assets?.[0]) {
-            const form = new FormData();
-            form.append("file", { uri: r.assets[0].uri, name: "photo.jpg", type: "image/jpeg" });
-            try { await api.post("/auth/me/photo", form, { headers: { "Content-Type": "multipart/form-data" } }); await refreshUser(); }
-            catch (e) { Alert.alert("Upload failed", formatApiError(e)); }
-          }
+          if (!r.canceled && r.assets?.[0]) await uploadPhoto(r.assets[0]);
         },
       },
+      ...(user?.photo_url ? [{ text: "Remove photo", style: "destructive", onPress: removePhoto }] : []),
       { text: "Cancel", style: "cancel" },
-    ]);
+    ];
+    Alert.alert("Profile photo", "Choose an option", options);
   };
 
   const doLogout = () => {
@@ -122,10 +126,19 @@ export default function CustomerProfileScreen({ navigation }) {
       <ScrollView contentContainerStyle={{ paddingBottom: 80 }} showsVerticalScrollIndicator={false}>
 
         {/* ── Gradient Header ─────────────────────────────────────────── */}
-        <LinearGradient colors={["#ff6b35", "#e85a25"]} start={{ x:0, y:0 }} end={{ x:1, y:1 }} style={s.hero}>
-          <View style={s.heroCircle} />
+        <LinearGradient colors={["#0A5C56","#0F766E","#0D9488"]} start={{ x:0, y:0 }} end={{ x:1, y:1 }} style={s.hero}>
+          {/* Decorative blobs */}
+          <View style={s.blob1} />
+          <View style={s.blob2} />
+          <View style={s.blob3} />
 
-          {/* Avatar — photo if set, else initials */}
+          {/* Customer badge top-left */}
+          <View style={s.custBadge}>
+            <Ionicons name="person-outline" size={11} color="#fff" />
+            <Text style={s.custBadgeTxt}>Customer</Text>
+          </View>
+
+          {/* Avatar */}
           <Pressable style={s.avatarRing} onPress={pickPhoto}>
             {user.photo_url
               ? <Image source={{ uri: user.photo_url.startsWith("http") ? user.photo_url : `${API_URL}${user.photo_url}` }} style={s.avatarImg} />
@@ -140,25 +153,42 @@ export default function CustomerProfileScreen({ navigation }) {
           <Text style={s.heroName}>{user.name}</Text>
           <Text style={s.heroPhone}>{user.phone_primary}</Text>
 
+          {/* Location + verified pills */}
           <View style={s.heroMeta}>
-            <View style={s.heroPill}>
-              <Ionicons name="person-outline" size={12} color="rgba(255,255,255,0.9)" />
-              <Text style={s.heroPillText}>Customer</Text>
-            </View>
             {addr.state && (
               <View style={s.heroPill}>
-                <Ionicons name="location-outline" size={12} color="rgba(255,255,255,0.9)" />
-                <Text style={s.heroPillText}>{addr.state}</Text>
+                <Ionicons name="location-outline" size={11} color="rgba(255,255,255,0.9)" />
+                <Text style={s.heroPillText}>{addr.district ? `${addr.district}, ` : ""}{addr.state}</Text>
               </View>
             )}
-            <Pressable onPress={doLogout} style={[s.heroPill, { backgroundColor:"rgba(0,0,0,0.2)" }]}>
-              <Ionicons name="log-out-outline" size={12} color="#fff" />
-              <Text style={s.heroPillText}>Logout</Text>
-            </Pressable>
+            {user.phone_verified && (
+              <View style={[s.heroPill, s.heroPillVerified]}>
+                <Ionicons name="checkmark-circle" size={11} color="#4ADE80" />
+                <Text style={s.heroPillText}>Verified</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Stats shelf */}
+          <View style={s.heroStatsRow}>
+            <View style={s.heroStat}>
+              <Text style={s.heroStatVal}>{addr.pincode || "—"}</Text>
+              <Text style={s.heroStatLabel}>Pincode</Text>
+            </View>
+            <View style={s.heroStatSep} />
+            <View style={s.heroStat}>
+              <Text style={s.heroStatVal}>{addr.district || "—"}</Text>
+              <Text style={s.heroStatLabel}>District</Text>
+            </View>
+            <View style={s.heroStatSep} />
+            <View style={s.heroStat}>
+              <Text style={s.heroStatVal}>{addr.state || "—"}</Text>
+              <Text style={s.heroStatLabel}>State</Text>
+            </View>
           </View>
         </LinearGradient>
 
-        <View style={{ padding: spacing.lg }}>
+        <View style={{ paddingHorizontal: spacing.lg, paddingTop: 10, paddingBottom: 80 }}>
 
           {/* Edit / Save */}
           {!editing ? (
@@ -242,16 +272,23 @@ export default function CustomerProfileScreen({ navigation }) {
             </View>
           )}
 
-          {/* Support */}
-          <Pressable onPress={() => navigation.navigate("ContactSupport")} style={s.supportLink}>
-            <Ionicons name="help-circle-outline" size={15} color={colors.indigo} />
-            <Text style={s.supportText}>Help & Support</Text>
-          </Pressable>
-
-          <Pressable onPress={doDeactivate} style={s.deactivateBtn}>
-            <Ionicons name="warning-outline" size={15} color={colors.danger} />
-            <Text style={s.deactivateText}>Deactivate account</Text>
-          </Pressable>
+          {/* Actions row */}
+          <View style={s.actionsRow}>
+            <Pressable style={s.actionBtn} onPress={() => navigation.navigate("ContactSupport")}>
+              <Ionicons name="help-circle-outline" size={22} color={colors.saffron} />
+              <Text style={s.actionBtnTxt}>Help</Text>
+            </Pressable>
+            <View style={s.actionSep} />
+            <Pressable style={s.actionBtn} onPress={doLogout}>
+              <Ionicons name="log-out-outline" size={22} color={colors.danger} />
+              <Text style={[s.actionBtnTxt, { color: colors.danger }]}>Logout</Text>
+            </Pressable>
+            <View style={s.actionSep} />
+            <Pressable style={s.actionBtn} onPress={doDeactivate}>
+              <Ionicons name="warning-outline" size={22} color={colors.textMuted} />
+              <Text style={[s.actionBtnTxt, { color: colors.textMuted }]}>Deactivate</Text>
+            </Pressable>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -260,8 +297,8 @@ export default function CustomerProfileScreen({ navigation }) {
 
 function SectionHeader({ icon, title }) {
   return (
-    <View style={{ flexDirection:"row", alignItems:"center", gap:7, marginTop:22, marginBottom:10 }}>
-      <Ionicons name={icon} size={16} color={colors.indigo} />
+    <View style={{ flexDirection:"row", alignItems:"center", gap:7, marginTop:14, marginBottom:8 }}>
+      <Ionicons name={icon} size={16} color={colors.saffron} />
       <Text style={{ fontFamily:fonts.bodyBold, fontSize:12, letterSpacing:1.2, textTransform:"uppercase", color:colors.textSecondary }}>{title}</Text>
     </View>
   );
@@ -280,20 +317,31 @@ function InfoRow({ label, val, locked }) {
 
 const s = StyleSheet.create({
   safe: { flex:1, backgroundColor:colors.bg },
-  hero: { padding:spacing.xl, paddingTop:spacing.lg, paddingBottom:spacing.xl, alignItems:"center", position:"relative", overflow:"hidden" },
-  heroCircle: { position:"absolute", width:200, height:200, borderRadius:100, backgroundColor:"rgba(255,255,255,0.08)", top:-50, right:-50 },
-  avatarRing: { width:106, height:106, borderRadius:53, borderWidth:3, borderColor:"rgba(255,255,255,0.4)", alignItems:"center", justifyContent:"center", marginBottom:12, position:"relative" },
-  avatar: { width:96, height:96, borderRadius:48, backgroundColor:"rgba(255,255,255,0.25)", alignItems:"center", justifyContent:"center" },
+  // Hero
+  hero: { paddingTop:spacing.md, paddingHorizontal:spacing.lg, paddingBottom:0, alignItems:"center", position:"relative", overflow:"hidden" },
+  blob1: { position:"absolute", width:220, height:220, borderRadius:110, backgroundColor:"rgba(255,255,255,0.06)", top:-70, right:-60 },
+  blob2: { position:"absolute", width:120, height:120, borderRadius:60, backgroundColor:"rgba(255,255,255,0.05)", bottom:30, left:-30 },
+  blob3: { position:"absolute", width:70, height:70, borderRadius:35, backgroundColor:"rgba(255,255,255,0.07)", top:20, left:20 },
+  custBadge: { flexDirection:"row", alignItems:"center", gap:5, backgroundColor:"rgba(255,255,255,0.15)", paddingVertical:5, paddingHorizontal:11, borderRadius:20, alignSelf:"flex-start", marginBottom:spacing.md },
+  custBadgeTxt: { fontFamily:fonts.bodyBold, fontSize:11, color:"#fff" },
+  avatarRing: { width:106, height:106, borderRadius:53, borderWidth:3, borderColor:"rgba(255,255,255,0.35)", alignItems:"center", justifyContent:"center", marginBottom:12, position:"relative" },
+  avatar: { width:100, height:100, borderRadius:50, backgroundColor:"rgba(255,255,255,0.2)", alignItems:"center", justifyContent:"center" },
   avatarImg: { width:100, height:100, borderRadius:50 },
   avatarText: { fontFamily:fonts.display, fontSize:36, color:"#fff" },
-  cameraBadge: { position:"absolute", bottom:2, right:2, backgroundColor:colors.indigo, borderRadius:14, padding:5, borderWidth:2, borderColor:"#fff" },
+  cameraBadge: { position:"absolute", bottom:2, right:2, backgroundColor:colors.saffron, borderRadius:14, padding:5, borderWidth:2, borderColor:"#fff" },
   heroName: { fontFamily:fonts.display, fontSize:24, color:"#fff", marginBottom:4 },
-  heroPhone: { fontFamily:fonts.bodySemi, fontSize:13, color:"rgba(255,255,255,0.75)", marginBottom:16 },
-  heroMeta: { flexDirection:"row", flexWrap:"wrap", gap:8, justifyContent:"center" },
-  heroPill: { flexDirection:"row", alignItems:"center", gap:5, backgroundColor:"rgba(255,255,255,0.2)", paddingVertical:6, paddingHorizontal:12, borderRadius:20 },
+  heroPhone: { fontFamily:fonts.bodySemi, fontSize:13, color:"rgba(255,255,255,0.7)", marginBottom:14 },
+  heroMeta: { flexDirection:"row", flexWrap:"wrap", gap:8, justifyContent:"center", marginBottom:spacing.lg },
+  heroPill: { flexDirection:"row", alignItems:"center", gap:5, backgroundColor:"rgba(255,255,255,0.18)", paddingVertical:6, paddingHorizontal:12, borderRadius:20 },
+  heroPillVerified: { backgroundColor:"rgba(74,222,128,0.2)" },
   heroPillText: { fontFamily:fonts.bodyBold, fontSize:12, color:"#fff" },
+  heroStatsRow: { flexDirection:"row", backgroundColor:"rgba(255,255,255,0.12)", borderTopLeftRadius:14, borderTopRightRadius:14, width:"100%", overflow:"hidden" },
+  heroStat: { flex:1, alignItems:"center", paddingVertical:13 },
+  heroStatVal: { fontFamily:fonts.display, fontSize:16, color:"#fff" },
+  heroStatLabel: { fontFamily:fonts.bodyBold, fontSize:9, letterSpacing:1, textTransform:"uppercase", color:"rgba(255,255,255,0.6)", marginTop:2 },
+  heroStatSep: { width:1, backgroundColor:"rgba(255,255,255,0.15)" },
   // Form
-  input: { backgroundColor:"#fff", borderWidth:1.5, borderColor:colors.indigo, borderRadius:12, paddingVertical:12, paddingHorizontal:14, fontFamily:fonts.body, fontSize:15, color:colors.text },
+  input: { backgroundColor:"#fff", borderWidth:1.5, borderColor:colors.saffron, borderRadius:12, paddingVertical:12, paddingHorizontal:14, fontFamily:fonts.body, fontSize:15, color:colors.text },
   pincodeRow: { flexDirection:"row", alignItems:"center" },
   pinSuccessBox: { flexDirection:"row", alignItems:"center", gap:5, backgroundColor:"#f0fdf4", padding:10, borderRadius:8 },
   pinSuccessText: { fontFamily:fonts.bodyBold, fontSize:12, color:"#15803d" },
@@ -307,8 +355,9 @@ const s = StyleSheet.create({
   addrLabel: { fontFamily:fonts.bodyBold, fontSize:11, letterSpacing:1, textTransform:"uppercase", color:colors.textMuted },
   addrVal: { fontFamily:fonts.bodySemi, fontSize:13, color:colors.text },
   emptyText: { fontFamily:fonts.body, color:colors.textMuted, fontSize:13, textAlign:"center" },
-  supportLink: { flexDirection:"row", alignItems:"center", gap:6, marginTop:28, alignSelf:"center" },
-  supportText: { fontFamily:fonts.bodySemi, fontSize:13, color:colors.indigo },
-  deactivateBtn: { flexDirection:"row", alignItems:"center", gap:6, marginTop:12, alignSelf:"center" },
-  deactivateText: { fontFamily:fonts.bodySemi, fontSize:12, color:colors.danger },
+  // Actions row
+  actionsRow: { flexDirection:"row", marginTop:24, backgroundColor:"#fff", borderRadius:14, borderWidth:1, borderColor:colors.border, overflow:"hidden" },
+  actionBtn: { flex:1, alignItems:"center", paddingVertical:16, gap:5 },
+  actionBtnTxt: { fontFamily:fonts.bodyBold, fontSize:11, color:colors.saffron },
+  actionSep: { width:1, backgroundColor:colors.border },
 });

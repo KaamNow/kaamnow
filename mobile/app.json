@@ -17,33 +17,28 @@
       "bundleIdentifier": "com.kaamnow.app",
       "infoPlist": {
         "NSAppTransportSecurity": {
-          "NSAllowsArbitraryLoads": false,
-          "NSAllowsLocalNetworking": true,
-          "NSExceptionDomains": {
-            "192.168.1.6": {
-              "NSExceptionAllowsInsecureHTTPLoads": true,
-              "NSIncludesSubdomains": false
-            },
-            "localhost": {
-              "NSExceptionAllowsInsecureHTTPLoads": true,
-              "NSIncludesSubdomains": false
-            }
-          }
+          "NSAllowsArbitraryLoads": true
         }
       }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#FF6B35"
+        "backgroundColor": "#0F766E"
       },
-      "package": "com.kaamnow.app"
+      "package": "com.kaamnow.app",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "apiUrl": "http://192.168.1.6:8000"
+      "apiUrl": "http://13.207.54.156",
+      "eas": {
+        "projectId": "e3488ace-e7ad-4919-ad70-af37afc967bb"
+      }
     },
     "plugins": [
       "expo-font",

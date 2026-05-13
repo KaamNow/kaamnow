@@ -1,147 +1,106 @@
 import { View, Text, Image, StyleSheet, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, fonts, radius } from "../theme";
-import TrustBadge from "./TrustBadge";
+import { colors, fonts, radius, spacing } from "../theme";
 import { API_URL } from "../api";
 
 const fullUrl = (url) => !url ? null : url.startsWith("http") ? url : `${API_URL}${url}`;
 
 export default function WorkerCard({ worker, onPress, testID }) {
+  const photo = fullUrl(worker.photo_url);
+  const initials = (worker.name || "?").split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
+
   return (
     <Pressable
       testID={testID}
       onPress={onPress}
-      style={({ pressed }) => [styles.card, pressed && { opacity: 0.85 }]}
+      style={({ pressed }) => [s.card, pressed && { opacity: 0.88 }]}
     >
-      <Image
-        source={{
-          uri:
-            fullUrl(worker.photo_url) ||
-            "https://images.pexels.com/photos/16476333/pexels-photo-16476333.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=400&w=400",
-        }}
-        style={styles.photo}
-      />
+      {/* Photo or initials */}
+      <View style={s.photoWrap}>
+        {photo
+          ? <Image source={{ uri: photo }} style={s.photo} />
+          : <View style={[s.photo, s.photoFallback]}>
+              <Text style={s.initials}>{initials}</Text>
+            </View>}
+        {worker.is_available && <View style={s.availDot} />}
+      </View>
+
+      {/* Content */}
       <View style={{ flex: 1 }}>
-        <View style={styles.header}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.name} numberOfLines={1}>
-              {worker.name}
-            </Text>
-            <View style={styles.metaRow}>
-              <Ionicons name="location-outline" size={11} color={colors.textMuted} />
-              <Text style={styles.meta} numberOfLines={1}>
-                {worker.village}, {worker.state}
+        {/* Name + rate */}
+        <View style={s.nameRow}>
+          <Text style={s.name} numberOfLines={1}>{worker.name}</Text>
+          <Text style={s.rate}>₹{worker.daily_rate}<Text style={s.rateUnit}>/day</Text></Text>
+        </View>
+
+        {/* Skills */}
+        <Text style={s.skills} numberOfLines={1}>
+          {(worker.skills || []).slice(0, 3).join(" · ") || "—"}
+        </Text>
+
+        {/* Footer */}
+        <View style={s.footer}>
+          {/* Rating */}
+          <View style={s.ratingRow}>
+            <Ionicons name="star" size={11} color="#F59E0B" />
+            <Text style={s.ratingTxt}>{(worker.avg_rating || 0).toFixed(1)}</Text>
+            {worker.total_jobs > 0 && (
+              <Text style={s.jobsTxt}> · {worker.total_jobs} jobs</Text>
+            )}
+          </View>
+          {/* Location */}
+          {(worker.village || worker.state) && (
+            <View style={s.locRow}>
+              <Ionicons name="location-outline" size={10} color={colors.textMuted} />
+              <Text style={s.locTxt} numberOfLines={1}>
+                {[worker.village, worker.state].filter(Boolean).join(", ")}
               </Text>
             </View>
-          </View>
-          <Text style={styles.rate}>₹{worker.daily_rate}</Text>
-        </View>
-
-        <View style={styles.skillsRow}>
-          {worker.skills.slice(0, 3).map((s) => (
-            <View key={s} style={styles.skillChip}>
-              <Text style={styles.skillText}>{s}</Text>
-            </View>
-          ))}
-        </View>
-
-        <View style={styles.footer}>
-          <TrustBadge tier={worker.trust_tier} />
-          <View style={styles.ratingRow}>
-            <Ionicons name="star" size={12} color={colors.saffron} />
-            <Text style={styles.ratingText}>
-              {(worker.avg_rating || 0).toFixed(1)}
-            </Text>
-            <Text style={styles.jobsText}>· {worker.total_jobs} jobs</Text>
-          </View>
+          )}
         </View>
       </View>
+
+      <Ionicons name="chevron-forward" size={16} color={colors.border} style={{ alignSelf: "center" }} />
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   card: {
     flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
     backgroundColor: "#fff",
-    borderRadius: radius.lg,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
     padding: 14,
-    gap: 14,
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  photo: {
-    width: 64,
-    height: 64,
-    borderRadius: radius.md,
-    backgroundColor: colors.border,
+  photoWrap: { position: "relative" },
+  photo: { width: 72, height: 72, borderRadius: 14, backgroundColor: colors.soft },
+  photoFallback: { alignItems: "center", justifyContent: "center", backgroundColor: colors.saffronTint },
+  initials: { fontFamily: fonts.display, fontSize: 26, color: colors.saffron },
+  availDot: {
+    position: "absolute",
+    bottom: 3,
+    right: 3,
+    width: 11,
+    height: 11,
+    borderRadius: 6,
+    backgroundColor: "#4ADE80",
+    borderWidth: 2,
+    borderColor: "#fff",
   },
-  header: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: 8,
-  },
-  name: {
-    fontFamily: fonts.display,
-    fontSize: 17,
-    color: colors.text,
-  },
-  metaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginTop: 2,
-  },
-  meta: {
-    fontFamily: fonts.body,
-    fontSize: 12,
-    color: colors.textMuted,
-  },
-  rate: {
-    fontFamily: fonts.display,
-    fontSize: 17,
-    color: colors.indigo,
-  },
-  skillsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 4,
-    marginTop: 8,
-  },
-  skillChip: {
-    backgroundColor: "#F3F4F6",
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 4,
-  },
-  skillText: {
-    fontFamily: fonts.bodyBold,
-    fontSize: 9,
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-    color: colors.textSecondary,
-  },
-  footer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 10,
-  },
-  ratingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-  },
-  ratingText: {
-    fontFamily: fonts.bodyBold,
-    fontSize: 12,
-    color: colors.text,
-  },
-  jobsText: {
-    fontFamily: fonts.body,
-    fontSize: 11,
-    color: colors.textMuted,
-  },
+  nameRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", gap: 6 },
+  name: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.text, flex: 1 },
+  rate: { fontFamily: fonts.display, fontSize: 16, color: colors.money },
+  rateUnit: { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted },
+  skills: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginTop: 3 },
+  footer: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 8 },
+  ratingRow: { flexDirection: "row", alignItems: "center", gap: 3 },
+  ratingTxt: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.text },
+  jobsTxt: { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted },
+  locRow: { flexDirection: "row", alignItems: "center", gap: 3 },
+  locTxt: { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted, maxWidth: 120 },
 });

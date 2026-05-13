@@ -1,226 +1,344 @@
 import { useEffect, useState } from "react";
 import {
-  ScrollView,
-  View,
-  Text,
-  Image,
-  StyleSheet,
-  Pressable,
-  Alert,
+  ScrollView, View, Text, Image, StyleSheet,
+  Pressable, Alert, ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import api, { formatApiError, API_URL } from "../api";
-const fullUrl = (url) => !url ? null : url.startsWith("http") ? url : `${API_URL}${url}`;
 import { useAuth } from "../contexts/AuthContext";
-import { colors, fonts, radius, spacing } from "../theme";
-import Overline from "../components/Overline";
+import { useLanguage } from "../contexts/LanguageContext";
+import { colors, fonts, spacing } from "../theme";
 import Button from "../components/Button";
-import TrustBadge from "../components/TrustBadge";
+
+const fullUrl = (url) => !url ? null : url.startsWith("http") ? url : `${API_URL}${url}`;
 
 export default function WorkerProfileScreen({ route, navigation }) {
   const { id } = route.params;
   const { user } = useAuth();
-  const [worker, setWorker] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [myJobs, setMyJobs] = useState([]);
+  const { lang } = useLanguage();
+
+  const [worker, setWorker]       = useState(null);
+  const [loading, setLoading]     = useState(true);
+  const [myJobs, setMyJobs]       = useState([]);
   const [selectedJob, setSelectedJob] = useState(null);
-  const [booking, setBooking] = useState(false);
+  const [booking, setBooking]     = useState(false);
 
   useEffect(() => {
-    api.get(`/workers/${id}`).then((r) => setWorker(r.data)).finally(() => setLoading(false));
+    api.get(`/workers/${id}`).then(r => setWorker(r.data)).finally(() => setLoading(false));
   }, [id]);
 
   useEffect(() => {
     if (user?.role === "customer") {
-      api.get("/jobs/mine").then((r) => setMyJobs(r.data.filter((j) => j.status === "open"))).catch(() => {});
+      api.get("/jobs/mine")
+        .then(r => setMyJobs(Array.isArray(r.data) ? r.data.filter(j => j.status === "open") : []))
+        .catch(() => {});
     }
   }, [user]);
 
   const book = async () => {
-    if (!selectedJob) return Alert.alert("Pick a job", "Select one of your open jobs first.");
+    if (!selectedJob) return Alert.alert(
+      lang === "hi" ? "Job चुनो" : "Pick a job",
+      lang === "hi" ? "पहले अपनी कोई open job चुनो।" : "Select one of your open jobs first."
+    );
     setBooking(true);
     try {
       await api.post("/bookings", { job_id: selectedJob, worker_id: id });
-      Alert.alert("✅ Booking sent!", "Worker will respond shortly.");
+      Alert.alert(
+        lang === "hi" ? "Booking भेजी!" : "Booking sent!",
+        lang === "hi" ? "कारीगर जल्द ही जवाब देगा।" : "Worker will respond shortly."
+      );
       navigation.navigate("Dashboard");
     } catch (err) {
-      Alert.alert("Booking failed", formatApiError(err));
+      Alert.alert(lang === "hi" ? "Booking नहीं हुई" : "Booking failed", formatApiError(err));
     } finally {
       setBooking(false);
     }
   };
 
-  if (loading || !worker) {
+  if (loading) {
     return (
-      <SafeAreaView style={styles.safe}>
-        <View style={styles.empty}>
-          <Text style={styles.emptyText}>Loading…</Text>
+      <SafeAreaView style={s.safe}>
+        <View style={s.loadingWrap}>
+          <ActivityIndicator size="large" color={colors.saffron} />
         </View>
       </SafeAreaView>
     );
   }
 
+  if (!worker) {
+    return (
+      <SafeAreaView style={s.safe}>
+        <View style={s.loadingWrap}>
+          <Ionicons name="person-outline" size={40} color={colors.textMuted} />
+          <Text style={s.loadingTxt}>{lang === "hi" ? "कारीगर नहीं मिला।" : "Worker not found."}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const photo = fullUrl(worker.photo_url);
+  const initials = (worker.name || "?").split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
+  const firstName = (worker.name || "").split(" ")[0];
+
   return (
-    <SafeAreaView edges={["top"]} style={styles.safe}>
-      <Pressable
-        testID="back-to-marketplace"
-        onPress={() => navigation.goBack()}
-        style={styles.backBtn}
-      >
-        <Ionicons name="arrow-back" size={18} color={colors.textSecondary} />
-        <Text style={styles.backText}>Back</Text>
+    <SafeAreaView edges={["top"]} style={s.safe}>
+      {/* ── Back button ───────────────────────────────────────────── */}
+      <Pressable onPress={() => navigation.goBack()} style={s.backBtn}>
+        <Ionicons name="arrow-back" size={18} color={colors.saffron} />
+        <Text style={s.backTxt}>{lang === "hi" ? "वापस" : "Back"}</Text>
       </Pressable>
 
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }}>
-        <View style={styles.card}>
-          <View style={styles.headerRow}>
-            {worker.photo_url ? (
-              <Image source={{ uri: fullUrl(worker.photo_url) }} style={styles.photo} />
-            ) : (
-              <View style={[styles.photo, { alignItems: "center", justifyContent: "center" }]}>
-                <Ionicons name="person" size={42} color={colors.textMuted} />
-              </View>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+
+        {/* ── Gradient hero ─────────────────────────────────────────── */}
+        <LinearGradient colors={["#0F766E", "#0D5F59"]} start={{ x:0, y:0 }} end={{ x:1, y:1 }} style={s.hero}>
+          <View style={s.heroBlob} />
+
+          {/* Availability badge */}
+          {worker.is_available !== undefined && (
+            <View style={[s.availBadge, !worker.is_available && s.availBadgeOff]}>
+              <View style={[s.availDot, !worker.is_available && s.availDotOff]} />
+              <Text style={s.availTxt}>
+                {worker.is_available
+                  ? (lang === "hi" ? "उपलब्ध" : "Available")
+                  : (lang === "hi" ? "व्यस्त" : "Busy")}
+              </Text>
+            </View>
+          )}
+
+          {/* Photo / initials */}
+          <View style={s.avatarRing}>
+            {photo
+              ? <Image source={{ uri: photo }} style={s.avatarImg} />
+              : <View style={s.avatarFallback}>
+                  <Text style={s.avatarInitials}>{initials}</Text>
+                </View>}
+          </View>
+
+          <Text style={s.heroName}>{worker.name || "Worker"}</Text>
+
+          {/* Rating row */}
+          <View style={s.heroRating}>
+            <Ionicons name="star" size={14} color="#FCD34D" />
+            <Text style={s.heroRatingTxt}>{(worker.avg_rating || 0).toFixed(1)}</Text>
+            {worker.total_jobs > 0 && (
+              <Text style={s.heroJobsTxt}>· {worker.total_jobs} {lang === "hi" ? "काम" : "jobs"}</Text>
             )}
-            <View style={{ flex: 1 }}>
-              <Text style={styles.name}>{worker.name || "Worker"}</Text>
-              <View style={styles.metaRow}>
-                <Ionicons name="location-outline" size={12} color={colors.textMuted} />
-                <Text style={styles.meta}>
-                  {[worker.village, worker.state].filter(Boolean).join(", ") || "—"}
-                </Text>
-              </View>
-              <View style={{ marginTop: 8 }}>
-                <TrustBadge tier={worker.trust_tier} />
-              </View>
-              <View style={styles.ratingRow}>
-                <Ionicons name="star" size={14} color={colors.saffron} />
-                <Text style={styles.ratingText}>{(worker.avg_rating || 0).toFixed(1)}</Text>
-                <Text style={styles.jobsText}>· {worker.total_jobs} jobs done</Text>
-              </View>
-              <Text style={styles.rate}>₹{worker.daily_rate}<Text style={styles.rateUnit}>/day</Text></Text>
+          </View>
+
+          {/* Pills row */}
+          <View style={s.heroPills}>
+            <View style={s.heroPill}>
+              <Ionicons name="location-outline" size={11} color="rgba(255,255,255,0.9)" />
+              <Text style={s.heroPillTxt}>
+                {[worker.village, worker.state].filter(Boolean).join(", ") || "—"}
+              </Text>
+            </View>
+            <View style={[s.heroPill, s.ratePill]}>
+              <Text style={s.rateValue}>₹{worker.daily_rate}</Text>
+              <Text style={s.rateUnit}>{lang === "hi" ? "/दिन" : "/day"}</Text>
             </View>
           </View>
+        </LinearGradient>
 
-          <Overline style={{ marginTop: spacing.lg }}>Skills</Overline>
-          <View style={styles.skillsRow}>
-            {(worker.skills || []).map((s) => (
-              <View key={s} style={styles.skillChip}>
-                <Text style={styles.skillText}>{s}</Text>
+        <View style={{ paddingHorizontal: spacing.lg }}>
+
+          {/* ── Skills ──────────────────────────────────────────────── */}
+          {(worker.skills || []).length > 0 && (
+            <View style={s.section}>
+              <SectionHead icon="construct-outline" title={lang === "hi" ? "Skills" : "Skills"} />
+              <View style={s.skillsRow}>
+                {worker.skills.map(sk => (
+                  <View key={sk} style={s.skillChip}>
+                    <Text style={s.skillTxt}>{sk}</Text>
+                  </View>
+                ))}
               </View>
-            ))}
-          </View>
+            </View>
+          )}
 
-          <Overline style={{ marginTop: spacing.lg }}>About</Overline>
-          <Text style={styles.bio}>{worker.bio}</Text>
-
-          <View style={styles.statsRow}>
-            <Stat label="Jobs" value={worker.total_jobs} />
-            <Stat label="Rating" value={(worker.avg_rating || 0).toFixed(1)} />
-            <Stat label="Trust" value={`Tier ${worker.trust_tier}`} />
-          </View>
-        </View>
-
-        <View style={[styles.card, { marginTop: 16 }]}>
-          <Text style={styles.sectionH}>Book {(worker.name || "this worker").split(" ")[0]}</Text>
-
-          {!user && (
-            <Button
-              testID="login-to-book"
-              title="Log in to book"
-              onPress={() => navigation.navigate("Login")}
-              style={{ marginTop: 12 }}
+          {/* ── Stats ───────────────────────────────────────────────── */}
+          <View style={s.statsCard}>
+            <StatBox
+              icon="briefcase-outline"
+              val={worker.total_jobs || 0}
+              label={lang === "hi" ? "काम" : "Jobs done"}
             />
+            <View style={s.statDivider} />
+            <StatBox
+              icon="star-outline"
+              val={(worker.avg_rating || 0).toFixed(1)}
+              label={lang === "hi" ? "Rating" : "Rating"}
+              star
+            />
+            <View style={s.statDivider} />
+            <StatBox
+              icon="cash-outline"
+              val={`₹${worker.daily_rate}`}
+              label={lang === "hi" ? "प्रति दिन" : "Per day"}
+              money
+            />
+          </View>
+
+          {/* ── About / Bio ─────────────────────────────────────────── */}
+          {!!worker.bio && (
+            <View style={s.section}>
+              <SectionHead icon="person-outline" title={lang === "hi" ? "परिचय" : "About"} />
+              <Text style={s.bio}>{worker.bio}</Text>
+            </View>
           )}
 
-          {user?.role === "worker" && (
-            <Text style={styles.note}>Workers can&apos;t book other workers.</Text>
-          )}
+          {/* ── Booking section ─────────────────────────────────────── */}
+          <View style={s.bookCard}>
+            <Text style={s.bookTitle}>
+              {lang === "hi" ? `${firstName} को काम दो` : `Book ${firstName}`}
+            </Text>
 
-          {user?.role === "customer" && (
-            <>
-              {myJobs.length === 0 ? (
-                <>
-                  <Text style={styles.note}>You don&apos;t have any open jobs yet.</Text>
-                  <Button
-                    testID="post-job-link"
-                    title="Post a job first"
-                    onPress={() => navigation.navigate("PostJob")}
-                    style={{ marginTop: 12 }}
-                  />
-                </>
-              ) : (
-                <>
-                  <Text style={styles.note}>Pick one of your open jobs:</Text>
-                  {myJobs.map((j) => (
-                    <Pressable
-                      key={j.id}
-                      testID={`job-pick-${j.id}`}
-                      onPress={() => setSelectedJob(j.id)}
-                      style={[styles.jobOption, selectedJob === j.id && styles.jobOptionActive]}
-                    >
-                      <Text style={styles.jobOptionTitle}>{j.title}</Text>
-                      <Text style={styles.jobOptionMeta}>{j.job_date} · {j.village}</Text>
-                    </Pressable>
-                  ))}
-                  <Button
-                    testID="confirm-booking"
-                    title={booking ? "Sending…" : "Send booking request"}
-                    loading={booking}
-                    disabled={!selectedJob}
-                    onPress={book}
-                    style={{ marginTop: 12 }}
-                  />
-                </>
-              )}
-            </>
-          )}
+            {/* Guest */}
+            {!user && (
+              <View style={{ gap: 10, marginTop: 12 }}>
+                <Text style={s.note}>
+                  {lang === "hi" ? "Booking के लिए login करो।" : "Log in to send a booking request."}
+                </Text>
+                <Button title={lang === "hi" ? "Login करो" : "Log in to book"} onPress={() => navigation.navigate("Login")} />
+              </View>
+            )}
+
+            {/* Worker viewing another worker */}
+            {user?.role === "worker" && (
+              <Text style={s.note}>
+                {lang === "hi" ? "Workers दूसरे workers को book नहीं कर सकते।" : "Workers can't book other workers."}
+              </Text>
+            )}
+
+            {/* Customer */}
+            {user?.role === "customer" && (
+              <View style={{ marginTop: 12, gap: 8 }}>
+                {myJobs.length === 0 ? (
+                  <>
+                    <Text style={s.note}>
+                      {lang === "hi" ? "पहले कोई job post करो।" : "You don't have any open jobs yet."}
+                    </Text>
+                    <Button
+                      title={lang === "hi" ? "Job post करो" : "Post a job first"}
+                      onPress={() => navigation.navigate("PostJob")}
+                      style={{ marginTop: 4 }}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <Text style={s.pickLabel}>
+                      {lang === "hi" ? "कौनसी job के लिए?" : "Which job?"}
+                    </Text>
+                    {myJobs.map(j => (
+                      <Pressable
+                        key={j.id}
+                        onPress={() => setSelectedJob(j.id)}
+                        style={[s.jobOption, selectedJob === j.id && s.jobOptionOn]}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={s.jobOptionTitle}>{j.title}</Text>
+                          <Text style={s.jobOptionMeta}>
+                            {j.job_date}{j.village ? ` · ${j.village}` : ""}
+                          </Text>
+                        </View>
+                        {selectedJob === j.id && (
+                          <Ionicons name="checkmark-circle" size={20} color={colors.saffron} />
+                        )}
+                      </Pressable>
+                    ))}
+                    <Button
+                      title={booking ? (lang === "hi" ? "भेज रहे हैं…" : "Sending…") : (lang === "hi" ? "Booking भेजो" : "Send booking request")}
+                      loading={booking}
+                      disabled={!selectedJob}
+                      onPress={book}
+                      style={{ marginTop: 4 }}
+                    />
+                  </>
+                )}
+              </View>
+            )}
+          </View>
+
         </View>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function Stat({ label, value }) {
+function SectionHead({ icon, title }) {
   return (
-    <View style={{ flex: 1 }}>
-      <Text style={statStyles.value}>{value}</Text>
-      <Text style={statStyles.label}>{label}</Text>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 7, marginBottom: 12 }}>
+      <Ionicons name={icon} size={15} color={colors.saffron} />
+      <Text style={{ fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 1.3, textTransform: "uppercase", color: colors.textSecondary }}>
+        {title}
+      </Text>
     </View>
   );
 }
 
-const statStyles = StyleSheet.create({
-  value: { fontFamily: fonts.display, fontSize: 22, color: colors.text },
-  label: { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1.4, textTransform: "uppercase", color: colors.textMuted, marginTop: 2 },
-});
+function StatBox({ icon, val, label, star, money }) {
+  return (
+    <View style={s.statBox}>
+      <Text style={[s.statVal, money && { color: colors.money }]}>{val}</Text>
+      <Text style={s.statLabel}>{label}</Text>
+    </View>
+  );
+}
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  backBtn: { flexDirection: "row", alignItems: "center", gap: 6, padding: spacing.lg, paddingBottom: 8 },
-  backText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.textSecondary },
-  card: { backgroundColor: "#fff", borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, padding: 18 },
-  headerRow: { flexDirection: "row", gap: 16, alignItems: "flex-start" },
-  photo: { width: 92, height: 92, borderRadius: radius.lg, backgroundColor: colors.border },
-  name: { fontFamily: fonts.display, fontSize: 26, color: colors.text },
-  metaRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
-  meta: { fontFamily: fonts.body, fontSize: 13, color: colors.textMuted },
-  ratingRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 8 },
-  ratingText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.text },
-  jobsText: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted },
-  rate: { fontFamily: fonts.display, fontSize: 24, color: colors.indigo, marginTop: 8 },
-  rateUnit: { fontFamily: fonts.body, fontSize: 13, color: colors.textMuted },
-  skillsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 },
-  skillChip: { backgroundColor: "#F3F4F6", paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.md },
-  skillText: { fontFamily: fonts.bodySemi, fontSize: 12, color: colors.textSecondary },
-  bio: { fontFamily: fonts.body, fontSize: 14, color: colors.textSecondary, marginTop: 8, lineHeight: 20 },
-  statsRow: { flexDirection: "row", gap: 12, marginTop: 18, paddingTop: 18, borderTopWidth: 1, borderTopColor: colors.border },
-  sectionH: { fontFamily: fonts.display, fontSize: 20, color: colors.text },
-  note: { fontFamily: fonts.body, fontSize: 13, color: colors.textSecondary, marginTop: 8 },
-  jobOption: { borderWidth: 1, borderColor: colors.border, borderRadius: radius.md, padding: 12, marginTop: 8 },
-  jobOptionActive: { borderColor: colors.saffron, backgroundColor: colors.saffronTint },
+  loadingWrap: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
+  loadingTxt: { fontFamily: fonts.body, color: colors.textMuted, fontSize: 14 },
+  backBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: spacing.lg, paddingVertical: 10 },
+  backTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.saffron },
+
+  // Hero
+  hero: { marginHorizontal: spacing.lg, borderRadius: 20, padding: 24, alignItems: "center", overflow: "hidden", marginBottom: 20 },
+  heroBlob: { position: "absolute", width: 180, height: 180, borderRadius: 90, backgroundColor: "rgba(255,255,255,0.07)", top: -50, right: -50 },
+  availBadge: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(74,222,128,0.2)", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5, marginBottom: 16, borderWidth: 1, borderColor: "rgba(74,222,128,0.4)" },
+  availBadgeOff: { backgroundColor: "rgba(255,255,255,0.1)", borderColor: "rgba(255,255,255,0.2)" },
+  availDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#4ADE80" },
+  availDotOff: { backgroundColor: "rgba(255,255,255,0.5)" },
+  availTxt: { fontFamily: fonts.bodyBold, fontSize: 11, color: "#fff" },
+  avatarRing: { width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: "rgba(255,255,255,0.35)", alignItems: "center", justifyContent: "center", marginBottom: 14 },
+  avatarImg: { width: 94, height: 94, borderRadius: 47 },
+  avatarFallback: { width: 94, height: 94, borderRadius: 47, backgroundColor: "rgba(255,255,255,0.2)", alignItems: "center", justifyContent: "center" },
+  avatarInitials: { fontFamily: fonts.display, fontSize: 36, color: "#fff" },
+  heroName: { fontFamily: fonts.display, fontSize: 26, color: "#fff", marginBottom: 8 },
+  heroRating: { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 14 },
+  heroRatingTxt: { fontFamily: fonts.bodyBold, fontSize: 14, color: "#fff" },
+  heroJobsTxt: { fontFamily: fonts.body, fontSize: 13, color: "rgba(255,255,255,0.75)" },
+  heroPills: { flexDirection: "row", gap: 10, flexWrap: "wrap", justifyContent: "center" },
+  heroPill: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "rgba(255,255,255,0.18)", paddingVertical: 6, paddingHorizontal: 12, borderRadius: 20 },
+  heroPillTxt: { fontFamily: fonts.bodySemi, fontSize: 12, color: "#fff" },
+  ratePill: { backgroundColor: "rgba(180,83,9,0.25)", borderWidth: 1, borderColor: "rgba(251,191,36,0.3)" },
+  rateValue: { fontFamily: fonts.display, fontSize: 18, color: "#FCD34D" },
+  rateUnit: { fontFamily: fonts.body, fontSize: 12, color: "rgba(255,255,255,0.75)" },
+
+  // Sections
+  section: { marginBottom: 20 },
+  skillsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  skillChip: { backgroundColor: colors.saffronTint, paddingHorizontal: 13, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: colors.border },
+  skillTxt: { fontFamily: fonts.bodySemi, fontSize: 12, color: colors.saffron },
+  bio: { fontFamily: fonts.body, fontSize: 14, color: colors.textSecondary, lineHeight: 21 },
+
+  // Stats card
+  statsCard: { flexDirection: "row", backgroundColor: "#fff", borderRadius: 16, borderWidth: 1, borderColor: colors.border, marginBottom: 20, overflow: "hidden" },
+  statBox: { flex: 1, alignItems: "center", paddingVertical: 16 },
+  statVal: { fontFamily: fonts.display, fontSize: 22, color: colors.text },
+  statLabel: { fontFamily: fonts.bodyBold, fontSize: 9, letterSpacing: 1.2, textTransform: "uppercase", color: colors.textMuted, marginTop: 3 },
+  statDivider: { width: 1, backgroundColor: colors.border },
+
+  // Booking card
+  bookCard: { backgroundColor: "#fff", borderRadius: 16, borderWidth: 1, borderColor: colors.border, padding: 18, marginBottom: 20 },
+  bookTitle: { fontFamily: fonts.display, fontSize: 20, color: colors.text },
+  pickLabel: { fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 1, textTransform: "uppercase", color: colors.textMuted },
+  note: { fontFamily: fonts.body, fontSize: 13, color: colors.textSecondary, lineHeight: 18 },
+  jobOption: { flexDirection: "row", alignItems: "center", borderWidth: 1.5, borderColor: colors.border, borderRadius: 12, padding: 13 },
+  jobOptionOn: { borderColor: colors.saffron, backgroundColor: colors.saffronTint },
   jobOptionTitle: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.text },
   jobOptionMeta: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginTop: 2 },
-  empty: { flex: 1, padding: 40, alignItems: "center", justifyContent: "center" },
-  emptyText: { fontFamily: fonts.body, color: colors.textMuted },
 });

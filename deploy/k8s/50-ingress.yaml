@@ -49,3 +49,33 @@ spec:
                 name: frontend
                 port:
                   number: 80
+---
+# IP-based access ingress — no host, no SSL redirect.
+# Allows mobile app to reach the API via http://<EC2-IP>/api/...
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kaamnow-ip-ingress
+  namespace: kaamnow
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 8001
+          - path: /static
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 8001
