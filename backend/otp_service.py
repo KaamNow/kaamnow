@@ -73,20 +73,24 @@ class GupshupOTPProvider(OTPProvider):
             import httpx
 
             destination = _normalize_phone(phone)
-            template_payload = json.dumps({
-                "id": "common_otp",
-                "params": [self.app_id, otp_code, "15 minutes"],
-            })
+            otp_text = (
+                f"Your KaamNow OTP is: *{otp_code}*\n"
+                f"Valid for 15 minutes.\n"
+                f"Do not share this code with anyone.\n\n"
+                f"काम की बात, KaamNow के साथ 🙏"
+            )
+            # Use regular text message API (same as bot) — works in sandbox for opted-in numbers
+            msg_url = self.source and "https://api.gupshup.io/wa/api/v1/msg"
             data = {
                 "channel": "whatsapp",
                 "source": self.source,
                 "destination": destination,
                 "src.name": self.app_id,
-                "template": template_payload,
+                "message": json.dumps({"type": "text", "text": otp_text}),
             }
             async with httpx.AsyncClient(timeout=10) as client:
                 resp = await client.post(
-                    self.template_url,
+                    msg_url,
                     data=data,
                     headers={"apikey": self.api_key},
                 )
