@@ -28,7 +28,8 @@ async def _notify(user_id: str, title: str, body: str, kind: str, ref_id: str = 
 
     # Fire push notification + WhatsApp for all engagement events
     if kind in ("booking_accepted", "booking_rejected", "interest_withdrawn",
-                "booking_request", "booking_completed", "booking_cancelled", "job_rated"):
+                "booking_request", "booking_completed", "booking_cancelled",
+                "job_rated", "tier_upgraded", "tier_downgraded"):
         try:
             user = await db.users.find_one({"id": user_id}, {"_id": 0, "phone_primary": 1, "push_token": 1})
             if user:
@@ -50,6 +51,62 @@ async def _notify(user_id: str, title: str, body: str, kind: str, ref_id: str = 
                     ).start()
         except Exception:
             pass
+
+TIER_THRESHOLDS = [
+    # (tier, name, min_jobs, min_rating, badge_emoji)
+    (4, "Elite",    50, 4.5, "🏆"),
+    (3, "Pro",      20, 4.0, "🔵"),
+    (2, "Verified",  5, 3.5, "✅"),
+    (1, "Basic",     0, 0.0, ""),
+]
+
+TIER_NAMES = {1: "Basic", 2: "Verified", 3: "Pro", 4: "Elite"}
+TIER_EMOJIS = {1: "", 2: "✅", 3: "🔵", 4: "🏆"}
+
+
+async def _check_tier(worker_id: str, worker_user_id: str) -> None:
+    """Recompute trust_tier based on total_jobs + avg_rating. Notify on change."""
+    worker = await db.workers.find_one({"id": worker_id}, {"_id": 0, "total_jobs": 1, "avg_rating": 1, "trust_tier": 1})
+    if not worker:
+        return
+
+    jobs = worker.get("total_jobs") or 0
+    rating = worker.get("avg_rating") or 0.0
+    current_tier = worker.get("trust_tier") or 1
+
+    # Find highest tier the worker qualifies for
+    new_tier = 1
+    for tier, _, min_jobs, min_rating, _ in TIER_THRESHOLDS:
+        if jobs >= min_jobs and rating >= min_rating:
+            new_tier = tier
+            break
+
+    if new_tier == current_tier:
+        return
+
+    await db.workers.update_one({"id": worker_id}, {"$set": {"trust_tier": new_tier}})
+
+    if new_tier > current_tier:
+        emoji = TIER_EMOJIS[new_tier]
+        name = TIER_NAMES[new_tier]
+        await _notify(
+            worker_user_id,
+            f"{emoji} बधाई हो! आप KaamNow {name} बन गए!",
+            f"आपकी rating {rating}/5 और {jobs} jobs के साथ आप {name} tier पर पहुँच गए। "
+            f"अब search results में ऊपर दिखेंगे।",
+            "tier_upgraded",
+        )
+    else:
+        old_name = TIER_NAMES[current_tier]
+        new_name = TIER_NAMES[new_tier]
+        await _notify(
+            worker_user_id,
+            f"Tier changed: {old_name} → {new_name}",
+            f"आपकी rating या jobs कम होने से tier {new_name} हो गई। "
+            f"Rating बढ़ाएं और {TIER_NAMES.get(current_tier, old_name)} वापस पाएं।",
+            "tier_downgraded",
+        )
+
 
 ACTIVE_ENGAGEMENT_STATUSES = ["requested", "accepted"]
 MAX_ACTIVE_REQUESTS_PER_WORKER = 5
@@ -497,6 +554,10 @@ async def complete_engagement(engagement_id: str, user: dict) -> dict:
         engagement_id,
     )
 
+    # Check if worker earned a tier upgrade (more jobs = possible promotion)
+    if worker_doc and worker_doc.get("user_id"):
+        await _check_tier(engagement["worker_id"], worker_doc["user_id"])
+
     return {"ok": True}
 
 
@@ -599,6 +660,9 @@ async def rate_engagement(engagement_id: str, rating: int, comment: str, user: d
                         {"id": engagement["worker_id"]},
                         {"$unset": {"low_rating_warning": ""}}
                     )
+
+            # Check tier upgrade/downgrade after every rating
+            await _check_tier(engagement["worker_id"], worker_doc["user_id"])
 
     elif user["role"] == "worker":
         worker = await db.workers.find_one({"user_id": user["id"]})

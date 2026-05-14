@@ -12,6 +12,10 @@ import { useAuth } from "../contexts/AuthContext";
 import { colors, fonts, radius, spacing, sizes } from "../theme";
 import Button from "../components/Button";
 
+const TIER_NAMES  = { 1: "Basic", 2: "Verified", 3: "Pro", 4: "Elite" };
+const TIER_BADGE  = { 1: "—", 2: "✅", 3: "🔵", 4: "🏆" };
+const TIER_COLORS = { 1: "#9ca3af", 2: "#16a34a", 3: "#2563eb", 4: "#b45309" };
+
 const SKILL_CATEGORIES = [
   { category: "Construction", skills: ["mason","tile work","carpentry","painting","plumbing","electrical","welding"] },
   { category: "Farm",         skills: ["harvesting","weeding","transplanting","irrigation"] },
@@ -262,8 +266,8 @@ export default function WorkerMyProfileScreen({ navigation }) {
               <Text style={s.statCardLabel}>Rating</Text>
             </View>
             <View style={[s.statCard, { borderRightWidth: 0 }]}>
-              <Text style={s.statCardVal}>T{profile.trust_tier || 1}</Text>
-              <Text style={s.statCardLabel}>Trust</Text>
+              <Text style={s.statCardVal}>{TIER_BADGE[profile.trust_tier || 1]}</Text>
+              <Text style={s.statCardLabel}>{TIER_NAMES[profile.trust_tier || 1]}</Text>
             </View>
           </View>
         </LinearGradient>

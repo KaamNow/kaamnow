@@ -82,6 +82,13 @@ export default function WorkerProfileScreen({ route, navigation }) {
   const initials = (worker.name || "?").split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
   const firstName = (worker.name || "").split(" ")[0];
 
+  const TIER_NAMES  = { 1: "Basic", 2: "Verified", 3: "Pro", 4: "Elite" };
+  const TIER_BADGE  = { 1: null, 2: "✅ Verified", 3: "🔵 Pro", 4: "🏆 Elite" };
+  const TIER_COLORS = { 1: null, 2: "#16a34a", 3: "#2563eb", 4: "#b45309" };
+  const tier = worker.trust_tier || 1;
+  const tierLabel = TIER_BADGE[tier];
+  const tierColor = TIER_COLORS[tier];
+
   return (
     <SafeAreaView edges={["top"]} style={s.safe}>
       {/* ── Back button ───────────────────────────────────────────── */}
@@ -140,6 +147,11 @@ export default function WorkerProfileScreen({ route, navigation }) {
               <Text style={s.rateValue}>₹{worker.daily_rate}</Text>
               <Text style={s.rateUnit}>{lang === "hi" ? "/दिन" : "/day"}</Text>
             </View>
+            {tierLabel && (
+              <View style={[s.heroPill, { backgroundColor: tierColor + "30", borderWidth: 1, borderColor: tierColor + "60" }]}>
+                <Text style={[s.heroPillTxt, { color: "#fff", fontWeight: "700" }]}>{tierLabel}</Text>
+              </View>
+            )}
           </View>
         </LinearGradient>
 
