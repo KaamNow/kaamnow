@@ -535,7 +535,8 @@ async def rate_engagement(engagement_id: str, rating: int, comment: str, user: d
                 {"$set": {"avg_rating": round(agg[0]["avg"], 2)}},
             )
 
-        # Notify worker they received a rating
+        # Notify worker they received a rating + check minimum rating thresholds
+        new_avg = round(agg[0]["avg"], 2) if agg else None
         worker_doc = await db.workers.find_one({"id": engagement["worker_id"]}, {"_id": 0, "user_id": 1})
         if worker_doc and worker_doc.get("user_id"):
             stars = "⭐" * rating
@@ -547,6 +548,57 @@ async def rate_engagement(engagement_id: str, rating: int, comment: str, user: d
                 "job_rated",
                 engagement_id,
             )
+
+            # ── Minimum rating enforcement ────────────────────────────
+            if new_avg is not None:
+                if new_avg < 2.5:
+                    # Flag account — hidden from new job matches
+                    await db.workers.update_one(
+                        {"id": engagement["worker_id"]},
+                        {"$set": {"available": False, "availability_status": "flagged",
+                                  "restriction_reason": "low_rating"}}
+                    )
+                    await _notify(
+                        worker_doc["user_id"],
+                        "🚫 Account flagged: Low rating",
+                        f"आपकी rating {new_avg}/5 हो गई है जो बहुत कम है। नए jobs में नहीं दिखेंगे। "
+                        f"Quality improve करें और support से contact करें।",
+                        "booking_rejected",
+                        engagement_id,
+                    )
+                elif new_avg < 3.0:
+                    # Strong warning + reduce visibility
+                    await db.workers.update_one(
+                        {"id": engagement["worker_id"]},
+                        {"$set": {"low_rating_warning": "strong"}}
+                    )
+                    await _notify(
+                        worker_doc["user_id"],
+                        f"⚠️ Rating बहुत कम: {new_avg}/5",
+                        f"आपकी rating {new_avg}/5 है। अगर 2.5 से नीचे गई तो account band हो जाएगा। "
+                        f"हर काम अच्छे से करें।",
+                        "booking_rejected",
+                        engagement_id,
+                    )
+                elif new_avg < 3.5:
+                    # First warning
+                    await db.workers.update_one(
+                        {"id": engagement["worker_id"]},
+                        {"$set": {"low_rating_warning": "first"}}
+                    )
+                    await _notify(
+                        worker_doc["user_id"],
+                        f"⚠️ Rating कम हो रही है: {new_avg}/5",
+                        f"आपकी rating {new_avg}/5 है। 3.5 से ऊपर रखें ताकि ज़्यादा jobs मिलें।",
+                        "job_rated",
+                        engagement_id,
+                    )
+                else:
+                    # Clear any previous warnings if rating recovered
+                    await db.workers.update_one(
+                        {"id": engagement["worker_id"]},
+                        {"$unset": {"low_rating_warning": ""}}
+                    )
 
     elif user["role"] == "worker":
         worker = await db.workers.find_one({"user_id": user["id"]})
