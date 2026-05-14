@@ -595,6 +595,7 @@ export default function Dashboard() {
     setRecentlyViewed(saved);
   }, []);
 
+  if (user && user.role === "admin") return <Navigate to="/admin" replace />;
   // Workers have their own dedicated dashboard
   if (user && user.role === "worker") return <Navigate to="/worker/dashboard" replace />;
   if (!user) return null;

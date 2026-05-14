@@ -30,7 +30,6 @@ function Protected({ children, adminOnly = false }) {
       <div className="p-12 text-center text-gray-500">Loading…</div>
     );
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role === "admin" && !adminOnly) return <Navigate to="/admin" replace />;
   if (adminOnly && user.role !== "admin") return <Navigate to="/dashboard" replace />;
   return children;
 }
