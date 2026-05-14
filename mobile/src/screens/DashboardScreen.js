@@ -8,6 +8,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import api, { formatApiError } from "../api";
 import { useAuth } from "../contexts/AuthContext";
+import { useLanguage } from "../contexts/LanguageContext";
 import { colors, fonts, spacing } from "../theme";
 import Button from "../components/Button";
 
@@ -28,6 +29,7 @@ function greeting() {
 
 export default function DashboardScreen({ navigation, route }) {
   const { user, logout, refreshUser } = useAuth();
+  const { lang } = useLanguage();
   const [engagements, setEngagements]   = useState([]);
   const [jobs, setJobs]                 = useState([]);
   const [nearbyCount, setNearbyCount]   = useState(null);
