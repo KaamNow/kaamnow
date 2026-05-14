@@ -610,14 +610,15 @@ export default function DashboardScreen({ navigation, route }) {
                         </Pressable>
                       </View>
                     )}
-                    {isCustomer && status === "accepted" && (
-                      <Pressable style={styles.btnOutline} onPress={() => { setDetailItem(null); completeEng(detailItem.id); }}>
-                        <Text style={styles.btnOutlineText}>✓ Mark Done</Text>
-                      </Pressable>
-                    )}
                     {isCustomer && status === "completed" && !detailItem.rating && (
                       <Pressable style={styles.btnSaffron} onPress={() => { setDetailItem(null); setRatingModal({ id: detailItem.id, workerName: detailItem.worker_name }); }}>
                         <Text style={styles.btnSaffronText}>⭐ Rate Worker</Text>
+                      </Pressable>
+                    )}
+                    {!isCustomer && status === "accepted" && (
+                      <Pressable style={[styles.btnSaffron, { flexDirection: "row", gap: 6 }]} onPress={() => { setDetailItem(null); completeEng(detailItem.id); }}>
+                        <Ionicons name="checkmark-circle-outline" size={16} color="#fff" />
+                        <Text style={styles.btnGreenText}>Mark Job Done</Text>
                       </Pressable>
                     )}
                     {!isCustomer && ["requested","accepted"].includes(status) && (
@@ -692,11 +693,6 @@ function CustomerActiveCard({ e, onComplete, onRate, onPress }) {
             <Text style={styles.btnGreenText}>Call Worker</Text>
           </Pressable>
         )}
-        {status === "accepted" && (
-          <Pressable style={[styles.btnOutline, { flex: 1 }]} onPress={onComplete}>
-            <Text style={styles.btnOutlineText}>✓ Mark Done</Text>
-          </Pressable>
-        )}
         {status === "completed" && !e.rating && (
           <Pressable style={[styles.btnSaffron, { flex: 1 }]} onPress={onRate}>
             <Text style={styles.btnSaffronText}>⭐ Rate</Text>
@@ -725,8 +721,9 @@ function WorkerActiveCard({ e, onComplete, onCancel, onPress }) {
             <Text style={styles.btnGreenText}>Call Customer</Text>
           </Pressable>
         )}
-        <Pressable style={[styles.btnOutline, { flex: 1 }]} onPress={onCancel}>
-          <Text style={styles.btnOutlineText}>Cancel</Text>
+        <Pressable style={[styles.btnSaffron, { flex: 1 }]} onPress={onComplete}>
+          <Ionicons name="checkmark-circle-outline" size={14} color="#fff" />
+          <Text style={styles.btnGreenText}>Mark Done</Text>
         </Pressable>
       </View>
     </Pressable>
