@@ -7,6 +7,7 @@ import {
   Users, Briefcase, CheckCircle, TrendingUp, AlertTriangle,
   ShieldCheck, ShieldOff, Loader2, Search, MessageSquare,
   Star, MapPin, RefreshCw, X, IndianRupee, Flag, Eye,
+  Settings, ClipboardList, Trash2, ToggleLeft, ToggleRight,
 } from "lucide-react";
 
 const TIER_LABEL = { 1: "Basic", 2: "Verified", 3: "Pro", 4: "Elite" };
@@ -87,6 +88,17 @@ export default function AdminDashboard() {
   const [broadcastMsg, setBroadcastMsg] = useState("");
   const [broadcastSending, setBroadcastSending] = useState(false);
 
+  // Platform Controls
+  const [platform, setPlatform] = useState(null);
+  const [platformLoading, setPlatformLoading] = useState(false);
+  const [wipingSeeds, setWipingSeeds] = useState(false);
+
+  // Audit Log
+  const [auditLogs, setAuditLogs] = useState([]);
+  const [auditTotal, setAuditTotal] = useState(0);
+  const [auditLoading, setAuditLoading] = useState(false);
+  const [auditPage, setAuditPage] = useState(0);
+
   // ── Fetch helpers ──
 
   const fetchStats = useCallback(async () => {
@@ -150,6 +162,35 @@ export default function AdminDashboard() {
     finally { setEngagementsLoading(false); }
   }, [engStatusFilter, engSearch]);
 
+  const fetchPlatform = useCallback(async () => {
+    try {
+      setPlatformLoading(true);
+      const res = await api.get("/admin/platform-info");
+      setPlatform(res.data);
+    } catch { toast.error("Failed to load platform info"); }
+    finally { setPlatformLoading(false); }
+  }, []);
+
+  const fetchAuditLog = useCallback(async (page = 0) => {
+    try {
+      setAuditLoading(true);
+      const res = await api.get(`/admin/audit-log?limit=${LIMIT}&skip=${page * LIMIT}`);
+      setAuditLogs(res.data.items); setAuditTotal(res.data.total);
+    } catch { toast.error("Failed to load audit log"); }
+    finally { setAuditLoading(false); }
+  }, []);
+
+  const wipeSeedData = async () => {
+    if (!window.confirm("Delete ALL dummy +717000* accounts? This cannot be undone.")) return;
+    setWipingSeeds(true);
+    try {
+      const res = await api.delete("/admin/seed-data");
+      toast.success(`Deleted: ${res.data.deleted.users} users, ${res.data.deleted.workers} workers, ${res.data.deleted.jobs} jobs`);
+      fetchPlatform();
+    } catch { toast.error("Failed to wipe seed data"); }
+    finally { setWipingSeeds(false); }
+  };
+
   useEffect(() => { if (user?.role === "admin") fetchStats(); }, [user, fetchStats]);
 
   useEffect(() => {
@@ -157,6 +198,8 @@ export default function AdminDashboard() {
     if (activeTab === "customers")   { setCustomerPage(0);  fetchCustomers(0); }
     if (activeTab === "jobs")        { setJobPage(0);       fetchJobs(0); }
     if (activeTab === "engagements") { setEngPage(0);       fetchEngagements(0); }
+    if (activeTab === "platform")    { fetchPlatform(); }
+    if (activeTab === "audit")       { setAuditPage(0);     fetchAuditLog(0); }
   }, [activeTab, workerSearch, workerTierFilter, workerAvailFilter,
       customerSearch, jobStatusFilter, jobSearch, engStatusFilter, engSearch]);
 
@@ -226,6 +269,8 @@ export default function AdminDashboard() {
     { id: "customers", label: "Customers" },
     { id: "jobs", label: "Jobs" },
     { id: "engagements", label: "Engagements" },
+    { id: "platform", label: "Platform" },
+    { id: "audit", label: "Audit Log" },
   ];
 
   return (
@@ -519,6 +564,101 @@ export default function AdminDashboard() {
               </div>
             )}
             <Pagination total={engagementsTotal} page={engPage} onPage={p => { setEngPage(p); fetchEngagements(p); }} />
+          </div>
+        </>
+      )}
+
+      {/* ── PLATFORM ── */}
+      {activeTab === "platform" && (
+        platformLoading ? <Spinner /> : platform ? (
+          <div className="space-y-6">
+            {/* Feature Flags */}
+            <div className="kn-card p-6">
+              <div className="flex items-center gap-2 mb-5">
+                <Settings size={18} className="text-[#ff6b35]" />
+                <h2 className="font-bold text-base">Feature Flags</h2>
+                <span className="text-xs text-gray-400 ml-2">(read-only — change via k8s secrets)</span>
+              </div>
+              <div className="space-y-3">
+                {Object.entries(platform.feature_flags).map(([key, val]) => (
+                  <div key={key} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
+                    <span className="text-sm font-mono text-gray-700">{key}</span>
+                    <span className={`flex items-center gap-1.5 text-sm font-bold ${val ? "text-green-600" : "text-gray-400"}`}>
+                      {val ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>}
+                      {val ? "ON" : "OFF"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Collection counts */}
+            <div className="kn-card p-6">
+              <h2 className="font-bold text-base mb-4">MongoDB Collections</h2>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {Object.entries(platform.collections).map(([col, count]) => (
+                  <div key={col} className="bg-gray-50 rounded-xl p-4">
+                    <div className="text-xl font-display text-gray-900">{count}</div>
+                    <div className="text-xs text-gray-500 font-mono mt-1">{col}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Danger zone */}
+            <div className="kn-card p-6 border-red-100">
+              <h2 className="font-bold text-base text-red-600 mb-2">Danger Zone</h2>
+              <p className="text-sm text-gray-500 mb-4">
+                Dummy accounts: <span className="font-bold text-gray-800">{platform.dummy_accounts}</span> (+717000* phones)
+              </p>
+              <button onClick={wipeSeedData} disabled={wipingSeeds || platform.dummy_accounts === 0}
+                className="flex items-center gap-2 px-4 py-2.5 bg-red-500 hover:bg-red-600 disabled:opacity-40 text-white rounded-xl text-sm font-bold transition-colors">
+                <Trash2 size={14}/> {wipingSeeds ? "Wiping…" : "Wipe Seed Data"}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button onClick={fetchPlatform} className="px-4 py-2 bg-gray-100 rounded-lg text-sm font-bold">Load Platform Info</button>
+        )
+      )}
+
+      {/* ── AUDIT LOG ── */}
+      {activeTab === "audit" && (
+        <>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2 text-sm text-gray-500">
+              <ClipboardList size={16}/> Last {Math.min(auditTotal, LIMIT)} of {auditTotal} actions
+            </div>
+            <button onClick={() => fetchAuditLog(auditPage)} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-bold">
+              <RefreshCw size={12}/> Refresh
+            </button>
+          </div>
+          <div className="kn-card overflow-hidden">
+            {auditLoading ? <Spinner /> : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead><tr className="bg-gray-50 border-b border-gray-100 text-gray-500 uppercase tracking-wider text-xs">
+                    <th className="p-4">Time</th><th className="p-4">Admin</th><th className="p-4">Action</th>
+                    <th className="p-4">Target</th><th className="p-4">Detail</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {auditLogs.map(log => (
+                      <tr key={log.id} className="hover:bg-gray-50/50">
+                        <td className="p-4 text-xs text-gray-400 whitespace-nowrap">{(log.ts||"").replace("T"," ").slice(0,19)}</td>
+                        <td className="p-4 text-xs font-bold text-gray-700">{log.admin_name}</td>
+                        <td className="p-4">
+                          <span className="text-xs font-mono bg-gray-100 text-gray-700 px-2 py-0.5 rounded">{log.action}</span>
+                        </td>
+                        <td className="p-4 text-xs text-gray-500 font-mono max-w-[140px] truncate">{log.target||"—"}</td>
+                        <td className="p-4 text-xs text-gray-500 max-w-[200px] truncate">{log.detail||"—"}</td>
+                      </tr>
+                    ))}
+                    {auditLogs.length===0 && <EmptyRow cols={5} />}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <Pagination total={auditTotal} page={auditPage} onPage={p => { setAuditPage(p); fetchAuditLog(p); }} />
           </div>
         </>
       )}

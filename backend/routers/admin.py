@@ -22,6 +22,22 @@ def get_admin_user(user: dict = Depends(get_current_user)):
     return user
 
 
+async def audit(admin: dict, action: str, target: str = "", detail: str = ""):
+    """Write one line to the admin_logs collection (fire-and-forget, never raises)."""
+    try:
+        await db.admin_logs.insert_one({
+            "id": str(uuid.uuid4()),
+            "admin_id": admin.get("id", ""),
+            "admin_name": admin.get("name", "admin"),
+            "action": action,
+            "target": target,
+            "detail": detail,
+            "ts": utc_now_iso(),
+        })
+    except Exception as e:
+        logger.warning("audit write failed: %s", e)
+
+
 # ---------------------------------------------------------------------------
 # Bootstrap — create the very first admin account (no auth required,
 # protected by ADMIN_BOOTSTRAP_SECRET env var)
@@ -219,6 +235,7 @@ async def set_worker_tier(worker_id: str, body: dict, admin: dict = Depends(get_
     res = await db.workers.update_one({"id": worker_id}, {"$set": {"trust_tier": tier}})
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Worker not found")
+    await audit(admin, "worker.tier_set", worker_id, f"tier={tier}")
     return {"ok": True}
 
 
@@ -230,16 +247,16 @@ async def lift_worker_restriction(worker_id: str, admin: dict = Depends(get_admi
     )
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Worker not found")
+    await audit(admin, "worker.restriction_lifted", worker_id)
     return {"ok": True}
 
 
 @router.patch("/workers/{worker_id}/suspend")
 async def suspend_worker(worker_id: str, body: dict, admin: dict = Depends(get_admin_user)):
-    """suspend=true to suspend, suspend=false to reactivate"""
     suspend = body.get("suspend", True)
     new_status = "suspended" if suspend else "available"
 
-    worker = await db.workers.find_one({"id": worker_id}, {"user_id": 1})
+    worker = await db.workers.find_one({"id": worker_id}, {"user_id": 1, "name": 1})
     if not worker:
         raise HTTPException(status_code=404, detail="Worker not found")
 
@@ -248,6 +265,7 @@ async def suspend_worker(worker_id: str, body: dict, admin: dict = Depends(get_a
         {"id": worker["user_id"]},
         {"$set": {"status": "suspended" if suspend else "active"}}
     )
+    await audit(admin, "worker.suspended" if suspend else "worker.reactivated", worker_id, worker.get("name",""))
     return {"ok": True}
 
 
@@ -271,6 +289,7 @@ async def send_whatsapp(body: dict, admin: dict = Depends(get_admin_user)):
     t = threading.Thread(target=_do_send)
     t.start()
     t.join(timeout=10)
+    await audit(admin, "whatsapp.sent", phone, message[:80])
     return {"ok": result.get("ok", False)}
 
 
@@ -322,6 +341,7 @@ async def suspend_customer(user_id: str, body: dict, admin: dict = Depends(get_a
     )
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Customer not found")
+    await audit(admin, "customer.suspended" if suspend else "customer.reactivated", user_id)
     return {"ok": True}
 
 
@@ -372,6 +392,7 @@ async def force_close_job(job_id: str, admin: dict = Depends(get_admin_user)):
     res = await db.jobs.update_one({"id": job_id}, {"$set": {"status": "expired"}})
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Job not found")
+    await audit(admin, "job.force_closed", job_id)
     return {"ok": True}
 
 
@@ -417,6 +438,7 @@ async def flag_engagement(engagement_id: str, body: dict, admin: dict = Depends(
     )
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Engagement not found")
+    await audit(admin, "engagement.flagged", engagement_id, note[:80])
     return {"ok": True}
 
 
@@ -426,6 +448,7 @@ async def unflag_engagement(engagement_id: str, admin: dict = Depends(get_admin_
         {"id": engagement_id},
         {"$unset": {"flagged": "", "admin_note": "", "flagged_at": ""}}
     )
+    await audit(admin, "engagement.unflagged", engagement_id)
     return {"ok": True}
 
 
@@ -462,7 +485,49 @@ async def broadcast_whatsapp(body: dict, admin: dict = Depends(get_admin_user)):
     t = threading.Thread(target=_send_all)
     t.start()
     t.join(timeout=30)
+    await audit(admin, "whatsapp.broadcast", audience, f"sent={sent} msg={message[:60]}")
     return {"ok": True, "sent": sent}
+
+
+# ---------------------------------------------------------------------------
+# Audit log
+# ---------------------------------------------------------------------------
+
+@router.get("/audit-log")
+async def get_audit_log(limit: int = 50, skip: int = 0, admin: dict = Depends(get_admin_user)):
+    logs = await db.admin_logs.find({}, {"_id": 0}) \
+        .skip(skip).limit(limit).sort("ts", -1).to_list(limit)
+    total = await db.admin_logs.count_documents({})
+    return {"items": logs, "total": total}
+
+
+# ---------------------------------------------------------------------------
+# Platform info
+# ---------------------------------------------------------------------------
+
+@router.get("/platform-info")
+async def get_platform_info(admin: dict = Depends(get_admin_user)):
+    """Return current feature flags and DB collection counts."""
+    return {
+        "feature_flags": {
+            "whatsapp_notifications": settings.feature_whatsapp_notifications,
+            "otp_auth": settings.feature_otp_auth,
+            "engagement_flow": settings.feature_engagement_flow,
+            "sandbox_mode": settings.gupshup_sandbox_mode,
+            "show_otp_in_response": settings.show_otp_in_response,
+        },
+        "collections": {
+            "users":       await db.users.count_documents({}),
+            "workers":     await db.workers.count_documents({}),
+            "jobs":        await db.jobs.count_documents({}),
+            "engagements": await db.engagements.count_documents({}),
+            "notifications": await db.notifications.count_documents({}),
+            "admin_logs":  await db.admin_logs.count_documents({}),
+        },
+        "dummy_accounts": await db.users.count_documents(
+            {"phone_primary": {"$regex": r"^\+717000"}}
+        ),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -482,6 +547,8 @@ async def delete_seed_data(admin: dict = Depends(get_admin_user)):
     del_workers = await db.workers.delete_many({"user_id": {"$in": dummy_ids}})
     del_jobs = await db.jobs.delete_many({"customer_id": {"$in": dummy_ids}})
 
+    await audit(admin, "seed_data.deleted", "",
+                f"users={del_users.deleted_count} workers={del_workers.deleted_count} jobs={del_jobs.deleted_count}")
     return {
         "ok": True,
         "deleted": {
