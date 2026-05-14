@@ -111,6 +111,71 @@ async def _expire_old_engagements() -> None:
         await asyncio.sleep(3600)  # run every hour
 
 
+async def _weekly_analytics() -> None:
+    """Background loop: send weekly WhatsApp report to admin every Monday 9am IST."""
+    import asyncio
+    from datetime import datetime, timedelta
+    from .db import db as _db
+    from .whatsapp_notify import _send as wa_send
+
+    await asyncio.sleep(30)  # wait for startup
+
+    while True:
+        try:
+            now = datetime.utcnow()
+            # IST = UTC+5:30. Target: Monday 03:30 UTC = Monday 09:00 IST
+            # Calculate seconds until next Monday 03:30 UTC
+            days_ahead = (7 - now.weekday()) % 7  # days until Monday
+            next_monday = now.replace(hour=3, minute=30, second=0, microsecond=0) + timedelta(days=days_ahead)
+            if next_monday <= now:
+                next_monday += timedelta(days=7)
+            wait_secs = (next_monday - now).total_seconds()
+            logger.info(f"[Analytics] Next report in {wait_secs/3600:.1f}h")
+            await asyncio.sleep(wait_secs)
+
+            # Gather last 7 days stats
+            week_ago = (datetime.utcnow() - timedelta(days=7)).isoformat()
+            new_workers   = await _db.users.count_documents({"role": "worker",   "created_at": {"$gte": week_ago}})
+            new_customers = await _db.users.count_documents({"role": "customer", "created_at": {"$gte": week_ago}})
+            new_jobs      = await _db.jobs.count_documents({"created_at": {"$gte": week_ago}})
+            completed     = await _db.engagements.count_documents({"status": "completed", "created_at": {"$gte": week_ago}})
+            requests      = await _db.engagements.count_documents({"status": {"$ne": "cancelled"}, "created_at": {"$gte": week_ago}})
+
+            gmv_pipe = [
+                {"$match": {"status": "completed", "created_at": {"$gte": week_ago}}},
+                {"$group": {"_id": None, "total": {"$sum": "$daily_rate"}}}
+            ]
+            gmv_docs = await _db.engagements.aggregate(gmv_pipe).to_list(1)
+            gmv = gmv_docs[0]["total"] if gmv_docs else 0
+
+            total_workers   = await _db.workers.count_documents({})
+            total_customers = await _db.users.count_documents({"role": "customer"})
+
+            msg = (
+                f"📊 *KaamNow Weekly Report*\n"
+                f"Week of {now.strftime('%d %b %Y')}\n\n"
+                f"🆕 New Signups\n"
+                f"  Workers: +{new_workers}\n"
+                f"  Customers: +{new_customers}\n\n"
+                f"💼 Jobs Posted: {new_jobs}\n"
+                f"🤝 Engagements: {requests}\n"
+                f"✅ Completed: {completed}\n"
+                f"💰 GMV: ₹{gmv:,}\n\n"
+                f"📈 Total\n"
+                f"  Workers: {total_workers}\n"
+                f"  Customers: {total_customers}\n\n"
+                f"kaamnow.com/admin"
+            )
+
+            admin_phone = settings.admin_phone or "+919654945155"
+            wa_send(admin_phone, msg)
+            logger.info(f"[Analytics] Weekly report sent to {admin_phone}")
+
+        except Exception as exc:
+            logger.error(f"[Analytics] Error: {exc}")
+            await asyncio.sleep(3600)
+
+
 @app.on_event("startup")
 async def on_startup() -> None:
     # Initialize OTP service (WhatsApp → SMS → Voice multi-channel delivery)
@@ -137,6 +202,8 @@ async def on_startup() -> None:
     import asyncio
     asyncio.create_task(_expire_old_engagements())
     logger.info("Engagement expiry background task started.")
+    asyncio.create_task(_weekly_analytics())
+    logger.info("Weekly analytics background task started.")
 
 
 @app.on_event("shutdown")

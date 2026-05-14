@@ -39,7 +39,7 @@ export default function DashboardScreen({ navigation, route }) {
   }, [route?.params?.initialTab]);
   const [refreshing, setRefreshing]     = useState(false);
   const [ratingModal, setRatingModal]   = useState(null);
-  const [ratingVal, setRatingVal]       = useState("5");
+  const [ratingVal, setRatingVal]       = useState(5);
   const [ratingComment, setRatingComment] = useState("");
   const [detailItem, setDetailItem]     = useState(null);
 
@@ -76,13 +76,26 @@ export default function DashboardScreen({ navigation, route }) {
     { text: "No", style: "cancel" },
     { text: "Withdraw", style: "destructive", onPress: async () => { try { await api.post(`/engagements/${id}/cancel`); load(); } catch (e) { Alert.alert("Error", formatApiError(e)); } } },
   ]);
-  const completeEng = async (id) => { try { await api.post(`/engagements/${id}/complete`); load(); Alert.alert("Marked complete!"); } catch (e) { Alert.alert("Error", formatApiError(e)); } };
+  const completeEng = async (id, workerName) => {
+    try {
+      await api.post(`/engagements/${id}/complete`);
+      load();
+      // Auto-prompt customer to rate immediately after marking done
+      if (user?.role === "customer") {
+        setRatingVal(5);
+        setRatingComment("");
+        setRatingModal({ id, workerName: workerName || "" });
+      } else {
+        Alert.alert("✅ Job marked complete!");
+      }
+    } catch (e) { Alert.alert("Error", formatApiError(e)); }
+  };
   const submitRating = async () => {
-    const r = parseInt(ratingVal, 10);
+    const r = ratingVal;
     if (!r || r < 1 || r > 5) return Alert.alert("Rating 1–5 please");
     try {
       await api.post(`/engagements/${ratingModal.id}/rate`, { rating: r, comment: ratingComment.trim() });
-      setRatingModal(null); setRatingVal("5"); setRatingComment("");
+      setRatingModal(null); setRatingVal(5); setRatingComment("");
       load(); Alert.alert("Thanks for rating!");
     } catch (e) { Alert.alert("Error", formatApiError(e)); }
   };
@@ -280,7 +293,7 @@ export default function DashboardScreen({ navigation, route }) {
               ) : (
                 <>
                   {/* Active bookings (accepted engagements) */}
-                  {activeEngs.map(e => <CustomerActiveCard key={e.id} e={e} onComplete={() => completeEng(e.id)} onRate={() => setRatingModal({ id: e.id, workerName: e.worker_name })} onPress={() => setDetailItem(e)} />)}
+                  {activeEngs.map(e => <CustomerActiveCard key={e.id} e={e} onComplete={() => completeEng(e.id, e.worker_name)} onRate={() => setRatingModal({ id: e.id, workerName: e.worker_name })} onPress={() => setDetailItem(e)} />)}
                   {/* Open jobs */}
                   {openJobs.map(j => {
                     const resp = responsesFor(j.id);
@@ -616,7 +629,7 @@ export default function DashboardScreen({ navigation, route }) {
                       </Pressable>
                     )}
                     {!isCustomer && status === "accepted" && (
-                      <Pressable style={[styles.btnSaffron, { flexDirection: "row", gap: 6 }]} onPress={() => { setDetailItem(null); completeEng(detailItem.id); }}>
+                      <Pressable style={[styles.btnSaffron, { flexDirection: "row", gap: 6 }]} onPress={() => { setDetailItem(null); completeEng(detailItem.id, detailItem.worker_name); }}>
                         <Ionicons name="checkmark-circle-outline" size={16} color="#fff" />
                         <Text style={styles.btnGreenText}>Mark Job Done</Text>
                       </Pressable>
@@ -639,26 +652,45 @@ export default function DashboardScreen({ navigation, route }) {
       </Modal>
 
       {/* ══ RATING MODAL ════════════════════════════════════════════════ */}
-      <Modal transparent visible={!!ratingModal} animationType="fade" onRequestClose={() => setRatingModal(null)}>
+      <Modal transparent visible={!!ratingModal} animationType="slide" onRequestClose={() => setRatingModal(null)}>
         <View style={styles.ratingModalBackdrop}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Rate {(ratingModal?.workerName || "").split(" ")[0]}</Text>
+            <Text style={styles.modalTitle}>
+              {lang === "hi" ? `${(ratingModal?.workerName || "").split(" ")[0]} को rate करो` : `Rate ${(ratingModal?.workerName || "").split(" ")[0]}`}
+            </Text>
+            <Text style={styles.modalSub}>
+              {lang === "hi" ? "काम कैसा था?" : "How was the work?"}
+            </Text>
+
+            {/* Stars */}
             <View style={styles.starsRow}>
               {[1,2,3,4,5].map(n => (
-                <Pressable key={n} onPress={() => setRatingVal(String(n))}>
-                  <Ionicons name={parseInt(ratingVal) >= n ? "star" : "star-outline"} size={36} color={colors.saffron} />
+                <Pressable key={n} onPress={() => setRatingVal(n)} hitSlop={8}>
+                  <Ionicons name={ratingVal >= n ? "star" : "star-outline"} size={44} color={colors.saffron} />
                 </Pressable>
               ))}
             </View>
+            <Text style={styles.ratingLabel}>
+              {ratingVal === 1 ? "😞 बहुत बुरा" : ratingVal === 2 ? "😐 ठीक नहीं" : ratingVal === 3 ? "🙂 ठीक था" : ratingVal === 4 ? "😊 अच्छा था" : "🌟 बहुत अच्छा!"}
+            </Text>
+
+            {/* Comment */}
             <TextInput
               value={ratingComment} onChangeText={setRatingComment}
-              placeholder="Add a comment (optional)"
+              placeholder={lang === "hi" ? "कुछ लिखो (optional)…" : "Add a comment (optional)…"}
               placeholderTextColor={colors.textMuted}
-              style={styles.commentInput} multiline
+              style={styles.commentInput} multiline maxLength={200}
             />
-            <Button title="Submit" onPress={submitRating} style={{ marginTop: 8 }} />
+
+            {/* Buttons */}
+            <Pressable onPress={submitRating} style={styles.submitRatingBtn}>
+              <Ionicons name="star" size={16} color="#fff" />
+              <Text style={styles.submitRatingTxt}>{lang === "hi" ? "Submit करो" : "Submit Rating"}</Text>
+            </Pressable>
             <Pressable onPress={() => setRatingModal(null)} style={{ marginTop: 12, alignItems: "center" }}>
-              <Text style={{ fontFamily: fonts.bodySemi, color: colors.saffron }}>Cancel</Text>
+              <Text style={{ fontFamily: fonts.bodySemi, color: colors.textMuted, fontSize: 13 }}>
+                {lang === "hi" ? "अभी नहीं" : "Skip for now"}
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -941,8 +973,12 @@ const styles = StyleSheet.create({
   detailDescLabel: { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1, textTransform: "uppercase", color: colors.textMuted, marginBottom: 6 },
   detailDescText: { fontFamily: fonts.body, fontSize: 13, color: colors.textSecondary, lineHeight: 20 },
   ratingModalBackdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center", padding: 20 },
-  modalCard: { backgroundColor: "#fff", borderRadius: 20, padding: 24, width: "100%", maxWidth: 360 },
-  modalTitle: { fontFamily: fonts.display, fontSize: 22, color: colors.text, marginBottom: 18, textAlign: "center" },
-  starsRow: { flexDirection: "row", justifyContent: "center", gap: 10, marginBottom: 18 },
-  commentInput: { backgroundColor: "#fafaf7", borderWidth: 1.5, borderColor: colors.border, borderRadius: 12, padding: 12, fontFamily: fonts.body, fontSize: 15, color: colors.text, minHeight: 80, textAlignVertical: "top" },
+  modalCard: { backgroundColor: "#fff", borderRadius: 24, padding: 24, width: "100%", maxWidth: 360 },
+  modalTitle: { fontFamily: fonts.display, fontSize: 22, color: colors.text, marginBottom: 4, textAlign: "center" },
+  modalSub: { fontFamily: fonts.body, fontSize: 14, color: colors.textMuted, textAlign: "center", marginBottom: 20 },
+  starsRow: { flexDirection: "row", justifyContent: "center", gap: 8, marginBottom: 10 },
+  ratingLabel: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.text, textAlign: "center", marginBottom: 18 },
+  commentInput: { backgroundColor: "#fafaf7", borderWidth: 1.5, borderColor: colors.border, borderRadius: 12, padding: 12, fontFamily: fonts.body, fontSize: 14, color: colors.text, minHeight: 72, textAlignVertical: "top", marginBottom: 16 },
+  submitRatingBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.saffron, paddingVertical: 14, borderRadius: 14 },
+  submitRatingTxt: { fontFamily: fonts.bodyBold, fontSize: 15, color: "#fff" },
 });

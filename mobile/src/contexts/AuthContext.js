@@ -155,6 +155,7 @@ export function AuthProvider({ children }) {
     } catch {}
     await SecureStore.deleteItemAsync(TOKEN_KEY);
     setUser(null);
+    resetOTPFlow();
   };
 
   return (
