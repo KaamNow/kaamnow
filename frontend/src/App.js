@@ -23,13 +23,15 @@ import AdminDashboard from "@/pages/AdminDashboard";
 import ContactSupport from "@/pages/ContactSupport";
 import "@/App.css";
 
-function Protected({ children }) {
+function Protected({ children, adminOnly = false }) {
   const { user } = useAuth();
   if (user === undefined)
     return (
       <div className="p-12 text-center text-gray-500">Loading…</div>
     );
   if (!user) return <Navigate to="/login" replace />;
+  if (user.role === "admin" && !adminOnly) return <Navigate to="/admin" replace />;
+  if (adminOnly && user.role !== "admin") return <Navigate to="/dashboard" replace />;
   return children;
 }
 
@@ -171,7 +173,7 @@ function App() {
           <Route
             path="/admin"
             element={
-              <Protected>
+              <Protected adminOnly>
                 <Layout>
                   <AdminDashboard />
                 </Layout>
