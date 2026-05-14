@@ -194,12 +194,17 @@ export default function WorkerJobFeedScreen({ navigation }) {
               onChangeText={v => setPincode(v.replace(/\D/g,"").slice(0,6))}
             />
 
-            {(activeFilterCount > 0 || pincode !== workerPincode) && (
-              <Pressable onPress={clearAll} style={s.clearBtn}>
-                <Ionicons name="refresh-outline" size={13} color={colors.saffron} />
-                <Text style={s.clearTxt}>{lang === "hi" ? "Reset करो" : "Reset filters"}</Text>
+            <View style={s.filterActions}>
+              {(activeFilterCount > 0 || pincode !== workerPincode) && (
+                <Pressable onPress={clearAll} style={s.clearBtn}>
+                  <Ionicons name="refresh-outline" size={13} color={colors.textMuted} />
+                  <Text style={s.clearTxt}>{lang === "hi" ? "Reset" : "Reset"}</Text>
+                </Pressable>
+              )}
+              <Pressable onPress={() => { setFiltersOpen(false); load(); }} style={s.applyFilterBtn}>
+                <Text style={s.applyFilterTxt}>{lang === "hi" ? "Apply करो" : "Apply Filters"}</Text>
               </Pressable>
-            )}
+            </View>
           </View>
         )}
 
@@ -446,8 +451,11 @@ const s = StyleSheet.create({
     borderRadius: 10, paddingVertical: 9, paddingHorizontal: 12,
     fontFamily: fonts.body, fontSize: 14, color: colors.text, marginBottom: 4,
   },
-  clearBtn: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 8, alignSelf: "flex-end" },
-  clearTxt: { fontFamily: fonts.bodySemi, fontSize: 12, color: colors.saffron },
+  filterActions: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 10, marginTop: 12 },
+  clearBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5, borderColor: colors.border },
+  clearTxt: { fontFamily: fonts.bodySemi, fontSize: 12, color: colors.textSecondary },
+  applyFilterBtn: { backgroundColor: colors.saffron, paddingHorizontal: 20, paddingVertical: 9, borderRadius: 10 },
+  applyFilterTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: "#fff" },
 
   countRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 10 },
   countTxt: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted },
