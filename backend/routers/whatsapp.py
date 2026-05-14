@@ -923,6 +923,9 @@ async def gupshup_verify(
     hub_challenge: str = None,
     hub_verify_token: str = None,
 ):
+    # Bare ping with no params — Gupshup URL validation health check
+    if not any([mode, challenge, verify_token, hub_mode, hub_challenge, hub_verify_token]):
+        return {"status": "ok"}
     if not settings.gupshup_verify_token:
         raise HTTPException(status_code=404, detail="WhatsApp verification not configured")
     token = verify_token or hub_verify_token
