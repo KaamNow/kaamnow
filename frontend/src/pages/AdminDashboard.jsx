@@ -7,7 +7,7 @@ import {
   Users, Briefcase, CheckCircle, TrendingUp, AlertTriangle,
   ShieldCheck, ShieldOff, Loader2, Search, MessageSquare,
   Star, MapPin, RefreshCw, X, IndianRupee, Flag, Eye,
-  Settings, ClipboardList, Trash2, ToggleLeft, ToggleRight,
+  Settings, ClipboardList, Trash2, ToggleLeft, ToggleRight, LogOut,
 } from "lucide-react";
 
 const TIER_LABEL = { 1: "Basic", 2: "Verified", 3: "Pro", 4: "Elite" };
@@ -274,14 +274,15 @@ export default function AdminDashboard() {
   ];
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8" data-testid="admin-dashboard">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <div className="kn-overline">Platform Control</div>
-          <h1 className="font-display text-3xl tracking-tight mt-1">Admin Dashboard</h1>
+    <div className="min-h-screen bg-gray-50" data-testid="admin-dashboard">
+      {/* Top bar */}
+      <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="font-display text-xl text-[#ff6b35]">KaamNow</span>
+          <span className="text-gray-300">|</span>
+          <span className="text-sm font-bold text-gray-500 uppercase tracking-widest">Admin</span>
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           <button onClick={() => setBroadcastModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-bold transition-colors">
             <MessageSquare size={14} /> Broadcast
@@ -290,8 +291,14 @@ export default function AdminDashboard() {
             className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-bold transition-colors">
             <RefreshCw size={14} /> Refresh
           </button>
+          <button onClick={() => { document.cookie = "token=; Max-Age=0; path=/"; window.location.href = "/login"; }}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-red-50 hover:text-red-600 rounded-lg text-sm font-bold transition-colors">
+            <LogOut size={14} /> Logout
+          </button>
         </div>
       </div>
+
+      <div className="max-w-7xl mx-auto px-6 py-6">
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200 mb-6 overflow-x-auto">
@@ -715,6 +722,7 @@ export default function AdminDashboard() {
           </div>
         </Modal>
       )}
+    </div>
     </div>
   );
 }

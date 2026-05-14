@@ -173,9 +173,7 @@ function App() {
             path="/admin"
             element={
               <Protected adminOnly>
-                <Layout>
-                  <AdminDashboard />
-                </Layout>
+                <AdminDashboard />
               </Protected>
             }
           />
