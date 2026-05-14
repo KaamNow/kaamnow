@@ -275,6 +275,197 @@ async def send_whatsapp(body: dict, admin: dict = Depends(get_admin_user)):
 
 
 # ---------------------------------------------------------------------------
+# Customers
+# ---------------------------------------------------------------------------
+
+@router.get("/customers")
+async def list_customers(
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = 50,
+    skip: int = 0,
+    admin: dict = Depends(get_admin_user)
+):
+    query: dict = {"role": "customer"}
+    if status:
+        query["status"] = status
+    if search:
+        pattern = re.escape(search.strip())
+        query["$or"] = [
+            {"name": {"$regex": pattern, "$options": "i"}},
+            {"phone_primary": {"$regex": pattern, "$options": "i"}},
+        ]
+
+    customers = await db.users.find(query, {"password_hash": 0, "_id": 0}) \
+        .skip(skip).limit(limit).sort("created_at", -1).to_list(limit)
+    total = await db.users.count_documents(query)
+
+    # Attach job counts
+    cids = [c["id"] for c in customers]
+    job_counts = await db.jobs.aggregate([
+        {"$match": {"customer_id": {"$in": cids}}},
+        {"$group": {"_id": "$customer_id", "count": {"$sum": 1}}}
+    ]).to_list(len(cids))
+    jmap = {j["_id"]: j["count"] for j in job_counts}
+    for c in customers:
+        c["jobs_posted"] = jmap.get(c["id"], 0)
+
+    return {"items": customers, "total": total, "skip": skip, "limit": limit}
+
+
+@router.patch("/customers/{user_id}/suspend")
+async def suspend_customer(user_id: str, body: dict, admin: dict = Depends(get_admin_user)):
+    suspend = body.get("suspend", True)
+    res = await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"status": "suspended" if suspend else "active"}}
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Customer not found")
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Jobs
+# ---------------------------------------------------------------------------
+
+@router.get("/jobs")
+async def list_jobs(
+    status: Optional[str] = None,
+    pincode: Optional[str] = None,
+    search: Optional[str] = None,
+    limit: int = 50,
+    skip: int = 0,
+    admin: dict = Depends(get_admin_user)
+):
+    query = {}
+    if status:
+        query["status"] = status
+    if pincode:
+        query["pincode"] = pincode
+    if search:
+        pattern = re.escape(search.strip())
+        query["$or"] = [
+            {"title": {"$regex": pattern, "$options": "i"}},
+            {"customer_name": {"$regex": pattern, "$options": "i"}},
+        ]
+
+    jobs = await db.jobs.find(query, {"_id": 0}) \
+        .skip(skip).limit(limit).sort("created_at", -1).to_list(limit)
+    total = await db.jobs.count_documents(query)
+
+    # Attach engagement count per job
+    job_ids = [j["id"] for j in jobs]
+    eng_counts = await db.engagements.aggregate([
+        {"$match": {"job_id": {"$in": job_ids}}},
+        {"$group": {"_id": "$job_id", "count": {"$sum": 1}}}
+    ]).to_list(len(job_ids))
+    emap = {e["_id"]: e["count"] for e in eng_counts}
+    for j in jobs:
+        j["engagement_count"] = emap.get(j.get("id"), 0)
+
+    return {"items": jobs, "total": total, "skip": skip, "limit": limit}
+
+
+@router.patch("/jobs/{job_id}/close")
+async def force_close_job(job_id: str, admin: dict = Depends(get_admin_user)):
+    res = await db.jobs.update_one({"id": job_id}, {"$set": {"status": "expired"}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Engagements
+# ---------------------------------------------------------------------------
+
+@router.get("/engagements")
+async def list_engagements(
+    status: Optional[str] = None,
+    date_from: Optional[str] = None,
+    search: Optional[str] = None,
+    limit: int = 50,
+    skip: int = 0,
+    admin: dict = Depends(get_admin_user)
+):
+    query = {}
+    if status:
+        query["status"] = status
+    if date_from:
+        query["created_at"] = {"$gte": date_from}
+    if search:
+        pattern = re.escape(search.strip())
+        query["$or"] = [
+            {"worker_name": {"$regex": pattern, "$options": "i"}},
+            {"customer_name": {"$regex": pattern, "$options": "i"}},
+            {"job_title": {"$regex": pattern, "$options": "i"}},
+        ]
+
+    engagements = await db.engagements.find(query, {"_id": 0}) \
+        .skip(skip).limit(limit).sort("created_at", -1).to_list(limit)
+    total = await db.engagements.count_documents(query)
+
+    return {"items": engagements, "total": total, "skip": skip, "limit": limit}
+
+
+@router.patch("/engagements/{engagement_id}/flag")
+async def flag_engagement(engagement_id: str, body: dict, admin: dict = Depends(get_admin_user)):
+    note = (body.get("note") or "").strip()
+    res = await db.engagements.update_one(
+        {"id": engagement_id},
+        {"$set": {"flagged": True, "admin_note": note, "flagged_at": utc_now_iso()}}
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Engagement not found")
+    return {"ok": True}
+
+
+@router.patch("/engagements/{engagement_id}/unflag")
+async def unflag_engagement(engagement_id: str, admin: dict = Depends(get_admin_user)):
+    await db.engagements.update_one(
+        {"id": engagement_id},
+        {"$unset": {"flagged": "", "admin_note": "", "flagged_at": ""}}
+    )
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Broadcast WhatsApp
+# ---------------------------------------------------------------------------
+
+@router.post("/whatsapp/broadcast")
+async def broadcast_whatsapp(body: dict, admin: dict = Depends(get_admin_user)):
+    """Send a message to all workers or all customers."""
+    audience = body.get("audience")  # "workers" or "customers"
+    message = (body.get("message") or "").strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="message required")
+    if audience not in ("workers", "customers"):
+        raise HTTPException(status_code=400, detail="audience must be 'workers' or 'customers'")
+
+    if audience == "workers":
+        users = await db.users.find({"role": "worker"}, {"phone_primary": 1}).to_list(2000)
+    else:
+        users = await db.users.find({"role": "customer"}, {"phone_primary": 1}).to_list(2000)
+
+    import threading
+    sent = 0
+
+    def _send_all():
+        nonlocal sent
+        for u in users:
+            phone = u.get("phone_primary", "")
+            if phone and not phone.startswith("+717000"):
+                if wa_send(phone, message):
+                    sent += 1
+
+    t = threading.Thread(target=_send_all)
+    t.start()
+    t.join(timeout=30)
+    return {"ok": True, "sent": sent}
+
+
+# ---------------------------------------------------------------------------
 # Dev utilities
 # ---------------------------------------------------------------------------
 
