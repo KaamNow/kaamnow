@@ -2,7 +2,7 @@ import { useState } from "react";
 import {
   View, Text, ScrollView, StyleSheet,
   KeyboardAvoidingView, Platform, Alert,
-  Pressable, Modal, TextInput,
+  Pressable, Modal, TextInput, Linking,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -33,6 +33,7 @@ export default function PhoneSignupScreen({ navigation, route }) {
   const [preferredLanguage, setPreferredLanguage] = useState("hi");
   const [loading, setLoading]           = useState(false);
   const [alreadyExists, setAlreadyExists] = useState(false);
+  const [requiresOptin, setRequiresOptin] = useState(false);
 
   const safePhone = phone || "";
   const fullPhone = safePhone.startsWith("+91") ? safePhone : `+91${safePhone.replace(/\D/g, "")}`;
@@ -75,7 +76,8 @@ export default function PhoneSignupScreen({ navigation, route }) {
     try {
       const check = await api.get("/auth/check-phone", { params: { phone: fullPhone } });
       if (check.data.exists && !check.data.expired) { setAlreadyExists(true); return; }
-      await sendOTP(fullPhone);
+      const res = await sendOTP(fullPhone);
+      if (res?.requires_optin) setRequiresOptin(true);
     } catch (err) {
       Alert.alert("Error", formatApiError(err));
     } finally {
@@ -197,6 +199,25 @@ export default function PhoneSignupScreen({ navigation, route }) {
           {/* ── Step 2 — OTP ──────────────────────────────────────── */}
           {step === 2 && (
             <View>
+              {requiresOptin && (
+                <Pressable
+                  style={s.optinBanner}
+                  onPress={() => Linking.openURL("https://wa.me/917834811114?text=Hi")}
+                >
+                  <Ionicons name="logo-whatsapp" size={18} color="#16a34a" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.optinTitle}>
+                      {lang === "hi" ? "OTP WhatsApp से आएगा" : "OTP arrives on WhatsApp"}
+                    </Text>
+                    <Text style={s.optinSub}>
+                      {lang === "hi"
+                        ? "पहली बार: नीचे टैप करो, 'Hi' भेजो, वापस आओ।"
+                        : "First time: tap below, send 'Hi', come back."}
+                    </Text>
+                  </View>
+                  <Text style={s.optinCta}>{lang === "hi" ? "खोलो →" : "Open →"}</Text>
+                </Pressable>
+              )}
               <Text style={s.fieldLabel}>{T.code}</Text>
               <TextInput
                 style={s.otpInput}
@@ -373,4 +394,8 @@ const s = StyleSheet.create({
   modalBody: { fontFamily: fonts.body, fontSize: 13, color: colors.textSecondary, textAlign: "center", lineHeight: 19, marginBottom: 6 },
   modalCancel: { marginTop: 8 },
   modalCancelTxt: { fontFamily: fonts.bodySemi, fontSize: 14, color: colors.textMuted },
+  optinBanner: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#f0fdf4", borderRadius: 12, borderWidth: 1, borderColor: "#86efac", padding: 12, marginBottom: 14 },
+  optinTitle: { fontFamily: fonts.bodyBold, fontSize: 13, color: "#15803d" },
+  optinSub: { fontFamily: fonts.body, fontSize: 11, color: "#166534", marginTop: 2 },
+  optinCta: { fontFamily: fonts.bodyBold, fontSize: 12, color: "#16a34a" },
 });

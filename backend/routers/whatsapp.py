@@ -937,7 +937,16 @@ async def gupshup_webhook(request: Request):
     if not settings.gupshup_api_url:
         raise HTTPException(status_code=503, detail="WhatsApp provider not configured")
 
-    body = await request.json()
+    content_type = request.headers.get("content-type", "")
+    if "application/json" in content_type:
+        body = await request.json()
+    else:
+        form = await request.form()
+        raw = dict(form).get("payload", "{}")
+        try:
+            body = json.loads(raw) if isinstance(raw, str) else dict(form)
+        except Exception:
+            body = dict(form)
     try:
         source_phone, message_text = _extract_gupshup_incoming(body)
     except ValueError:

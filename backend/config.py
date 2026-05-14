@@ -32,6 +32,10 @@ class Settings(BaseModel):
     gupshup_app_id: Optional[str] = None
     gupshup_channel: str = "whatsapp"
     gupshup_verify_token: Optional[str] = None
+    gupshup_template_url: Optional[str] = None
+    gupshup_template_namespace: Optional[str] = None
+    gupshup_sandbox_mode: bool = False
+    show_otp_in_response: bool = False
 
     feature_engagement_flow: bool = False
     feature_otp_auth: bool = False
@@ -62,6 +66,10 @@ settings = Settings(
     gupshup_app_id=os.getenv("GUPSHUP_APP_ID"),
     gupshup_channel=os.getenv("GUPSHUP_CHANNEL", "whatsapp"),
     gupshup_verify_token=os.getenv("GUPSHUP_VERIFY_TOKEN"),
+    gupshup_template_url=os.getenv("GUPSHUP_TEMPLATE_URL"),
+    gupshup_template_namespace=os.getenv("GUPSHUP_TEMPLATE_NAMESPACE"),
+    gupshup_sandbox_mode=_to_bool(os.getenv("GUPSHUP_SANDBOX_MODE"), False),
+    show_otp_in_response=_to_bool(os.getenv("SHOW_OTP_IN_RESPONSE"), False),
     feature_engagement_flow=_to_bool(os.getenv("FEATURE_ENGAGEMENT_FLOW"), False),
     feature_otp_auth=_to_bool(os.getenv("FEATURE_OTP_AUTH"), False),
     feature_whatsapp_notifications=_to_bool(os.getenv("FEATURE_WHATSAPP_NOTIFICATIONS"), False),

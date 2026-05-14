@@ -23,6 +23,10 @@ stringData:
   CLOUDINARY_CLOUD_NAME: "dztrzwvee"
   CLOUDINARY_API_KEY: "455385769148981"
   CLOUDINARY_API_SECRET: "KdYmM68W8Z3TlsGauG_iQTtdwfE"
+  GUPSHUP_TEMPLATE_URL: "https://api.gupshup.io/wa/api/v1/template/msg"
+  GUPSHUP_TEMPLATE_NAMESPACE: "fc27d30f_a1e9_e84c_cd55_0de6ee10b598"
+  SHOW_OTP_IN_RESPONSE: "false"
+  GUPSHUP_SANDBOX_MODE: "true"
 ---
 apiVersion: v1
 kind: ConfigMap

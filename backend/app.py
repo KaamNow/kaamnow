@@ -68,12 +68,16 @@ async def on_startup() -> None:
     #   - EXOTEL_API_KEY, EXOTEL_SENDER_ID (for SMS)
     #   - VOICE_OTP_API_KEY, TTS_API_KEY (for Voice)
     init_otp_service(
-        whatsapp_api_key=os.getenv("MSG91_API_KEY"),
+        gupshup_api_key=settings.gupshup_api_key,
+        gupshup_source=settings.gupshup_source,
+        gupshup_template_url=settings.gupshup_template_url,
+        gupshup_app_id=settings.gupshup_app_id or "KaamNow",
         sms_api_key=os.getenv("EXOTEL_API_KEY"),
         voice_api_key=os.getenv("VOICE_OTP_API_KEY"),
-        default_language=getattr(settings, "default_language", "en")
+        default_language="hi",
     )
-    logger.info("OTP service initialized (all channels mocked for testing)")
+    wa_live = "LIVE (Gupshup)" if settings.gupshup_api_key else "mocked"
+    logger.info(f"OTP service initialized — WhatsApp: {wa_live}")
 
     await seed_data()
     logger.info("Seed data loaded.")

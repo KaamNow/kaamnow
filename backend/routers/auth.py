@@ -242,7 +242,8 @@ async def send_otp(request: Request, body: SendOTPRequest):
         "otp_token": otp_token,
         "expires_in": 900,
         "message": "OTP sent successfully",
-        "otp_code": otp_code  # For testing only, remove in production
+        "otp_code": otp_code if settings.show_otp_in_response else None,
+        "requires_optin": settings.gupshup_sandbox_mode,
     }
 
 

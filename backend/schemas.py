@@ -50,7 +50,8 @@ class SendOTPResponse(BaseModel):
     otp_token: str
     expires_in: int = 900
     message: str = "OTP sent successfully"
-    otp_code: Optional[str] = None  # Only for development/testing
+    otp_code: Optional[str] = None       # Only when SHOW_OTP_IN_RESPONSE=true
+    requires_optin: bool = False          # True in sandbox — user must message the bot first
 
 
 class VerifyOTPRequest(BaseModel):
