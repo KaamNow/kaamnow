@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, FlatList, Pressable,
   Alert, RefreshControl, ActivityIndicator, TextInput, ScrollView, Linking,
+  KeyboardAvoidingView, Platform, Keyboard,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -127,6 +128,7 @@ export default function WorkerJobFeedScreen({ navigation }) {
   }
 
   return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
     <SafeAreaView edges={["top"]} style={s.safe}>
       {/* ── Header ── */}
       <View style={s.header}>
@@ -255,8 +257,11 @@ export default function WorkerJobFeedScreen({ navigation }) {
             </View>
           )
         }
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       />
     </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }
 

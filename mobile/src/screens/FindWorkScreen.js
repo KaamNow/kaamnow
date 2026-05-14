@@ -3,6 +3,7 @@ import {
   View, Text, StyleSheet, FlatList, Pressable,
   Alert, RefreshControl, ActivityIndicator,
   TextInput, ScrollView, Linking, Keyboard,
+  KeyboardAvoidingView, Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -150,6 +151,7 @@ export default function FindWorkScreen({ navigation }) {
 
   /* ─── Render ─────────────────────────────────────────────────────── */
   return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
     <SafeAreaView edges={["top"]} style={s.safe}>
 
       {/* ── Top bar ── */}
@@ -293,9 +295,12 @@ export default function FindWorkScreen({ navigation }) {
               )}
             </View>
           }
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
         />
       )}
     </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }
 
