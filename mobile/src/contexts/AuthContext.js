@@ -1,6 +1,47 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import * as SecureStore from "expo-secure-store";
+import * as Notifications from "expo-notifications";
+import Constants from "expo-constants";
+import { Platform } from "react-native";
 import api from "../api";
+
+// Show notification banners when app is in foreground
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
+
+async function registerPushToken() {
+  try {
+    const { status: existing } = await Notifications.getPermissionsAsync();
+    let finalStatus = existing;
+    if (existing !== "granted") {
+      const { status } = await Notifications.requestPermissionsAsync();
+      finalStatus = status;
+    }
+    if (finalStatus !== "granted") return;
+
+    // Android needs a notification channel
+    if (Platform.OS === "android") {
+      await Notifications.setNotificationChannelAsync("default", {
+        name: "KaamNow",
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+      });
+    }
+
+    const projectId = Constants?.expoConfig?.extra?.eas?.projectId;
+    const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
+    if (token) {
+      await api.post("/auth/push-token", { token });
+    }
+  } catch {
+    // Push registration failure must never crash the app
+  }
+}
 
 const AuthContext = createContext(null);
 const TOKEN_KEY = "kn_token";
@@ -34,6 +75,8 @@ export function AuthProvider({ children }) {
       try {
         const r = await api.get("/auth/me");
         setUser(r.data);
+        // Register push token now that we have a valid session
+        registerPushToken();
       } catch {
         await SecureStore.deleteItemAsync(TOKEN_KEY);
         setUser(null);
@@ -80,6 +123,7 @@ export function AuthProvider({ children }) {
     await SecureStore.setItemAsync(TOKEN_KEY, r.data.access_token);
     setUser(r.data.user);
     resetOTPFlow();
+    registerPushToken();
     return r.data.user;
   };
 
@@ -91,6 +135,7 @@ export function AuthProvider({ children }) {
     );
     await SecureStore.setItemAsync(TOKEN_KEY, r.data.access_token);
     setUser(r.data.user);
+    registerPushToken();
     return r.data.user;
   };
 

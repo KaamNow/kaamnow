@@ -59,6 +59,58 @@ app.add_middleware(
 )
 
 
+async def _expire_old_engagements() -> None:
+    """Background loop: auto-cancel requested engagements older than 24h, every hour."""
+    import asyncio
+    from datetime import datetime, timedelta
+    from .db import db as _db
+    from .utils import utc_now_iso
+
+    await asyncio.sleep(60)  # wait for DB to be ready
+    while True:
+        try:
+            cutoff = (datetime.utcnow() - timedelta(hours=24)).isoformat()
+            old = await _db.engagements.find(
+                {"status": "requested", "created_at": {"$lt": cutoff}},
+                {"_id": 0},
+            ).to_list(200)
+
+            if old:
+                now = utc_now_iso()
+                ids = [e["id"] for e in old]
+                await _db.engagements.update_many(
+                    {"id": {"$in": ids}},
+                    {"$set": {"status": "cancelled", "cancelled_at": now, "updated_at": now,
+                              "cancel_reason": "auto_expired_24h"}},
+                )
+                logger.info(f"[Expiry] Auto-cancelled {len(old)} stale engagements")
+
+                # Notify both parties
+                from .engagements import _notify
+                for e in old:
+                    # Notify customer: their request expired
+                    await _notify(
+                        e["customer_id"],
+                        f"Request expired: {e.get('job_title', 'Job')}",
+                        "No worker responded in 24 hours. Post again to find workers.",
+                        "booking_rejected",
+                        e["id"],
+                    )
+                    # Notify worker: their application expired
+                    worker = await _db.workers.find_one({"id": e["worker_id"]}, {"_id": 0, "user_id": 1})
+                    if worker and worker.get("user_id"):
+                        await _notify(
+                            worker["user_id"],
+                            f"Interest expired: {e.get('job_title', 'Job')}",
+                            "Customer didn't respond in 24 hours. Browse other jobs.",
+                            "booking_rejected",
+                            e["id"],
+                        )
+        except Exception as exc:
+            logger.error(f"[Expiry] Task error: {exc}")
+        await asyncio.sleep(3600)  # run every hour
+
+
 @app.on_event("startup")
 async def on_startup() -> None:
     # Initialize OTP service (WhatsApp → SMS → Voice multi-channel delivery)
@@ -81,6 +133,10 @@ async def on_startup() -> None:
 
     await seed_data()
     logger.info("Seed data loaded.")
+
+    import asyncio
+    asyncio.create_task(_expire_old_engagements())
+    logger.info("Engagement expiry background task started.")
 
 
 @app.on_event("shutdown")

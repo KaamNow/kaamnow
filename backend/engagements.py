@@ -26,19 +26,28 @@ async def _notify(user_id: str, title: str, body: str, kind: str, ref_id: str = 
     except Exception:
         pass
 
-    # Fire WhatsApp for all engagement events
+    # Fire push notification + WhatsApp for all engagement events
     if kind in ("booking_accepted", "booking_rejected", "interest_withdrawn",
                 "booking_request", "booking_completed", "booking_cancelled", "job_rated"):
         try:
-            user = await db.users.find_one({"id": user_id}, {"_id": 0, "phone_primary": 1})
-            if user and user.get("phone_primary"):
-                from .whatsapp_notify import _send as _wa_send
-                import threading
-                threading.Thread(
-                    target=_wa_send,
-                    args=(user["phone_primary"], f"{title}\n{body}"),
-                    daemon=True,
-                ).start()
+            user = await db.users.find_one({"id": user_id}, {"_id": 0, "phone_primary": 1, "push_token": 1})
+            if user:
+                # Push notification (instant, lock-screen)
+                push_token = user.get("push_token")
+                if push_token:
+                    from .push_service import send_push
+                    import asyncio
+                    asyncio.create_task(send_push(push_token, title, body, {"kind": kind, "ref_id": ref_id or ""}))
+
+                # WhatsApp (rich message with details)
+                if user.get("phone_primary"):
+                    from .whatsapp_notify import _send as _wa_send
+                    import threading
+                    threading.Thread(
+                        target=_wa_send,
+                        args=(user["phone_primary"], f"{title}\n{body}"),
+                        daemon=True,
+                    ).start()
         except Exception:
             pass
 

@@ -66,6 +66,16 @@ async def me(user: dict = Depends(get_current_user)):
     return _user_out(user)
 
 
+@router.post("/push-token")
+async def save_push_token(body: dict, user: dict = Depends(get_current_user)):
+    """Save Expo push token for this device. Called on app startup after login."""
+    token = body.get("token", "").strip()
+    if not token or not token.startswith("ExponentPushToken["):
+        raise HTTPException(status_code=400, detail="Invalid Expo push token")
+    await db.users.update_one({"id": user["id"]}, {"$set": {"push_token": token}})
+    return {"ok": True}
+
+
 @router.patch("/me", response_model=UserOut)
 async def update_me(body: dict, user: dict = Depends(get_current_user)):
     update_data = {}
