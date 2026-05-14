@@ -114,7 +114,11 @@ export default function WorkerJobFeedScreen({ navigation }) {
   };
 
   const activeFilterCount = [!!category, !!skill, pincode.length === 6].filter(Boolean).length;
-  const clearAll = () => { setCategory(""); setSkill(""); setPincode(workerPincode); };
+  const clearAll = () => {
+    setCategory("");
+    setSkill("");
+    setPincode(workerPincode);
+  };
 
   if (user?.role !== "worker") {
     return (
@@ -195,12 +199,10 @@ export default function WorkerJobFeedScreen({ navigation }) {
             />
 
             <View style={s.filterActions}>
-              {(activeFilterCount > 0 || pincode !== workerPincode) && (
-                <Pressable onPress={clearAll} style={s.clearBtn}>
-                  <Ionicons name="refresh-outline" size={13} color={colors.textMuted} />
-                  <Text style={s.clearTxt}>{lang === "hi" ? "Reset" : "Reset"}</Text>
-                </Pressable>
-              )}
+              <Pressable onPress={clearAll} style={s.clearBtn}>
+                <Ionicons name="refresh-outline" size={13} color={colors.textMuted} />
+                <Text style={s.clearTxt}>{lang === "hi" ? "Reset" : "Reset"}</Text>
+              </Pressable>
               <Pressable onPress={() => { setFiltersOpen(false); load(); }} style={s.applyFilterBtn}>
                 <Text style={s.applyFilterTxt}>{lang === "hi" ? "Apply करो" : "Apply Filters"}</Text>
               </Pressable>
