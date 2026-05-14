@@ -26,6 +26,7 @@ from ..schemas import (
 )
 from ..utils import utc_now_iso
 from ..otp_service import get_otp_service
+from ..config import settings
 import random
 import logging
 
