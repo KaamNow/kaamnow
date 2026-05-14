@@ -25,6 +25,7 @@ class Settings(BaseModel):
     # Security: these MUST be set via env vars in production — no defaults
     admin_phone: str = Field(default="")
     admin_password: str = Field(default="")
+    admin_bootstrap_secret: str = Field(default="")
 
     gupshup_api_url: Optional[str] = None
     gupshup_api_key: Optional[str] = None
@@ -60,6 +61,7 @@ settings = Settings(
     cors_origins=os.getenv("CORS_ORIGINS", "*"),
     admin_phone=os.getenv("ADMIN_PHONE", ""),
     admin_password=os.getenv("ADMIN_PASSWORD", ""),
+    admin_bootstrap_secret=os.getenv("ADMIN_BOOTSTRAP_SECRET", ""),
     gupshup_api_url=os.getenv("GUPSHUP_API_URL"),
     gupshup_api_key=os.getenv("GUPSHUP_API_KEY"),
     gupshup_source=os.getenv("GUPSHUP_SOURCE"),
