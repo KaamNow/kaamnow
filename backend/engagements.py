@@ -401,6 +401,43 @@ async def cancel_engagement(engagement_id: str, user: dict) -> dict:
             {"id": engagement["worker_id"]},
             {"$set": {"available": True, "availability_status": "available"}}
         )
+
+        # ── Cancellation limit enforcement ────────────────────────────
+        from datetime import datetime
+        month_start = datetime.utcnow().strftime("%Y-%m-01")
+        monthly_count = await db.engagements.count_documents({
+            "worker_id": engagement["worker_id"],
+            "status": "cancelled",
+            "cancelled_at": {"$gte": month_start},
+        })
+
+        worker_doc = await db.workers.find_one({"id": engagement["worker_id"]}, {"_id": 0, "user_id": 1})
+        worker_user_id = worker_doc.get("user_id") if worker_doc else None
+
+        if monthly_count >= 8 and worker_user_id:
+            # Restrict account
+            await db.workers.update_one(
+                {"id": engagement["worker_id"]},
+                {"$set": {"available": False, "availability_status": "restricted",
+                          "restriction_reason": "cancellation_limit"}}
+            )
+            await _notify(
+                worker_user_id,
+                "🚫 Account restricted",
+                f"इस महीने {monthly_count} cancellations हो गईं। आपका account temporarily restrict है। Support से संपर्क करें।",
+                "booking_rejected",
+                engagement_id,
+            )
+        elif monthly_count >= 5 and worker_user_id:
+            # Warning
+            remaining = 8 - monthly_count
+            await _notify(
+                worker_user_id,
+                f"⚠️ Warning: {monthly_count} cancellations this month",
+                f"आप इस महीने {monthly_count} बार cancel कर चुके हैं। {remaining} और cancel हुईं तो account restrict होगा।",
+                "booking_rejected",
+                engagement_id,
+            )
     elif user["role"] == "customer":
         eng_worker = await db.workers.find_one({"id": engagement["worker_id"]}, {"_id": 0})
         if eng_worker:
