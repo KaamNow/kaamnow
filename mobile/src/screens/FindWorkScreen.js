@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, FlatList, Pressable,
   Alert, RefreshControl, ActivityIndicator,
-  TextInput, ScrollView, Linking,
+  TextInput, ScrollView, Linking, Keyboard,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -11,254 +11,242 @@ import { useAuth } from "../contexts/AuthContext";
 import { useLanguage } from "../contexts/LanguageContext";
 import { colors, fonts, spacing } from "../theme";
 
-const CATEGORIES = [
-  { v: "",             l: { en: "All",          hi: "सभी"     }, icon: "💼" },
-  { v: "construction", l: { en: "Construction", hi: "निर्माण" }, icon: "🏗️" },
-  { v: "farm",         l: { en: "Farm",         hi: "खेती"    }, icon: "🌾" },
-  { v: "electrical",   l: { en: "Electrical",   hi: "बिजली"  }, icon: "⚡" },
-  { v: "cleaning",     l: { en: "Cleaning",     hi: "सफाई"   }, icon: "✨" },
-  { v: "transport",    l: { en: "Transport",    hi: "ट्रांसपोर्ट" }, icon: "🚛" },
-  { v: "home",         l: { en: "Home",         hi: "घर"     }, icon: "🏠" },
-  { v: "other",        l: { en: "Other",        hi: "अन्य"   }, icon: "📦" },
+/* ─── Constants ─────────────────────────────────────────────────────── */
+
+const CATS = [
+  { v: "",             label: { en: "All",     hi: "सभी"    }, icon: "💼" },
+  { v: "construction", label: { en: "Mason",   hi: "राजमिस्त्री" }, icon: "🏗️" },
+  { v: "farm",         label: { en: "Farm",    hi: "खेती"   }, icon: "🌾" },
+  { v: "electrical",   label: { en: "Electric",hi: "बिजली" }, icon: "⚡" },
+  { v: "cleaning",     label: { en: "Cleaning",hi: "सफाई"  }, icon: "✨" },
+  { v: "transport",    label: { en: "Driver",  hi: "ड्राइवर" }, icon: "🚛" },
+  { v: "home",         label: { en: "Home",    hi: "घर"    }, icon: "🏠" },
+  { v: "other",        label: { en: "Other",   hi: "अन्य"  }, icon: "📦" },
 ];
 
-const URGENCY_BADGE = {
-  urgent:   { label: "🔥 Urgent",   bg: "#fff1f2", border: "#fecaca", text: "#dc2626" },
-  immediate:{ label: "⚡ Now",      bg: "#fffbeb", border: "#fde68a", text: "#b45309" },
-  flexible: { label: "📅 Flexible", bg: "#f0fdf4", border: "#bbf7d0", text: "#16a34a" },
-};
-
-function daysAgo(dateStr) {
-  if (!dateStr) return null;
-  const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 86400000);
-  if (diff === 0) return "Today";
-  if (diff === 1) return "Yesterday";
-  return `${diff}d ago`;
+function daysAgo(d) {
+  if (!d) return null;
+  const n = Math.floor((Date.now() - new Date(d).getTime()) / 86400000);
+  return n === 0 ? "Today" : n === 1 ? "Yesterday" : `${n}d ago`;
 }
+
+/* ─── Screen ─────────────────────────────────────────────────────────── */
 
 export default function FindWorkScreen({ navigation }) {
   const { user } = useAuth();
-  const { lang } = useLanguage();
+  const { lang }  = useLanguage();
+  const inputRef  = useRef(null);
 
-  const [jobs, setJobs]               = useState([]);
-  const [engagements, setEngagements] = useState([]);
-  const [loading, setLoading]         = useState(true);
-  const [refreshing, setRefreshing]   = useState(false);
+  const [jobs, setJobs]             = useState([]);
+  const [engs, setEngs]             = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Input state (what user is typing — not yet applied)
-  const [searchInput, setSearchInput]   = useState("");
-  const [pincodeInput, setPincodeInput] = useState("");
-  const [category, setCategory]         = useState("");
-  const [showFilters, setShowFilters]   = useState(false);
+  // What the user is typing right now
+  const [query, setQuery]     = useState("");
+  const [pincode, setPincode] = useState("");
+  const [cat, setCat]         = useState("");
 
-  // Applied state (what was last searched)
-  const [appliedSearch, setAppliedSearch]   = useState("");
-  const [appliedPincode, setAppliedPincode] = useState("");
-  const [appliedCategory, setAppliedCategory] = useState("");
+  // What's actually applied (shown in results)
+  const [applied, setApplied] = useState({ query: "", pincode: "", cat: "" });
 
-  const doSearch = useCallback(async (overrides = {}) => {
-    const cat  = overrides.category  !== undefined ? overrides.category  : category;
-    const pin  = overrides.pincode   !== undefined ? overrides.pincode   : pincodeInput;
-    const text = overrides.search    !== undefined ? overrides.search    : searchInput;
+  /* ── Auto-detect worker pincode on mount ── */
+  useEffect(() => {
+    if (user?.role === "worker") {
+      api.get("/workers/me/profile")
+        .then(r => {
+          const pc = r.data?.address?.pincode || r.data?.pincode || "";
+          if (pc) setPincode(pc);
+        })
+        .catch(() => {});
+    }
+  }, [user]);
 
-    setAppliedCategory(cat);
-    setAppliedPincode(pin);
-    setAppliedSearch(text);
-    setLoading(true);
-
+  /* ── Fetch ── */
+  const fetch = useCallback(async (params = {}) => {
+    const p = { status: "open", ...params };
     try {
-      const params = { status: "open" };
-      if (cat) params.category = cat;
-      if (pin.length === 6) params.pincode = pin;
-      if (text.trim()) params.search = text.trim();
-
-      const [pub, mine] = await Promise.all([
-        api.get("/jobs/public", { params }).catch(() => api.get("/jobs/feed", { params }).catch(() => ({ data: [] }))),
+      const [jobs, mine] = await Promise.all([
+        api.get("/jobs/public", { params: p })
+          .catch(() => api.get("/jobs/feed", { params: p })
+          .catch(() => ({ data: [] }))),
         user?.role === "worker"
           ? api.get("/engagements/mine").catch(() => ({ data: [] }))
           : Promise.resolve({ data: [] }),
       ]);
-      setJobs(Array.isArray(pub.data) ? pub.data : []);
-      setEngagements(Array.isArray(mine.data) ? mine.data : []);
+      setJobs(Array.isArray(jobs.data) ? jobs.data : []);
+      setEngs(Array.isArray(mine.data) ? mine.data : []);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [user, category, pincodeInput, searchInput]);
+  }, [user]);
 
-  // Initial load
-  useEffect(() => { doSearch(); }, []); // eslint-disable-line
+  useEffect(() => { fetch(); }, [fetch]);
 
-  const load = () => doSearch();
-
-  const resetAll = () => {
-    setSearchInput(""); setPincodeInput(""); setCategory("");
-    doSearch({ category: "", pincode: "", search: "" });
+  /* ── Search ── */
+  const doSearch = (overrides = {}) => {
+    Keyboard.dismiss();
+    const q  = overrides.query   !== undefined ? overrides.query   : query;
+    const pc = overrides.pincode !== undefined ? overrides.pincode : pincode;
+    const c  = overrides.cat     !== undefined ? overrides.cat     : cat;
+    setApplied({ query: q, pincode: pc, cat: c });
+    setLoading(true);
+    const params = {};
+    if (c)              params.category = c;
+    if (pc.length === 6) params.pincode = pc;
+    if (q.trim())       params.search = q.trim();
+    fetch(params);
   };
 
-  const engagementFor = (jobId) =>
-    engagements.find(e => e.job_id === jobId && ["requested","accepted"].includes(e.status));
+  const resetSearch = () => {
+    setQuery(""); setPincode(""); setCat("");
+    setApplied({ query: "", pincode: "", cat: "" });
+    setLoading(true);
+    fetch();
+  };
 
-  const hasActiveFilters = appliedSearch || appliedPincode || appliedCategory;
+  const engFor = (jobId) =>
+    engs.find(e => e.job_id === jobId && ["requested","accepted"].includes(e.status));
 
-  const onApply = async (jobId) => {
+  /* ── Apply / Withdraw ── */
+  const apply = async (jobId) => {
     if (!user) {
       Alert.alert(
         lang === "hi" ? "Login जरूरी है" : "Login required",
-        lang === "hi" ? "Apply करने के लिए login करो।" : "Sign in as a worker to apply.",
-        [
-          { text: lang === "hi" ? "रद्द" : "Cancel", style: "cancel" },
-          { text: "Login", onPress: () => navigation.navigate("Login") },
-        ]
+        lang === "hi" ? "Worker account से login करो।" : "Sign in as a worker to apply.",
+        [{ text: lang === "hi" ? "रद्द" : "Cancel", style: "cancel" },
+         { text: "Login", onPress: () => navigation.navigate("Login") }]
       );
       return;
     }
     if (user.role !== "worker") {
-      Alert.alert(lang === "hi" ? "सिर्फ workers के लिए" : "Workers only", lang === "hi" ? "Worker account से apply करो।" : "Only worker accounts can apply.");
+      Alert.alert(lang === "hi" ? "सिर्फ workers के लिए" : "Workers only");
       return;
     }
     try {
       await api.post(`/jobs/${jobId}/interest`);
       Alert.alert(
-        lang === "hi" ? "Interest भेजा! ✅" : "Interest sent! ✅",
-        lang === "hi" ? "Customer आपको देखेगा।" : "The customer will review your profile."
+        lang === "hi" ? "✅ Interest भेजा!" : "✅ Interest sent!",
+        lang === "hi" ? "Customer आपका profile देखेगा।" : "Customer will review your profile."
       );
-      load();
+      doSearch();
     } catch (err) { Alert.alert("Error", formatApiError(err)); }
   };
 
-  const withdraw = async (engId) => {
+  const withdraw = (engId) => {
     Alert.alert(
-      lang === "hi" ? "Withdraw करें?" : "Withdraw?",
-      "",
-      [
-        { text: lang === "hi" ? "नहीं" : "No", style: "cancel" },
-        { text: lang === "hi" ? "हाँ" : "Yes", style: "destructive", onPress: async () => {
-          try { await api.post(`/engagements/${engId}/cancel`); load(); }
-          catch (err) { Alert.alert("Failed", formatApiError(err)); }
-        }},
-      ]
+      lang === "hi" ? "Withdraw करें?" : "Withdraw?", "",
+      [{ text: lang === "hi" ? "नहीं" : "No", style: "cancel" },
+       { text: lang === "hi" ? "हाँ" : "Yes", style: "destructive",
+         onPress: async () => {
+           try { await api.post(`/engagements/${engId}/cancel`); doSearch(); }
+           catch (err) { Alert.alert("Failed", formatApiError(err)); }
+         }}]
     );
   };
 
-  const activeFilters = [!!appliedCategory, appliedPincode.length === 6].filter(Boolean).length;
+  const hasActive = applied.query || applied.pincode || applied.cat;
 
+  /* ─── Render ─────────────────────────────────────────────────────── */
   return (
     <SafeAreaView edges={["top"]} style={s.safe}>
-      {/* ── Header ── */}
-      <View style={s.header}>
-        <View style={s.titleRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.overline}>{lang === "hi" ? "FIND WORK" : "FIND WORK"}</Text>
-            <Text style={s.title}>{lang === "hi" ? "काम खोजो" : "Find Jobs"}</Text>
-          </View>
-          <Pressable
-            style={[s.filterBtn, activeFilters > 0 && s.filterBtnActive]}
-            onPress={() => setShowFilters(v => !v)}
-          >
-            <Ionicons name="options-outline" size={18} color={activeFilters > 0 ? "#fff" : colors.saffron} />
-            {activeFilters > 0 && <View style={s.filterDot} />}
-          </Pressable>
-        </View>
 
-        {/* Search bar + button */}
-        <View style={s.searchRow}>
-          <Ionicons name="search-outline" size={16} color={colors.textMuted} style={{ marginRight: 8 }} />
+      {/* ── Top bar ── */}
+      <View style={s.topBar}>
+        <View style={s.topLeft}>
+          <Text style={s.overline}>{lang === "hi" ? "काम खोजो" : "FIND WORK"}</Text>
+          <Text style={s.screenTitle}>{lang === "hi" ? "नौकरियाँ" : "Job Board"}</Text>
+        </View>
+        {hasActive && (
+          <Pressable onPress={resetSearch} style={s.resetBtn}>
+            <Ionicons name="refresh-outline" size={14} color={colors.saffron} />
+            <Text style={s.resetTxt}>{lang === "hi" ? "Reset" : "Reset"}</Text>
+          </Pressable>
+        )}
+      </View>
+
+      {/* ── Search row ── */}
+      <View style={s.searchWrap}>
+        <View style={s.searchBox}>
+          <Ionicons name="search-outline" size={16} color={colors.textMuted} />
           <TextInput
+            ref={inputRef}
             style={s.searchInput}
-            value={searchInput}
-            onChangeText={setSearchInput}
-            placeholder={lang === "hi" ? "title, जगह, काम खोजो…" : "Search title, location, skill…"}
+            value={query}
+            onChangeText={setQuery}
+            placeholder={lang === "hi" ? "काम, जगह, skill खोजो…" : "Search job, location, skill…"}
             placeholderTextColor={colors.textMuted}
             returnKeyType="search"
             onSubmitEditing={() => doSearch()}
           />
-          {searchInput.length > 0 && (
-            <Pressable onPress={() => setSearchInput("")} hitSlop={8} style={{ marginRight: 6 }}>
-              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+          {query.length > 0 && (
+            <Pressable onPress={() => setQuery("")} hitSlop={8}>
+              <Ionicons name="close-circle" size={17} color={colors.textMuted} />
             </Pressable>
           )}
-          <Pressable style={s.searchBtn} onPress={() => doSearch()}>
-            <Text style={s.searchBtnTxt}>{lang === "hi" ? "खोजो" : "Search"}</Text>
-          </Pressable>
         </View>
-
-        {/* Category chips — instant */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }}>
-          <View style={s.chipRow}>
-            {CATEGORIES.map(c => (
-              <Pressable key={c.v} onPress={() => { setCategory(c.v); doSearch({ category: c.v }); }}
-                style={[s.chip, category === c.v && s.chipOn]}>
-                <Text style={s.chipEmoji}>{c.icon}</Text>
-                <Text style={[s.chipTxt, category === c.v && s.chipTxtOn]}>{c.l[lang] || c.l.en}</Text>
-              </Pressable>
-            ))}
-          </View>
-        </ScrollView>
-
-        {/* Pincode filter panel */}
-        {showFilters && (
-          <View style={s.filterPanel}>
-            <Text style={s.filterLabel}>{lang === "hi" ? "Pincode से खोजो" : "Filter by Pincode"}</Text>
-            <View style={s.pincodeRow}>
-              <TextInput
-                style={[s.pincodeInput, { flex: 1 }]}
-                value={pincodeInput}
-                onChangeText={v => setPincodeInput(v.replace(/\D/g,"").slice(0,6))}
-                placeholder={lang === "hi" ? "6-अंक pincode" : "6-digit pincode"}
-                placeholderTextColor={colors.textMuted}
-                keyboardType="number-pad"
-                maxLength={6}
-                onSubmitEditing={() => doSearch()}
-              />
-              <Pressable style={s.applyBtn} onPress={() => doSearch()}>
-                <Text style={s.applyBtnTxt}>{lang === "hi" ? "Apply" : "Apply"}</Text>
-              </Pressable>
-            </View>
-            {hasActiveFilters && (
-              <Pressable onPress={resetAll} style={s.clearBtn}>
-                <Ionicons name="refresh-outline" size={13} color={colors.saffron} />
-                <Text style={s.clearTxt}>{lang === "hi" ? "सब Reset करो" : "Reset all"}</Text>
-              </Pressable>
-            )}
-          </View>
-        )}
-
-        {/* Active filter chips */}
-        {hasActiveFilters && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
-            <View style={{ flexDirection: "row", gap: 6, paddingBottom: 2 }}>
-              {appliedSearch ? (
-                <View style={s.activeChip}>
-                  <Ionicons name="search" size={10} color={colors.saffron} />
-                  <Text style={s.activeChipTxt} numberOfLines={1}>"{appliedSearch}"</Text>
-                  <Pressable onPress={() => { setSearchInput(""); doSearch({ search: "" }); }} hitSlop={6}>
-                    <Ionicons name="close" size={12} color={colors.saffron} />
-                  </Pressable>
-                </View>
-              ) : null}
-              {appliedPincode ? (
-                <View style={s.activeChip}>
-                  <Ionicons name="location" size={10} color={colors.saffron} />
-                  <Text style={s.activeChipTxt}>{appliedPincode}</Text>
-                  <Pressable onPress={() => { setPincodeInput(""); doSearch({ pincode: "" }); }} hitSlop={6}>
-                    <Ionicons name="close" size={12} color={colors.saffron} />
-                  </Pressable>
-                </View>
-              ) : null}
-            </View>
-          </ScrollView>
-        )}
-
-        <Text style={s.countTxt}>
-          {loading ? "" : `${jobs.length} ${lang === "hi" ? "काम मिले" : jobs.length === 1 ? "job found" : "jobs found"}`}
-        </Text>
+        <Pressable style={s.searchBtn} onPress={() => doSearch()}>
+          <Text style={s.searchBtnTxt}>{lang === "hi" ? "खोजो" : "Search"}</Text>
+        </Pressable>
       </View>
 
-      {/* ── List ── */}
+      {/* ── Pincode row ── */}
+      <View style={s.pincodeWrap}>
+        <Ionicons name="location-outline" size={14} color={colors.textMuted} style={{ marginRight: 6 }} />
+        <TextInput
+          style={s.pincodeInput}
+          value={pincode}
+          onChangeText={v => setPincode(v.replace(/\D/g,"").slice(0,6))}
+          placeholder={lang === "hi" ? "Pincode (6 अंक)" : "Pincode (6 digits)"}
+          placeholderTextColor={colors.textMuted}
+          keyboardType="number-pad"
+          maxLength={6}
+          returnKeyType="search"
+          onSubmitEditing={() => doSearch()}
+        />
+        {pincode.length > 0 && (
+          <Pressable onPress={() => setPincode("")} hitSlop={8} style={{ marginRight: 4 }}>
+            <Ionicons name="close-circle" size={16} color={colors.textMuted} />
+          </Pressable>
+        )}
+        {pincode.length === 6 && (
+          <Pressable style={s.applyBtn} onPress={() => doSearch()}>
+            <Text style={s.applyBtnTxt}>{lang === "hi" ? "Apply" : "Apply"}</Text>
+          </Pressable>
+        )}
+      </View>
+
+      {/* ── Category chips ── */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}
+        contentContainerStyle={s.chipList} style={s.chipScroll}>
+        {CATS.map(c => (
+          <Pressable key={c.v}
+            onPress={() => { setCat(c.v); doSearch({ cat: c.v }); }}
+            style={[s.chip, cat === c.v && s.chipActive]}>
+            <Text style={s.chipIcon}>{c.icon}</Text>
+            <Text style={[s.chipTxt, cat === c.v && s.chipTxtActive]}>
+              {c.label[lang] || c.label.en}
+            </Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+
+      {/* ── Applied filters ── */}
+      {hasActive && (
+        <View style={s.appliedRow}>
+          <Text style={s.appliedLabel}>{lang === "hi" ? "खोज:" : "Results for:"}</Text>
+          {applied.query ? <View style={s.tag}><Text style={s.tagTxt}>"{applied.query}"</Text></View> : null}
+          {applied.pincode ? <View style={s.tag}><Ionicons name="location" size={10} color={colors.saffron}/><Text style={s.tagTxt}> {applied.pincode}</Text></View> : null}
+          {applied.cat ? <View style={s.tag}><Text style={s.tagTxt}>{CATS.find(c=>c.v===applied.cat)?.icon} {applied.cat}</Text></View> : null}
+        </View>
+      )}
+
+      {/* ── Results ── */}
       {loading ? (
         <View style={s.center}>
           <ActivityIndicator color={colors.saffron} size="large" />
+          <Text style={s.loadingTxt}>{lang === "hi" ? "ढूंढ रहे हैं…" : "Searching…"}</Text>
         </View>
       ) : (
         <FlatList
@@ -266,31 +254,43 @@ export default function FindWorkScreen({ navigation }) {
           keyExtractor={j => j.id}
           contentContainerStyle={{ padding: spacing.lg, paddingBottom: 100 }}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={colors.saffron} />
+            <RefreshControl refreshing={refreshing}
+              onRefresh={() => { setRefreshing(true); doSearch(); }}
+              tintColor={colors.saffron} />
           }
           renderItem={({ item }) => {
-            const eng = engagementFor(item.id);
-            const cat = CATEGORIES.find(c => c.v === item.category) || CATEGORIES[0];
+            const eng = engFor(item.id);
+            const cat = CATS.find(c => c.v === item.category) || CATS[0];
             return (
-              <JobCard
-                item={item} eng={eng} cat={cat} lang={lang}
+              <JobCard item={item} eng={eng} cat={cat} lang={lang}
                 isWorker={user?.role === "worker"}
-                onApply={() => onApply(item.id)}
+                onApply={() => apply(item.id)}
                 onWithdraw={() => withdraw(eng?.id)}
               />
             );
           }}
+          ListHeaderComponent={
+            <Text style={s.resultCount}>
+              {jobs.length === 0
+                ? (lang === "hi" ? "कोई काम नहीं मिला" : "No jobs found")
+                : `${jobs.length} ${lang === "hi" ? "काम मिले" : jobs.length === 1 ? "job" : "jobs"}`}
+            </Text>
+          }
           ListEmptyComponent={
             <View style={s.empty}>
               <Text style={s.emptyEmoji}>🔍</Text>
               <Text style={s.emptyTitle}>
-                {search ? (lang === "hi" ? "कोई match नहीं" : "No matches") : (lang === "hi" ? "कोई काम नहीं मिला" : "No jobs found")}
+                {lang === "hi" ? "कोई काम नहीं मिला" : "No jobs found"}
               </Text>
               <Text style={s.emptySub}>
-                {search
-                  ? (lang === "hi" ? "दूसरे words से खोजो।" : "Try different keywords.")
-                  : (lang === "hi" ? "नीचे खींचकर refresh करो।" : "Pull down to refresh.")}
+                {lang === "hi" ? "दूसरी जगह या category आज़माओ।" : "Try a different area or category."}
               </Text>
+              {hasActive && (
+                <Pressable onPress={resetSearch} style={s.resetBtnLg}>
+                  <Ionicons name="refresh-outline" size={15} color="#fff" />
+                  <Text style={s.resetBtnLgTxt}>{lang === "hi" ? "सब Reset करो" : "Reset search"}</Text>
+                </Pressable>
+              )}
             </View>
           }
         />
@@ -299,59 +299,54 @@ export default function FindWorkScreen({ navigation }) {
   );
 }
 
-/* ── Job Card ── */
+/* ─── Job Card ───────────────────────────────────────────────────────── */
+
 function JobCard({ item, eng, cat, lang, isWorker, onApply, onWithdraw }) {
-  const urgency = URGENCY_BADGE[item.urgency];
   const posted = daysAgo(item.created_at);
 
-  const callCustomer = () => {
-    if (eng?.customer_phone) Linking.openURL(`tel:${eng.customer_phone}`);
-  };
-
   return (
-    <View style={[s.card, eng?.status === "accepted" && s.cardAccepted]}>
-      {/* Top */}
-      <View style={s.cardTop}>
-        <View style={s.catBadge}>
-          <Text style={s.catEmoji}>{cat.icon}</Text>
-        </View>
+    <View style={[s.card, eng?.status === "accepted" && s.cardHired]}>
+
+      {/* Header */}
+      <View style={s.cardHead}>
+        <View style={s.catIcon}><Text style={s.catEmoji}>{cat.icon}</Text></View>
         <View style={{ flex: 1 }}>
-          <Text style={s.cardTitle} numberOfLines={2}>{item.title}</Text>
-          <View style={s.cardMeta}>
+          <Text style={s.jobTitle} numberOfLines={2}>{item.title}</Text>
+          <View style={s.metaRow}>
             <Ionicons name="location-outline" size={11} color={colors.textMuted} />
-            <Text style={s.cardMetaTxt} numberOfLines={1}>
-              {item.village || item.address?.village || "—"}
-              {item.address?.pincode ? ` · ${item.address.pincode}` : ""}
+            <Text style={s.metaTxt} numberOfLines={1}>
+              {[item.village || item.address?.village, item.address?.pincode].filter(Boolean).join(" · ") || "—"}
             </Text>
           </View>
         </View>
-        {urgency && (
-          <View style={[s.urgencyBadge, { backgroundColor: urgency.bg, borderColor: urgency.border }]}>
-            <Text style={[s.urgencyTxt, { color: urgency.text }]}>{urgency.label}</Text>
-          </View>
-        )}
+        {/* Rate — top right */}
+        <View style={s.rateBadge}>
+          <Text style={s.rateAmt}>₹{item.daily_rate}</Text>
+          <Text style={s.rateUnit}>/day</Text>
+        </View>
       </View>
 
       {/* Pills */}
-      <View style={s.pillRow}>
-        <View style={s.ratePill}>
-          <Text style={s.rateTxt}>₹{item.daily_rate}</Text>
-          <Text style={s.rateUnit}>/day</Text>
-        </View>
-        <View style={s.infoPill}>
-          <Ionicons name="people-outline" size={12} color={colors.textSecondary} />
-          <Text style={s.infoPillTxt}>{item.workers_needed} {lang === "hi" ? "चाहिए" : "needed"}</Text>
-        </View>
+      <View style={s.pills}>
         {item.job_date && (
-          <View style={s.infoPill}>
-            <Ionicons name="calendar-outline" size={12} color={colors.textSecondary} />
-            <Text style={s.infoPillTxt}>{item.job_date}</Text>
+          <View style={s.pill}>
+            <Ionicons name="calendar-outline" size={11} color={colors.textSecondary} />
+            <Text style={s.pillTxt}>{item.job_date}</Text>
           </View>
         )}
+        <View style={s.pill}>
+          <Ionicons name="people-outline" size={11} color={colors.textSecondary} />
+          <Text style={s.pillTxt}>{item.workers_needed} {lang === "hi" ? "चाहिए" : "needed"}</Text>
+        </View>
         {posted && (
-          <View style={s.infoPill}>
-            <Ionicons name="time-outline" size={12} color={colors.textSecondary} />
-            <Text style={s.infoPillTxt}>{posted}</Text>
+          <View style={s.pill}>
+            <Ionicons name="time-outline" size={11} color={colors.textSecondary} />
+            <Text style={s.pillTxt}>{posted}</Text>
+          </View>
+        )}
+        {item.urgency === "urgent" && (
+          <View style={s.urgentPill}>
+            <Text style={s.urgentTxt}>🔥 {lang === "hi" ? "Urgent" : "Urgent"}</Text>
           </View>
         )}
       </View>
@@ -361,48 +356,41 @@ function JobCard({ item, eng, cat, lang, isWorker, onApply, onWithdraw }) {
         <Text style={s.desc} numberOfLines={2}>{item.description}</Text>
       )}
 
-      {/* Skills required */}
-      {item.required_skills?.length > 0 && (
-        <View style={s.skillsRow}>
-          {item.required_skills.slice(0,3).map(sk => (
-            <View key={sk} style={s.skillChip}>
-              <Text style={s.skillChipTxt}>{sk}</Text>
-            </View>
-          ))}
-        </View>
-      )}
-
-      {/* CTA */}
+      {/* ── CTA ── */}
       {eng ? (
         eng.status === "accepted" ? (
-          <View style={s.acceptedBox}>
+          /* HIRED */
+          <View style={s.hiredBox}>
             <View style={{ flex: 1 }}>
-              <Text style={s.acceptedTitle}>{lang === "hi" ? "🎉 आप hire हो गए!" : "🎉 You're hired!"}</Text>
-              <Text style={s.acceptedSub}>{lang === "hi" ? "Customer से contact करो।" : "Contact the customer to confirm."}</Text>
+              <Text style={s.hiredTitle}>{lang === "hi" ? "🎉 आप hire हो गए!" : "🎉 You're hired!"}</Text>
+              <Text style={s.hiredSub}>{lang === "hi" ? "Customer से contact करो।" : "Contact the customer."}</Text>
             </View>
             {eng.customer_phone && (
-              <Pressable style={s.callBtn} onPress={callCustomer}>
+              <Pressable style={s.callBtn} onPress={() => Linking.openURL(`tel:${eng.customer_phone}`)}>
                 <Ionicons name="call" size={15} color="#fff" />
-                <Text style={s.callBtnTxt}>Call</Text>
+                <Text style={s.callTxt}>Call</Text>
               </Pressable>
             )}
           </View>
         ) : (
+          /* PENDING */
           <View style={s.pendingBox}>
-            <View style={{ flex: 1 }}>
-              <Text style={s.pendingTitle}>{lang === "hi" ? "⏳ Review हो रहा है" : "⏳ Pending review"}</Text>
-              <Text style={s.pendingSub}>{lang === "hi" ? "Customer आपका profile देख रहा है।" : "Customer is reviewing your profile."}</Text>
-            </View>
-            <Pressable style={s.withdrawBtn} onPress={onWithdraw}>
+            <Text style={s.pendingTxt}>
+              {lang === "hi" ? "⏳ Review हो रहा है — " : "⏳ Pending review — "}
+            </Text>
+            <Pressable onPress={onWithdraw}>
               <Text style={s.withdrawTxt}>{lang === "hi" ? "वापस लो" : "Withdraw"}</Text>
             </Pressable>
           </View>
         )
       ) : (
-        <Pressable style={s.btnPrimary} onPress={onApply}>
-          <Ionicons name="hand-right-outline" size={15} color="#fff" />
-          <Text style={s.btnPrimaryTxt}>
-            {isWorker ? (lang === "hi" ? "मुझे interest है" : "I'm interested") : (lang === "hi" ? "Login करके apply करो" : "Login to apply")}
+        /* APPLY */
+        <Pressable style={s.applyBigBtn} onPress={onApply}>
+          <Ionicons name="hand-right-outline" size={16} color="#fff" />
+          <Text style={s.applyBigTxt}>
+            {isWorker
+              ? (lang === "hi" ? "Apply करो" : "Apply Now")
+              : (lang === "hi" ? "Login करके apply करो" : "Login to Apply")}
           </Text>
         </Pressable>
       )}
@@ -410,110 +398,93 @@ function JobCard({ item, eng, cat, lang, isWorker, onApply, onWithdraw }) {
   );
 }
 
+/* ─── Styles ─────────────────────────────────────────────────────────── */
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  safe: { flex: 1, backgroundColor: "#f5f4f0" },
+  center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10, paddingTop: 60 },
+  loadingTxt: { fontFamily: fonts.body, fontSize: 13, color: colors.textMuted },
 
-  header: {
-    backgroundColor: "#fff",
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: 10,
-  },
-  titleRow: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
+  // Top bar
+  topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, paddingTop: 14, paddingBottom: 10, backgroundColor: "#fff" },
+  topLeft: {},
   overline: { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1.5, color: colors.saffron },
-  title: { fontFamily: fonts.display, fontSize: 22, color: colors.text, marginTop: 1 },
-  filterBtn: {
-    width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center",
-    backgroundColor: colors.saffronTint, borderWidth: 1.5, borderColor: colors.saffron, position: "relative",
-  },
-  filterBtnActive: { backgroundColor: colors.saffron },
-  filterDot: { position: "absolute", top: 8, right: 8, width: 7, height: 7, borderRadius: 4, backgroundColor: colors.money, borderWidth: 1.5, borderColor: "#fff" },
+  screenTitle: { fontFamily: fonts.display, fontSize: 22, color: colors.text, marginTop: 1 },
+  resetBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1.5, borderColor: colors.saffron, backgroundColor: colors.saffronTint },
+  resetTxt: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.saffron },
 
-  searchRow: {
-    flexDirection: "row", alignItems: "center",
-    backgroundColor: "#f9f8f5", borderRadius: 12, borderWidth: 1.5,
-    borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 10,
-  },
+  // Search
+  searchWrap: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: spacing.lg, paddingVertical: 10, backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: colors.border },
+  searchBox: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#f5f4f0", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1.5, borderColor: colors.border },
   searchInput: { flex: 1, fontFamily: fonts.body, fontSize: 14, color: colors.text, padding: 0 },
+  searchBtn: { backgroundColor: colors.saffron, paddingHorizontal: 18, paddingVertical: 11, borderRadius: 12 },
+  searchBtnTxt: { fontFamily: fonts.bodyBold, fontSize: 14, color: "#fff" },
 
-  chipRow: { flexDirection: "row", gap: 7, paddingBottom: 4 },
-  chip: {
-    flexDirection: "row", alignItems: "center", gap: 5,
-    paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20,
-    borderWidth: 1.5, borderColor: colors.border, backgroundColor: "#fff",
-  },
-  chipOn: { backgroundColor: colors.saffron, borderColor: colors.saffron },
-  chipEmoji: { fontSize: 12 },
-  chipTxt: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.textSecondary },
-  chipTxtOn: { color: "#fff" },
+  // Pincode
+  pincodeWrap: { flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.lg, paddingVertical: 8, backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: colors.border },
+  pincodeInput: { flex: 1, fontFamily: fonts.body, fontSize: 14, color: colors.text, padding: 0 },
+  applyBtn: { backgroundColor: colors.indigo, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 10 },
+  applyBtnTxt: { fontFamily: fonts.bodyBold, fontSize: 12, color: "#fff" },
 
-  filterPanel: { marginTop: 10, backgroundColor: "#f9f8f5", borderRadius: 12, padding: 14, borderWidth: 1, borderColor: colors.border },
-  filterLabel: { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1.2, textTransform: "uppercase", color: colors.textMuted, marginBottom: 8 },
-  pincodeInput: {
-    backgroundColor: "#fff", borderWidth: 1.5, borderColor: colors.border,
-    borderRadius: 10, paddingVertical: 9, paddingHorizontal: 12,
-    fontFamily: fonts.body, fontSize: 14, color: colors.text,
-  },
-  searchBtn: { backgroundColor: colors.saffron, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
-  searchBtnTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: "#fff" },
-  pincodeRow: { flexDirection: "row", gap: 8, alignItems: "center" },
-  applyBtn: { backgroundColor: colors.saffron, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
-  applyBtnTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: "#fff" },
-  clearBtn: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 10, alignSelf: "flex-end" },
-  clearTxt: { fontFamily: fonts.bodySemi, fontSize: 12, color: colors.saffron },
-  activeChip: {
-    flexDirection: "row", alignItems: "center", gap: 4,
-    backgroundColor: colors.saffronTint, paddingHorizontal: 10, paddingVertical: 5,
-    borderRadius: 20, borderWidth: 1, borderColor: colors.saffron + "40",
-  },
-  activeChipTxt: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.saffron, maxWidth: 120 },
-  countTxt: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginTop: 10 },
+  // Category chips
+  chipScroll: { backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: colors.border },
+  chipList: { paddingHorizontal: spacing.lg, paddingVertical: 10, gap: 8 },
+  chip: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: colors.border, backgroundColor: "#fff" },
+  chipActive: { backgroundColor: colors.saffron, borderColor: colors.saffron },
+  chipIcon: { fontSize: 13 },
+  chipTxt: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.textSecondary },
+  chipTxtActive: { color: "#fff" },
+
+  // Applied filters
+  appliedRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: spacing.lg, paddingVertical: 8, backgroundColor: colors.saffronTint, flexWrap: "wrap" },
+  appliedLabel: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.textMuted },
+  tag: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20, borderWidth: 1, borderColor: colors.saffron + "50" },
+  tagTxt: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.saffron },
+
+  // Count
+  resultCount: { fontFamily: fonts.bodySemi, fontSize: 12, color: colors.textMuted, marginBottom: 10 },
 
   // Card
   card: { backgroundColor: "#fff", borderRadius: 16, borderWidth: 1, borderColor: colors.border, padding: 16, marginBottom: 12 },
-  cardAccepted: { borderColor: "#86efac", borderWidth: 1.5 },
-  cardTop: { flexDirection: "row", gap: 12, alignItems: "flex-start", marginBottom: 12 },
-  catBadge: { width: 46, height: 46, borderRadius: 12, backgroundColor: colors.saffronTint, alignItems: "center", justifyContent: "center" },
-  catEmoji: { fontSize: 22 },
-  cardTitle: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.text, lineHeight: 20 },
-  cardMeta: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
-  cardMetaTxt: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, flex: 1 },
-  urgencyBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1 },
-  urgencyTxt: { fontFamily: fonts.bodyBold, fontSize: 10 },
+  cardHired: { borderColor: "#86efac", borderWidth: 2 },
+  cardHead: { flexDirection: "row", gap: 12, alignItems: "flex-start", marginBottom: 10 },
+  catIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: colors.saffronTint, alignItems: "center", justifyContent: "center" },
+  catEmoji: { fontSize: 20 },
+  jobTitle: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.text, lineHeight: 20, flex: 1 },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 3 },
+  metaTxt: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, flex: 1 },
+  rateBadge: { alignItems: "flex-end" },
+  rateAmt: { fontFamily: fonts.display, fontSize: 18, color: colors.money },
+  rateUnit: { fontFamily: fonts.body, fontSize: 10, color: colors.textMuted },
 
-  pillRow: { flexDirection: "row", gap: 7, flexWrap: "wrap", marginBottom: 8 },
-  ratePill: { flexDirection: "row", alignItems: "baseline", gap: 1, backgroundColor: "#FFFBEB", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: "#FDE68A" },
-  rateTxt: { fontFamily: fonts.display, fontSize: 16, color: colors.money },
-  rateUnit: { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted },
-  infoPill: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#f9f8f5", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: colors.border },
-  infoPillTxt: { fontFamily: fonts.bodySemi, fontSize: 11, color: colors.textSecondary },
+  pills: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 10 },
+  pill: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#f5f4f0", paddingHorizontal: 9, paddingVertical: 5, borderRadius: 20 },
+  pillTxt: { fontFamily: fonts.bodySemi, fontSize: 11, color: colors.textSecondary },
+  urgentPill: { backgroundColor: "#fff1f2", paddingHorizontal: 9, paddingVertical: 5, borderRadius: 20, borderWidth: 1, borderColor: "#fecaca" },
+  urgentTxt: { fontFamily: fonts.bodyBold, fontSize: 11, color: "#dc2626" },
 
-  desc: { fontFamily: fonts.body, fontSize: 13, color: colors.textSecondary, lineHeight: 18, marginBottom: 10 },
+  desc: { fontFamily: fonts.body, fontSize: 13, color: colors.textSecondary, lineHeight: 18, marginBottom: 12 },
 
-  skillsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 10 },
-  skillChip: { backgroundColor: "#eff6ff", paddingHorizontal: 9, paddingVertical: 4, borderRadius: 20, borderWidth: 1, borderColor: "#bfdbfe" },
-  skillChipTxt: { fontFamily: fonts.bodyBold, fontSize: 11, color: "#1d4ed8" },
+  // Apply button — BIG and obvious
+  applyBigBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.saffron, paddingVertical: 14, borderRadius: 14, marginTop: 4 },
+  applyBigTxt: { fontFamily: fonts.bodyBold, fontSize: 15, color: "#fff" },
 
-  btnPrimary: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.saffron, paddingVertical: 13, borderRadius: 12 },
-  btnPrimaryTxt: { fontFamily: fonts.bodyBold, fontSize: 14, color: "#fff" },
-
-  acceptedBox: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "#f0fdf4", padding: 14, borderRadius: 12, borderWidth: 1, borderColor: "#86efac" },
-  acceptedTitle: { fontFamily: fonts.bodyBold, fontSize: 14, color: "#15803d" },
-  acceptedSub: { fontFamily: fonts.body, fontSize: 12, color: "#166534", marginTop: 2 },
+  // Hired
+  hiredBox: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "#f0fdf4", padding: 14, borderRadius: 12, borderWidth: 1, borderColor: "#86efac" },
+  hiredTitle: { fontFamily: fonts.bodyBold, fontSize: 14, color: "#15803d" },
+  hiredSub: { fontFamily: fonts.body, fontSize: 12, color: "#166534", marginTop: 2 },
   callBtn: { backgroundColor: "#16a34a", paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, flexDirection: "row", alignItems: "center", gap: 6 },
-  callBtnTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: "#fff" },
+  callTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: "#fff" },
 
-  pendingBox: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "#fffbeb", padding: 14, borderRadius: 12, borderWidth: 1, borderColor: "#fde68a" },
-  pendingTitle: { fontFamily: fonts.bodyBold, fontSize: 13, color: "#92400e" },
-  pendingSub: { fontFamily: fonts.body, fontSize: 12, color: "#78350f", marginTop: 2 },
-  withdrawBtn: { borderWidth: 1.5, borderColor: colors.border, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
-  withdrawTxt: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.textSecondary },
+  // Pending
+  pendingBox: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", backgroundColor: "#fffbeb", padding: 12, borderRadius: 12, borderWidth: 1, borderColor: "#fde68a" },
+  pendingTxt: { fontFamily: fonts.body, fontSize: 13, color: "#92400e" },
+  withdrawTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.saffron },
 
-  empty: { padding: 40, alignItems: "center", gap: 8 },
-  emptyEmoji: { fontSize: 44 },
+  // Empty
+  empty: { paddingTop: 60, alignItems: "center", gap: 10 },
+  emptyEmoji: { fontSize: 48 },
   emptyTitle: { fontFamily: fonts.display, fontSize: 20, color: colors.text },
-  emptySub: { fontFamily: fonts.body, fontSize: 13, color: colors.textMuted, textAlign: "center" },
+  emptySub: { fontFamily: fonts.body, fontSize: 14, color: colors.textMuted, textAlign: "center" },
+  resetBtnLg: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8, backgroundColor: colors.saffron, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12 },
+  resetBtnLgTxt: { fontFamily: fonts.bodyBold, fontSize: 14, color: "#fff" },
 });
