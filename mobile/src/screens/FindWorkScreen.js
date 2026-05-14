@@ -45,16 +45,32 @@ export default function FindWorkScreen({ navigation }) {
   const [loading, setLoading]         = useState(true);
   const [refreshing, setRefreshing]   = useState(false);
 
-  const [search, setSearch]           = useState("");
-  const [category, setCategory]       = useState("");
-  const [pincode, setPincode]         = useState("");
-  const [showFilters, setShowFilters] = useState(false);
+  // Input state (what user is typing — not yet applied)
+  const [searchInput, setSearchInput]   = useState("");
+  const [pincodeInput, setPincodeInput] = useState("");
+  const [category, setCategory]         = useState("");
+  const [showFilters, setShowFilters]   = useState(false);
 
-  const load = useCallback(async () => {
+  // Applied state (what was last searched)
+  const [appliedSearch, setAppliedSearch]   = useState("");
+  const [appliedPincode, setAppliedPincode] = useState("");
+  const [appliedCategory, setAppliedCategory] = useState("");
+
+  const doSearch = useCallback(async (overrides = {}) => {
+    const cat  = overrides.category  !== undefined ? overrides.category  : category;
+    const pin  = overrides.pincode   !== undefined ? overrides.pincode   : pincodeInput;
+    const text = overrides.search    !== undefined ? overrides.search    : searchInput;
+
+    setAppliedCategory(cat);
+    setAppliedPincode(pin);
+    setAppliedSearch(text);
+    setLoading(true);
+
     try {
       const params = { status: "open" };
-      if (category) params.category = category;
-      if (pincode.length === 6) params.pincode = pincode;
+      if (cat) params.category = cat;
+      if (pin.length === 6) params.pincode = pin;
+      if (text.trim()) params.search = text.trim();
 
       const [pub, mine] = await Promise.all([
         api.get("/jobs/public", { params }).catch(() => api.get("/jobs/feed", { params }).catch(() => ({ data: [] }))),
@@ -68,12 +84,22 @@ export default function FindWorkScreen({ navigation }) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [user, category, pincode]);
+  }, [user, category, pincodeInput, searchInput]);
 
-  useEffect(() => { load(); }, [load]);
+  // Initial load
+  useEffect(() => { doSearch(); }, []); // eslint-disable-line
+
+  const load = () => doSearch();
+
+  const resetAll = () => {
+    setSearchInput(""); setPincodeInput(""); setCategory("");
+    doSearch({ category: "", pincode: "", search: "" });
+  };
 
   const engagementFor = (jobId) =>
     engagements.find(e => e.job_id === jobId && ["requested","accepted"].includes(e.status));
+
+  const hasActiveFilters = appliedSearch || appliedPincode || appliedCategory;
 
   const onApply = async (jobId) => {
     if (!user) {
@@ -115,19 +141,7 @@ export default function FindWorkScreen({ navigation }) {
     );
   };
 
-  // Client-side search filter
-  const filtered = jobs.filter(j => {
-    if (!search.trim()) return true;
-    const q = search.toLowerCase();
-    return (
-      (j.title || "").toLowerCase().includes(q) ||
-      (j.category || "").toLowerCase().includes(q) ||
-      (j.village || j.address?.village || "").toLowerCase().includes(q) ||
-      (j.description || "").toLowerCase().includes(q)
-    );
-  });
-
-  const activeFilters = [!!category, pincode.length === 6].filter(Boolean).length;
+  const activeFilters = [!!appliedCategory, appliedPincode.length === 6].filter(Boolean).length;
 
   return (
     <SafeAreaView edges={["top"]} style={s.safe}>
@@ -147,30 +161,34 @@ export default function FindWorkScreen({ navigation }) {
           </Pressable>
         </View>
 
-        {/* Search bar */}
+        {/* Search bar + button */}
         <View style={s.searchRow}>
           <Ionicons name="search-outline" size={16} color={colors.textMuted} style={{ marginRight: 8 }} />
           <TextInput
             style={s.searchInput}
-            value={search}
-            onChangeText={setSearch}
-            placeholder={lang === "hi" ? "title, जगह, काम खोजो…" : "Search by title, location, work…"}
+            value={searchInput}
+            onChangeText={setSearchInput}
+            placeholder={lang === "hi" ? "title, जगह, काम खोजो…" : "Search title, location, skill…"}
             placeholderTextColor={colors.textMuted}
             returnKeyType="search"
-            clearButtonMode="while-editing"
+            onSubmitEditing={() => doSearch()}
           />
-          {search.length > 0 && (
-            <Pressable onPress={() => setSearch("")} hitSlop={8}>
+          {searchInput.length > 0 && (
+            <Pressable onPress={() => setSearchInput("")} hitSlop={8} style={{ marginRight: 6 }}>
               <Ionicons name="close-circle" size={18} color={colors.textMuted} />
             </Pressable>
           )}
+          <Pressable style={s.searchBtn} onPress={() => doSearch()}>
+            <Text style={s.searchBtnTxt}>{lang === "hi" ? "खोजो" : "Search"}</Text>
+          </Pressable>
         </View>
 
-        {/* Category chips */}
+        {/* Category chips — instant */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }}>
           <View style={s.chipRow}>
             {CATEGORIES.map(c => (
-              <Pressable key={c.v} onPress={() => setCategory(c.v)} style={[s.chip, category === c.v && s.chipOn]}>
+              <Pressable key={c.v} onPress={() => { setCategory(c.v); doSearch({ category: c.v }); }}
+                style={[s.chip, category === c.v && s.chipOn]}>
                 <Text style={s.chipEmoji}>{c.icon}</Text>
                 <Text style={[s.chipTxt, category === c.v && s.chipTxtOn]}>{c.l[lang] || c.l.en}</Text>
               </Pressable>
@@ -178,30 +196,62 @@ export default function FindWorkScreen({ navigation }) {
           </View>
         </ScrollView>
 
-        {/* Pincode filter */}
+        {/* Pincode filter panel */}
         {showFilters && (
           <View style={s.filterPanel}>
             <Text style={s.filterLabel}>{lang === "hi" ? "Pincode से खोजो" : "Filter by Pincode"}</Text>
-            <TextInput
-              style={s.pincodeInput}
-              value={pincode}
-              onChangeText={v => setPincode(v.replace(/\D/g,"").slice(0,6))}
-              placeholder={lang === "hi" ? "6-अंक pincode" : "6-digit pincode"}
-              placeholderTextColor={colors.textMuted}
-              keyboardType="number-pad"
-              maxLength={6}
-            />
-            {(category || pincode) && (
-              <Pressable onPress={() => { setCategory(""); setPincode(""); }} style={s.clearBtn}>
+            <View style={s.pincodeRow}>
+              <TextInput
+                style={[s.pincodeInput, { flex: 1 }]}
+                value={pincodeInput}
+                onChangeText={v => setPincodeInput(v.replace(/\D/g,"").slice(0,6))}
+                placeholder={lang === "hi" ? "6-अंक pincode" : "6-digit pincode"}
+                placeholderTextColor={colors.textMuted}
+                keyboardType="number-pad"
+                maxLength={6}
+                onSubmitEditing={() => doSearch()}
+              />
+              <Pressable style={s.applyBtn} onPress={() => doSearch()}>
+                <Text style={s.applyBtnTxt}>{lang === "hi" ? "Apply" : "Apply"}</Text>
+              </Pressable>
+            </View>
+            {hasActiveFilters && (
+              <Pressable onPress={resetAll} style={s.clearBtn}>
                 <Ionicons name="refresh-outline" size={13} color={colors.saffron} />
-                <Text style={s.clearTxt}>{lang === "hi" ? "Reset करो" : "Reset filters"}</Text>
+                <Text style={s.clearTxt}>{lang === "hi" ? "सब Reset करो" : "Reset all"}</Text>
               </Pressable>
             )}
           </View>
         )}
 
+        {/* Active filter chips */}
+        {hasActiveFilters && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8 }}>
+            <View style={{ flexDirection: "row", gap: 6, paddingBottom: 2 }}>
+              {appliedSearch ? (
+                <View style={s.activeChip}>
+                  <Ionicons name="search" size={10} color={colors.saffron} />
+                  <Text style={s.activeChipTxt} numberOfLines={1}>"{appliedSearch}"</Text>
+                  <Pressable onPress={() => { setSearchInput(""); doSearch({ search: "" }); }} hitSlop={6}>
+                    <Ionicons name="close" size={12} color={colors.saffron} />
+                  </Pressable>
+                </View>
+              ) : null}
+              {appliedPincode ? (
+                <View style={s.activeChip}>
+                  <Ionicons name="location" size={10} color={colors.saffron} />
+                  <Text style={s.activeChipTxt}>{appliedPincode}</Text>
+                  <Pressable onPress={() => { setPincodeInput(""); doSearch({ pincode: "" }); }} hitSlop={6}>
+                    <Ionicons name="close" size={12} color={colors.saffron} />
+                  </Pressable>
+                </View>
+              ) : null}
+            </View>
+          </ScrollView>
+        )}
+
         <Text style={s.countTxt}>
-          {loading ? "" : `${filtered.length} ${lang === "hi" ? "काम मिले" : filtered.length === 1 ? "job found" : "jobs found"}`}
+          {loading ? "" : `${jobs.length} ${lang === "hi" ? "काम मिले" : jobs.length === 1 ? "job found" : "jobs found"}`}
         </Text>
       </View>
 
@@ -212,7 +262,7 @@ export default function FindWorkScreen({ navigation }) {
         </View>
       ) : (
         <FlatList
-          data={filtered}
+          data={jobs}
           keyExtractor={j => j.id}
           contentContainerStyle={{ padding: spacing.lg, paddingBottom: 100 }}
           refreshControl={
@@ -407,8 +457,19 @@ const s = StyleSheet.create({
     borderRadius: 10, paddingVertical: 9, paddingHorizontal: 12,
     fontFamily: fonts.body, fontSize: 14, color: colors.text,
   },
+  searchBtn: { backgroundColor: colors.saffron, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
+  searchBtnTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: "#fff" },
+  pincodeRow: { flexDirection: "row", gap: 8, alignItems: "center" },
+  applyBtn: { backgroundColor: colors.saffron, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
+  applyBtnTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: "#fff" },
   clearBtn: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 10, alignSelf: "flex-end" },
   clearTxt: { fontFamily: fonts.bodySemi, fontSize: 12, color: colors.saffron },
+  activeChip: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    backgroundColor: colors.saffronTint, paddingHorizontal: 10, paddingVertical: 5,
+    borderRadius: 20, borderWidth: 1, borderColor: colors.saffron + "40",
+  },
+  activeChipTxt: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.saffron, maxWidth: 120 },
   countTxt: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginTop: 10 },
 
   // Card
