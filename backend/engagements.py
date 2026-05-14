@@ -26,8 +26,9 @@ async def _notify(user_id: str, title: str, body: str, kind: str, ref_id: str = 
     except Exception:
         pass
 
-    # Fire WhatsApp for events the worker cares about in real-time
-    if kind in ("booking_accepted", "booking_rejected", "interest_withdrawn", "booking_request"):
+    # Fire WhatsApp for all engagement events
+    if kind in ("booking_accepted", "booking_rejected", "interest_withdrawn",
+                "booking_request", "booking_completed", "booking_cancelled", "job_rated"):
         try:
             user = await db.users.find_one({"id": user_id}, {"_id": 0, "phone_primary": 1})
             if user and user.get("phone_primary"):
@@ -367,9 +368,15 @@ async def cancel_engagement(engagement_id: str, user: dict) -> dict:
     if user["role"] == "worker":
         worker_name = engagement.get("worker_name", "A worker")
         was_accepted = engagement["status"] == "accepted"
-        title = f"Booking cancelled: {engagement.get('job_title')}" if was_accepted else f"Interest withdrawn: {engagement.get('job_title')}"
-        body = f"{worker_name} has cancelled the booking. Please look for another worker." if was_accepted else f"{worker_name} has withdrawn their interest. Your job is back open."
-        await _notify(engagement["customer_id"], title, body, "booking_rejected", engagement_id)
+        if was_accepted:
+            kind = "booking_cancelled"
+            title = f"Booking cancelled: {engagement.get('job_title')}"
+            body = f"{worker_name} ने active booking cancel कर दी। दूसरा worker ढूंढें।"
+        else:
+            kind = "interest_withdrawn"
+            title = f"Interest withdrawn: {engagement.get('job_title')}"
+            body = f"{worker_name} ने interest वापस ले ली। आपकी job फिर से open है।"
+        await _notify(engagement["customer_id"], title, body, kind, engagement_id)
 
         # Reopen job + decrement filled_count if accepted booking cancelled
         job = await db.jobs.find_one({"id": engagement["job_id"]}, {"_id": 0})
@@ -404,13 +411,12 @@ async def complete_engagement(engagement_id: str, user: dict) -> dict:
     if not engagement:
         raise HTTPException(status_code=404, detail="Engagement not found")
 
-    # Both customer AND worker can mark as completed
-    is_customer = user["role"] == "customer" and engagement["customer_id"] == user["id"]
+    # Only the assigned worker can mark as completed
     worker_doc = await db.workers.find_one({"id": engagement["worker_id"]}, {"_id": 0, "user_id": 1})
     is_worker = user["role"] == "worker" and worker_doc and worker_doc.get("user_id") == user["id"]
 
-    if not is_customer and not is_worker:
-        raise HTTPException(status_code=403, detail="Only the customer or assigned worker can complete this booking")
+    if not is_worker:
+        raise HTTPException(status_code=403, detail="Only the assigned worker can mark a job as complete")
     if engagement["status"] != "accepted":
         raise HTTPException(status_code=400, detail="Only accepted engagements can be completed")
 
@@ -436,24 +442,14 @@ async def complete_engagement(engagement_id: str, user: dict) -> dict:
         {"$set": {"status": "completed"}}
     )
 
-    # Notify the other party
-    if is_worker:
-        await _notify(
-            engagement["customer_id"],
-            f"Work completed: {engagement.get('job_title')}",
-            f"{engagement.get('worker_name', 'Worker')} has marked the work as completed. Please rate the worker.",
-            "booking_completed",
-            engagement_id,
-        )
-    else:
-        if worker_doc:
-            await _notify(
-                worker_doc.get("user_id", ""),
-                f"Work marked complete: {engagement.get('job_title')}",
-                "The customer has marked the work as completed. Thank you!",
-                "booking_completed",
-                engagement_id,
-            )
+    # Notify customer that work is done — rate the worker
+    await _notify(
+        engagement["customer_id"],
+        f"✅ काम पूरा: {engagement.get('job_title')}",
+        f"{engagement.get('worker_name', 'Worker')} ने काम पूरा कर दिया। Worker को rate करें।",
+        "booking_completed",
+        engagement_id,
+    )
 
     return {"ok": True}
 
@@ -492,7 +488,20 @@ async def rate_engagement(engagement_id: str, rating: int, comment: str, user: d
                 {"id": engagement["worker_id"]},
                 {"$set": {"avg_rating": round(agg[0]["avg"], 2)}},
             )
-            
+
+        # Notify worker they received a rating
+        worker_doc = await db.workers.find_one({"id": engagement["worker_id"]}, {"_id": 0, "user_id": 1})
+        if worker_doc and worker_doc.get("user_id"):
+            stars = "⭐" * rating
+            await _notify(
+                worker_doc["user_id"],
+                f"{stars} Rating मिली: {rating}/5",
+                f"{engagement.get('job_title', 'Job')} के लिए {rating}/5 stars।"
+                + (f' "{comment}"' if comment else ""),
+                "job_rated",
+                engagement_id,
+            )
+
     elif user["role"] == "worker":
         worker = await db.workers.find_one({"user_id": user["id"]})
         if not worker or worker["id"] != engagement["worker_id"]:

@@ -132,14 +132,36 @@ def notify_customer_booking_rejected(phone: str, booking: dict) -> bool:
 
 
 def notify_worker_job_completed(phone: str, booking: dict) -> bool:
-    """
-    Notifies a worker that a job has been marked as completed.
-    Prompts them to wait for the rating.
-    """
+    """Notifies a worker that a job has been marked as completed."""
     msg = (
         f"🎉 Job completed on KaamNow!\n\n"
         f"📋 {booking.get('job_title', 'Your job')} has been marked complete by the customer.\n"
         f"⭐ You'll receive a rating shortly.\n\n"
         f"Keep up the great work! Visit kaamnow.com/worker/dashboard to view your profile."
+    )
+    return _send(phone, msg)
+
+
+def notify_customer_work_completed(phone: str, engagement: dict) -> bool:
+    """Customer gets WhatsApp when worker marks job complete — prompts rating."""
+    msg = (
+        f"✅ काम पूरा हो गया!\n\n"
+        f"👷 Worker: {engagement.get('worker_name', 'Worker')}\n"
+        f"📋 Job: {engagement.get('job_title', 'Your job')}\n"
+        f"💰 ₹{engagement.get('daily_rate', '')}/day\n\n"
+        f"Worker को rate करें → kaamnow.com/dashboard\n"
+        f"काम की बात, KaamNow के साथ 🙏"
+    )
+    return _send(phone, msg)
+
+
+def notify_worker_rating_received(phone: str, rating: int, comment: str, job_title: str) -> bool:
+    """Worker gets WhatsApp when customer leaves a rating."""
+    stars = "⭐" * rating
+    msg = (
+        f"{stars} आपको {rating}/5 rating मिली!\n\n"
+        f"📋 Job: {job_title}\n"
+        + (f'💬 "{comment}"\n\n' if comment else "\n")
+        + f"काम की बात, KaamNow के साथ 🙏"
     )
     return _send(phone, msg)

@@ -36,6 +36,7 @@ metadata:
 data:
   # MONGO_URL and DB_NAME are in the Secret (contain credentials)
   CORS_ORIGINS: "https://kaamnow.com,https://www.kaamnow.com"
+  FEATURE_WHATSAPP_NOTIFICATIONS: "true"
 ---
 apiVersion: apps/v1
 kind: Deployment

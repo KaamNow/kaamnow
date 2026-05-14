@@ -206,17 +206,9 @@ async def _alert_matching_workers(job: dict) -> None:
             skill_match = bool(job_skills & w_skills)
             same_pincode = bool(job_pincode and w_pincode and job_pincode == w_pincode)
 
-            nearby = False
-            if job_lat and job_lng:
-                try:
-                    w_lat = float(w.get("lat") or 0)
-                    w_lng = float(w.get("lng") or 0)
-                    if w_lat and w_lng:
-                        nearby = _haversine_km(job_lat, job_lng, w_lat, w_lng) <= 25.0
-                except Exception:
-                    pass
-
-            if skill_match or same_pincode or nearby:
+            # Phase 1: notify workers in same pincode only
+            # Phase 2 (later): change to `same_pincode and skill_match`
+            if same_pincode:
                 matched.append(w)
 
         matched = matched[:50]
