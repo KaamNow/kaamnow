@@ -1267,12 +1267,19 @@ async def gupshup_webhook(request: Request):
             body = json.loads(raw) if isinstance(raw, str) else dict(form)
         except Exception:
             body = dict(form)
+    # Non-message events (user-event, sandbox-start, sent, delivered, read, billing, etc.)
+    event_type = body.get("type", "")
+    payload_type = body.get("payload", {}).get("type", "") if isinstance(body.get("payload"), dict) else ""
+    if event_type != "message" and event_type != "":
+        logger.info("Gupshup non-message event: type=%s payload_type=%s", event_type, payload_type)
+        return Response(status_code=200)
+
     logger.info("Gupshup webhook body keys=%s ct=%s", list(body.keys()), content_type[:40])
     try:
         source_phone, message_text = _extract_gupshup_incoming(body)
     except ValueError as e:
         logger.error("Gupshup parse failed: %s | body=%s", e, str(body)[:300])
-        raise HTTPException(status_code=400, detail="Unable to parse incoming WhatsApp payload")
+        return Response(status_code=200)
 
     session_id = _create_session_id(source_phone)
     state_doc = await db.bot_sessions.find_one({"session_id": session_id})
