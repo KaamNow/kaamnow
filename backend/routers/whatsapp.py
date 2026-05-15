@@ -28,6 +28,7 @@ from typing import Any, Optional
 
 import requests
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import Response
 
 from ..config import settings
 from ..db import db
@@ -1216,7 +1217,20 @@ async def whatsapp_message(body: WhatsAppMessageIn):
     return {"reply": reply, "state": new_state}
 
 
+@router.head("/gupshup")
+@router.head("/gupshup/")
+async def gupshup_head():
+    return Response(status_code=200)
+
+
+@router.options("/gupshup")
+@router.options("/gupshup/")
+async def gupshup_options():
+    return Response(status_code=200)
+
+
 @router.get("/gupshup")
+@router.get("/gupshup/")
 async def gupshup_verify(
     mode: str = None,
     challenge: str = None,
@@ -1238,6 +1252,7 @@ async def gupshup_verify(
 
 
 @router.post("/gupshup")
+@router.post("/gupshup/")
 async def gupshup_webhook(request: Request):
     if not settings.gupshup_api_url:
         raise HTTPException(status_code=503, detail="WhatsApp provider not configured")
