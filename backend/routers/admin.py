@@ -271,13 +271,43 @@ async def suspend_worker(worker_id: str, body: dict, admin: dict = Depends(get_a
 
 @router.delete("/workers/{worker_id}")
 async def delete_worker_profile(worker_id: str, admin: dict = Depends(get_admin_user)):
+    """Full wipe: deletes worker profile, user account, all engagements, notifications, bot session."""
     worker = await db.workers.find_one({"id": worker_id}, {"_id": 0, "user_id": 1, "name": 1})
     if not worker:
         raise HTTPException(status_code=404, detail="Worker not found")
+    user_id = worker.get("user_id", "")
+    name = worker.get("name", "")
     await db.workers.delete_one({"id": worker_id})
-    await db.users.update_one({"id": worker["user_id"]}, {"$set": {"role": "customer"}})
-    await audit(admin, "worker.profile_deleted", worker_id, worker.get("name", ""))
-    return {"ok": True}
+    await db.users.delete_one({"id": user_id})
+    await db.engagements.delete_many({"worker_id": worker_id})
+    await db.notifications.delete_many({"user_id": user_id})
+    await db.bot_sessions.delete_many({"session_id": {"$regex": user_id[:8]}})
+    await db.otps.delete_many({"phone": {"$regex": ""}})  # cleared by user below
+    await db.wa_notif_log.delete_many({"user_id": user_id})
+    await audit(admin, "worker.full_delete", worker_id, name)
+    return {"ok": True, "deleted": name}
+
+
+@router.delete("/users/by-phone/{phone}")
+async def delete_user_by_phone(phone: str, admin: dict = Depends(get_admin_user)):
+    """Full wipe of a user account by phone number — removes user, worker profile, all data."""
+    user = await db.users.find_one({"phone_primary": {"$regex": phone, "$options": "i"}}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail=f"No user found with phone containing {phone}")
+    user_id = user["id"]
+    worker = await db.workers.find_one({"user_id": user_id}, {"_id": 0, "id": 1})
+    if worker:
+        await db.workers.delete_one({"id": worker["id"]})
+        await db.engagements.delete_many({"worker_id": worker["id"]})
+        await db.wa_notif_log.delete_many({"user_id": user_id})
+    await db.engagements.delete_many({"customer_id": user_id})
+    await db.jobs.delete_many({"customer_id": user_id})
+    await db.notifications.delete_many({"user_id": user_id})
+    await db.bot_sessions.delete_many({"session_id": {"$regex": phone.replace("+", "")}})
+    await db.otps.delete_many({"phone": {"$regex": phone.replace("+", "")}})
+    await db.users.delete_one({"id": user_id})
+    await audit(admin, "user.full_delete", user_id, user.get("name", phone))
+    return {"ok": True, "deleted_user": user.get("name"), "phone": phone}
 
 
 # ---------------------------------------------------------------------------

@@ -39,6 +39,7 @@ import ContactSupportScreen from "./src/screens/ContactSupportScreen";
 import WorkerMyProfileScreen from "./src/screens/WorkerMyProfileScreen";
 import CustomerProfileScreen from "./src/screens/CustomerProfileScreen";
 import CalendarScreen from "./src/screens/CalendarScreen";
+import AdminScreen from "./src/screens/AdminScreen";
 
 function AccountTab(props) {
   const { user } = useAuth();
@@ -110,6 +111,12 @@ function Tabs() {
           options={{ title: "My Work", ...TAB_OPTS.icon("wallet-outline") }} />
         <Tab.Screen name="MyProfile" component={WorkerMyProfileScreen}
           options={{ title: "My Profile", ...TAB_OPTS.icon("person-circle-outline") }} />
+      </>}
+
+      {/* ── ADMIN ──────────────────────────────────────── */}
+      {role === "admin" && <>
+        <Tab.Screen name="Admin" component={AdminScreen}
+          options={{ title: "Dashboard", ...TAB_OPTS.icon("shield-checkmark-outline") }} />
       </>}
     </Tab.Navigator>
   );
