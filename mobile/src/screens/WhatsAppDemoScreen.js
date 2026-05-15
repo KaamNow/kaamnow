@@ -20,12 +20,8 @@ import Overline from "../components/Overline";
 const SESSION_KEY = "kn_wa_session";
 
 function getSessionId(user) {
-  // Logged-in users: use their phone so the bot identifies them correctly
-  if (user?.phone_primary) {
-    const digits = user.phone_primary.replace(/\D/g, "");
-    return digits.length >= 10 ? digits : null;
-  }
-  return null;
+  // Logged-in users: use their id as session — backend injects identity via JWT
+  return user?.id ? `app-${user.id}` : null;
 }
 
 export default function WhatsAppDemoScreen() {
@@ -79,7 +75,6 @@ export default function WhatsAppDemoScreen() {
   };
 
   const reset = async () => {
-    // For logged-in users just clear messages; session stays as their phone
     if (!getSessionId(user)) {
       await SecureStore.deleteItemAsync(SESSION_KEY);
       const sid = "wa-" + Math.random().toString(36).slice(2, 12);
@@ -87,7 +82,7 @@ export default function WhatsAppDemoScreen() {
       sessionId.current = sid;
     }
     setMessages([]);
-    setTimeout(() => send("hi", true), 200);
+    setTimeout(() => send("MENU", true), 200);
   };
 
   return (

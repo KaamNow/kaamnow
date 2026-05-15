@@ -27,9 +27,10 @@ from datetime import date, timedelta
 from typing import Any, Optional
 
 import requests
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 
+from ..auth import get_optional_user
 from ..config import settings
 from ..db import db
 from ..engagements import (
@@ -1222,10 +1223,22 @@ def send_whatsapp(phone: str, text: str) -> None:
 # ─── Routes ───────────────────────────────────────────────────────────────────
 
 @router.post("/message")
-async def whatsapp_message(body: WhatsAppMessageIn):
-    """Internal REST endpoint for testing the bot without Gupshup."""
+async def whatsapp_message(body: WhatsAppMessageIn, current_user: dict = Depends(get_optional_user)):
+    """Internal REST endpoint for in-app chat bot."""
     state_doc = await db.bot_sessions.find_one({"session_id": body.session_id})
     state = state_doc["state"] if state_doc else {"step": "start"}
+
+    # If user is authenticated, inject their identity into state so bot skips phone lookup
+    if current_user and not state.get("user_id"):
+        worker = await db.workers.find_one({"user_id": current_user["id"]}, {"_id": 0, "id": 1})
+        state = {
+            **state,
+            "user_id": current_user["id"],
+            "role": current_user.get("role", "customer"),
+            "worker_id": worker["id"] if worker else None,
+            "step": state.get("step", "start"),
+        }
+
     reply, new_state = await _handle_message(body.session_id, body.message, state)
     await _save_bot_state(body.session_id, new_state)
     return {"reply": reply, "state": new_state}
