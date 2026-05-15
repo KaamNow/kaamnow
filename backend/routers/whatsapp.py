@@ -1304,32 +1304,7 @@ def _send_gupshup_buttons(destination: str, text: str, buttons: list[tuple[str, 
         except Exception as exc:
             logger.warning("quick_reply attempt failed: %s", exc)
 
-        # Attempt 2: WhatsApp interactive/button format
-        ia_payload = {
-            "type": "interactive",
-            "interactive": {
-                "type": "button",
-                "body": {"text": text},
-                "action": {
-                    "buttons": [
-                        {"type": "reply", "reply": {"id": bid[:256], "title": btitle[:20]}}
-                        for bid, btitle in btn_list
-                    ]
-                },
-            },
-        }
-        try:
-            form2 = {**base, "message": json.dumps(ia_payload)}
-            resp2 = requests.post(settings.gupshup_api_url, data=form2, headers=headers, timeout=10)
-            r2 = resp2.json() if resp2.content else {}
-            logger.info("Gupshup interactive/button → HTTP %s status=%s resp=%s",
-                        resp2.status_code, r2.get("status"), str(r2)[:120])
-            if r2.get("status") == "submitted":
-                return r2
-        except Exception as exc:
-            logger.warning("interactive/button attempt failed: %s", exc)
-
-        logger.warning("Both button formats rejected by Gupshup — falling back to text")
+        logger.warning("quick_reply not submitted by Gupshup — falling back to text")
 
     # Fallback: clean text with options (always works)
     btn_lines = "\n".join(f"{b[1]}" for b in btn_list)
