@@ -265,5 +265,11 @@ def init_otp_service(
 def get_otp_service() -> OTPService:
     global otp_service
     if otp_service is None:
-        otp_service = OTPService()
+        from .config import settings
+        otp_service = OTPService(
+            gupshup_api_key=settings.gupshup_api_key,
+            gupshup_source=settings.gupshup_source,
+            gupshup_template_url=settings.gupshup_template_url,
+            gupshup_app_id=getattr(settings, "gupshup_app_id", "KaamNow"),
+        )
     return otp_service
