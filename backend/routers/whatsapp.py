@@ -596,6 +596,7 @@ _CATEGORY_MAP = {1: "Farm", 2: "Construction", 3: "Construction", 4: "Home", 5: 
 async def _finish_customer_onboard(source_phone: str, state: dict) -> tuple[str, dict]:
     phone_digits = "".join(c for c in source_phone if c.isdigit())
     phone_10 = phone_digits[-10:] if len(phone_digits) >= 10 else phone_digits
+    phone_stored = f"+91{phone_10}"  # consistent with app-registered users
     existing = await db.users.find_one({"phone_primary": {"$regex": phone_10, "$options": "i"}})
     if existing:
         return (
@@ -608,7 +609,7 @@ async def _finish_customer_onboard(source_phone: str, state: dict) -> tuple[str,
     }
     user_id = str(uuid.uuid4())
     await db.users.insert_one({
-        "id": user_id, "phone_primary": phone_10, "phone_verified": True,
+        "id": user_id, "phone_primary": phone_stored, "phone_verified": True,
         "name": state["wa_name"], "role": "customer", "password_hash": None,
         "pincode": state["wa_pincode"], "village": state["wa_village"], "address": address,
         "photo_url": None, "preferred_language": "hi",
@@ -627,6 +628,7 @@ async def _finish_customer_onboard(source_phone: str, state: dict) -> tuple[str,
 async def _finish_worker_onboard(source_phone: str, state: dict) -> tuple[str, dict]:
     phone_digits = "".join(c for c in source_phone if c.isdigit())
     phone_10 = phone_digits[-10:] if len(phone_digits) >= 10 else phone_digits
+    phone_stored = f"+91{phone_10}"
     existing_user = await db.users.find_one({"phone_primary": {"$regex": phone_10, "$options": "i"}})
     if existing_user:
         user_id = existing_user["id"]
@@ -643,7 +645,7 @@ async def _finish_worker_onboard(source_phone: str, state: dict) -> tuple[str, d
             "state": state["wa_state"], "block": state.get("wa_block", ""), "pincode": state["wa_pincode"],
         }
         await db.users.insert_one({
-            "id": user_id, "phone_primary": phone_10, "phone_verified": True,
+            "id": user_id, "phone_primary": phone_stored, "phone_verified": True,
             "name": state["wa_name"], "role": "worker", "password_hash": None,
             "pincode": state["wa_pincode"], "village": state["wa_village"], "address": address,
             "photo_url": None, "preferred_language": "hi",

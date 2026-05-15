@@ -146,8 +146,11 @@ async def update_me(body: dict, user: dict = Depends(get_current_user)):
 async def check_phone(request: Request, phone: str):
     """Check if phone is registered. Returns exists, role, is_active, and expired status."""
     from datetime import datetime, timezone
+    # Normalize: match last 10 digits — handles +91XXXXXXXXXX vs XXXXXXXXXX stored formats
+    phone_digits = "".join(c for c in phone if c.isdigit())
+    phone_10 = phone_digits[-10:] if len(phone_digits) >= 10 else phone_digits
     user = await db.users.find_one(
-        {"phone_primary": phone},
+        {"phone_primary": {"$regex": phone_10, "$options": "i"}},
         {"_id": 0, "role": 1, "id": 1, "is_active": 1, "deleted_at": 1, "permanently_deleted": 1}
     )
     if not user:
@@ -435,7 +438,9 @@ async def login_complete(
     token = authorization.replace("Bearer ", "")
     phone = verify_temp_token(token)
 
-    user = await db.users.find_one({"phone_primary": phone})
+    phone_digits = "".join(c for c in phone if c.isdigit())
+    phone_10 = phone_digits[-10:] if len(phone_digits) >= 10 else phone_digits
+    user = await db.users.find_one({"phone_primary": {"$regex": phone_10}})
     if not user:
         raise HTTPException(status_code=404, detail="No account found for this number. Please sign up.")
 
