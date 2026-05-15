@@ -13,12 +13,23 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "expo-secure-store";
 import api from "../api";
+import { useAuth } from "../contexts/AuthContext";
 import { colors, fonts, radius, spacing } from "../theme";
 import Overline from "../components/Overline";
 
 const SESSION_KEY = "kn_wa_session";
 
+function getSessionId(user) {
+  // Logged-in users: use their phone so the bot identifies them correctly
+  if (user?.phone_primary) {
+    const digits = user.phone_primary.replace(/\D/g, "");
+    return digits.length >= 10 ? digits : null;
+  }
+  return null;
+}
+
 export default function WhatsAppDemoScreen() {
+  const { user } = useAuth();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
@@ -27,15 +38,20 @@ export default function WhatsAppDemoScreen() {
 
   useEffect(() => {
     (async () => {
-      let sid = await SecureStore.getItemAsync(SESSION_KEY);
+      // Prefer real phone for logged-in users; fall back to stored random for guests
+      let sid = getSessionId(user);
       if (!sid) {
-        sid = "wa-" + Math.random().toString(36).slice(2, 12);
-        await SecureStore.setItemAsync(SESSION_KEY, sid);
+        sid = await SecureStore.getItemAsync(SESSION_KEY);
+        if (!sid) {
+          sid = "wa-" + Math.random().toString(36).slice(2, 12);
+          await SecureStore.setItemAsync(SESSION_KEY, sid);
+        }
       }
       sessionId.current = sid;
+      setMessages([]);
       send("hi", true);
     })();
-  }, []);
+  }, [user?.id]); // re-init when user logs in/out
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -63,10 +79,13 @@ export default function WhatsAppDemoScreen() {
   };
 
   const reset = async () => {
-    await SecureStore.deleteItemAsync(SESSION_KEY);
-    const sid = "wa-" + Math.random().toString(36).slice(2, 12);
-    await SecureStore.setItemAsync(SESSION_KEY, sid);
-    sessionId.current = sid;
+    // For logged-in users just clear messages; session stays as their phone
+    if (!getSessionId(user)) {
+      await SecureStore.deleteItemAsync(SESSION_KEY);
+      const sid = "wa-" + Math.random().toString(36).slice(2, 12);
+      await SecureStore.setItemAsync(SESSION_KEY, sid);
+      sessionId.current = sid;
+    }
     setMessages([]);
     setTimeout(() => send("hi", true), 200);
   };
@@ -77,19 +96,11 @@ export default function WhatsAppDemoScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={{ flex: 1 }}
       >
-        <View style={styles.head}>
-          <Overline>WhatsApp bot — simulated demo</Overline>
-          <Text style={styles.h1}>Book workers without an app.</Text>
-          <Text style={styles.lead}>
-            Try it: type <Text style={styles.code}>1</Text> to book workers, or <Text style={styles.code}>menu</Text> to restart.
-          </Text>
-        </View>
-
         <View style={styles.chatHeader}>
           <View style={styles.botAvatar}><Text style={styles.botAvatarText}>K</Text></View>
           <View style={{ flex: 1 }}>
             <Text style={styles.botName}>KaamNow Bot</Text>
-            <Text style={styles.botStatus}>online · simulated</Text>
+            <Text style={styles.botStatus}>{user ? `online · ${user.name}` : "online · guest"}</Text>
           </View>
           <Pressable testID="reset-chat" onPress={reset}>
             <Text style={styles.resetText}>Reset</Text>
