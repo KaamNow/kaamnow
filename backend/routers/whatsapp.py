@@ -1216,6 +1216,13 @@ def _extract_gupshup_incoming(body: dict) -> tuple[str, str]:
         if not text and body.get("type") == "button_reply":
             text = body.get("id") or body.get("title") or ""
 
+        # Format E: Gupshup quick_reply postback
+        if not text and inner.get("type") == "quick_reply":
+            text = inner_payload.get("postbackText") or inner_payload.get("title") or ""
+        if not text and body.get("type") == "quick_reply":
+            btn = inner.get("payload") or inner_payload
+            text = btn.get("postbackText") or btn.get("title") or ""
+
         # Format D: payload.interactive.button_reply (v2 format)
         if not text:
             interactive_data = inner.get("interactive") or {}
@@ -1265,8 +1272,42 @@ def _send_gupshup_buttons(destination: str, text: str, buttons: list[tuple[str, 
     btn_list = buttons[:3]
 
     if getattr(settings, "feature_whatsapp_buttons", True):
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "apikey": settings.gupshup_api_key,
+        }
+        base = {
+            "channel": settings.gupshup_channel,
+            "source": settings.gupshup_source,
+            "destination": destination,
+        }
+        if getattr(settings, "gupshup_app_id", None):
+            base["src.name"] = settings.gupshup_app_id
+
+        # Attempt 1: Gupshup native quick_reply format
+        qr_payload = {
+            "type": "quick_reply",
+            "content": {"type": "text", "text": text},
+            "options": [
+                {"type": "text", "title": btitle[:20], "postbackText": bid}
+                for bid, btitle in btn_list
+            ],
+        }
         try:
-            interactive = {
+            form1 = {**base, "message": json.dumps(qr_payload)}
+            resp1 = requests.post(settings.gupshup_api_url, data=form1, headers=headers, timeout=10)
+            r1 = resp1.json() if resp1.content else {}
+            logger.info("Gupshup quick_reply → HTTP %s status=%s resp=%s",
+                        resp1.status_code, r1.get("status"), str(r1)[:120])
+            if r1.get("status") == "submitted":
+                return r1
+        except Exception as exc:
+            logger.warning("quick_reply attempt failed: %s", exc)
+
+        # Attempt 2: WhatsApp interactive/button format
+        ia_payload = {
+            "type": "interactive",
+            "interactive": {
                 "type": "button",
                 "body": {"text": text},
                 "action": {
@@ -1275,49 +1316,22 @@ def _send_gupshup_buttons(destination: str, text: str, buttons: list[tuple[str, 
                         for bid, btitle in btn_list
                     ]
                 },
-            }
-            headers = {
-                "Content-Type": "application/x-www-form-urlencoded",
-                "apikey": settings.gupshup_api_key,
-            }
-            base = {
-                "channel": settings.gupshup_channel,
-                "source": settings.gupshup_source,
-                "destination": destination,
-            }
-            if getattr(settings, "gupshup_app_id", None):
-                base["src.name"] = settings.gupshup_app_id
-
-            # Attempt 1: type as top-level form field (Gupshup preferred)
-            payload = {
-                **base,
-                "message": json.dumps({"interactive": interactive}),
-                "type": "interactive",
-            }
-            resp = requests.post(settings.gupshup_api_url, data=payload, headers=headers, timeout=10)
-            result = resp.json() if resp.content else {}
-            logger.info("Gupshup interactive attempt1 → %s %s — buttons: %s",
-                        resp.status_code, result.get("status"), [b[0] for b in btn_list])
-
-            if result.get("status") not in ("error", "failed") and resp.status_code < 400:
-                return result
-
-            # Attempt 2: type inside message JSON
-            payload2 = {
-                **base,
-                "message": json.dumps({"type": "interactive", "interactive": interactive}),
-            }
-            resp2 = requests.post(settings.gupshup_api_url, data=payload2, headers=headers, timeout=10)
-            result2 = resp2.json() if resp2.content else {}
-            logger.info("Gupshup interactive attempt2 → %s %s", resp2.status_code, result2.get("status"))
-            if result2.get("status") not in ("error", "failed") and resp2.status_code < 400:
-                return result2
-
-            logger.warning("Both interactive attempts failed — falling back to text")
+            },
+        }
+        try:
+            form2 = {**base, "message": json.dumps(ia_payload)}
+            resp2 = requests.post(settings.gupshup_api_url, data=form2, headers=headers, timeout=10)
+            r2 = resp2.json() if resp2.content else {}
+            logger.info("Gupshup interactive/button → HTTP %s status=%s resp=%s",
+                        resp2.status_code, r2.get("status"), str(r2)[:120])
+            if r2.get("status") == "submitted":
+                return r2
         except Exception as exc:
-            logger.warning("Interactive send exception, falling back to text: %s", exc)
+            logger.warning("interactive/button attempt failed: %s", exc)
 
-    # Fallback: clean text with options (always works in sandbox)
+        logger.warning("Both button formats rejected by Gupshup — falling back to text")
+
+    # Fallback: clean text with options (always works)
     btn_lines = "\n".join(f"{b[1]}" for b in btn_list)
     return _send_gupshup_text(destination, f"{text}\n\n{btn_lines}")
 
