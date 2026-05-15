@@ -41,7 +41,7 @@ class Settings(BaseModel):
     feature_engagement_flow: bool = False
     feature_otp_auth: bool = False
     feature_whatsapp_notifications: bool = False
-    feature_whatsapp_buttons: bool = False  # enable only after Gupshup enables interactive msgs on account
+    feature_whatsapp_buttons: bool = True  # sends real interactive buttons; falls back to text if Gupshup rejects
 
     class Config:
         extra = "ignore"

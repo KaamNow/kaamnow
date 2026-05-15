@@ -774,6 +774,25 @@ async def _handle_message(source_phone: str, message_text: str, state: dict) -> 
     msg_up = raw.upper()
     msg_low = raw.lower()
 
+    # ── Normalize button title aliases to commands ──
+    _ALIASES = {
+        "find jobs": "JOBS", "find job": "JOBS", "💼 find jobs": "JOBS",
+        "my status": "STATUS", "meri status": "STATUS", "📊 my status": "STATUS",
+        "help": "HELP", "❓ help": "HELP",
+        "find workers": "MENU", "🔍 find workers": "MENU",
+        "more jobs": "MORE", "💼 more jobs": "MORE",
+        "withdraw": "WITHDRAW", "↩️ withdraw": "WITHDRAW",
+        "apply": "APPLY", "✅ apply": "APPLY",
+        "jobs list": "JOBS", "🔙 jobs list": "JOBS",
+        "worker": "2", "👷 worker": "2",
+        "customer": "1", "👤 customer": "1",
+    }
+    if msg_low in _ALIASES:
+        raw = _ALIASES[msg_low]
+        msg_up = raw.upper()
+        msg_low = raw.lower()
+        logger.info("Alias normalized: %r → %r", message_text.strip(), raw)
+
     # ── Universal commands ──
     if msg_up in ("HELP", "?", "MADAD"):
         role = state.get("role")
@@ -1180,13 +1199,31 @@ def _extract_gupshup_incoming(body: dict) -> tuple[str, str]:
         text = _format_gupshup_message(inner)
 
     # Handle button reply payloads (user tapped a quick-reply button)
+    # Gupshup sends multiple formats depending on version — try all
     if not text:
         inner_payload = inner.get("payload") if isinstance(inner.get("payload"), dict) else {}
+
+        # Format A: payload.type == "button_reply"
         if inner_payload.get("type") == "button_reply":
             text = inner_payload.get("id") or inner_payload.get("title") or ""
+
+        # Format B: payload.type == "interactive", payload.payload.button_reply
         elif inner.get("type") == "interactive":
-            btn = inner.get("payload") or {}
-            text = btn.get("id") or btn.get("title") or ""
+            btn_reply = inner_payload.get("button_reply") or inner_payload
+            text = btn_reply.get("id") or btn_reply.get("title") or ""
+
+        # Format C: top-level button_reply
+        if not text and body.get("type") == "button_reply":
+            text = body.get("id") or body.get("title") or ""
+
+        # Format D: payload.interactive.button_reply (v2 format)
+        if not text:
+            interactive_data = inner.get("interactive") or {}
+            btn_reply = interactive_data.get("button_reply") or {}
+            text = btn_reply.get("id") or btn_reply.get("title") or ""
+
+        if text:
+            logger.info("Button reply extracted: %r", text)
 
     if not src or not text:
         raise ValueError(f"Invalid Gupshup payload — src={src!r} text={text!r} body_keys={list(body.keys())}")
@@ -1227,7 +1264,7 @@ def _send_gupshup_buttons(destination: str, text: str, buttons: list[tuple[str, 
 
     btn_list = buttons[:3]
 
-    if getattr(settings, "feature_whatsapp_buttons", False):
+    if getattr(settings, "feature_whatsapp_buttons", True):
         try:
             interactive = {
                 "type": "button",
@@ -1239,26 +1276,48 @@ def _send_gupshup_buttons(destination: str, text: str, buttons: list[tuple[str, 
                     ]
                 },
             }
-            payload = {
-                "channel": settings.gupshup_channel,
-                "source": settings.gupshup_source,
-                "destination": destination,
-                "message": json.dumps({"type": "interactive", "interactive": interactive}),
-            }
-            if getattr(settings, "gupshup_app_id", None):
-                payload["src.name"] = settings.gupshup_app_id
             headers = {
                 "Content-Type": "application/x-www-form-urlencoded",
                 "apikey": settings.gupshup_api_key,
             }
+            base = {
+                "channel": settings.gupshup_channel,
+                "source": settings.gupshup_source,
+                "destination": destination,
+            }
+            if getattr(settings, "gupshup_app_id", None):
+                base["src.name"] = settings.gupshup_app_id
+
+            # Attempt 1: type as top-level form field (Gupshup preferred)
+            payload = {
+                **base,
+                "message": json.dumps({"interactive": interactive}),
+                "type": "interactive",
+            }
             resp = requests.post(settings.gupshup_api_url, data=payload, headers=headers, timeout=10)
             result = resp.json() if resp.content else {}
-            logger.info("Interactive buttons sent to %s: %s", destination[-4:], [b[0] for b in btn_list])
-            return result
-        except Exception as exc:
-            logger.warning("Interactive send failed, falling back to text: %s", exc)
+            logger.info("Gupshup interactive attempt1 → %s %s — buttons: %s",
+                        resp.status_code, result.get("status"), [b[0] for b in btn_list])
 
-    # Default: clean text with options (sandbox safe, always works)
+            if result.get("status") not in ("error", "failed") and resp.status_code < 400:
+                return result
+
+            # Attempt 2: type inside message JSON
+            payload2 = {
+                **base,
+                "message": json.dumps({"type": "interactive", "interactive": interactive}),
+            }
+            resp2 = requests.post(settings.gupshup_api_url, data=payload2, headers=headers, timeout=10)
+            result2 = resp2.json() if resp2.content else {}
+            logger.info("Gupshup interactive attempt2 → %s %s", resp2.status_code, result2.get("status"))
+            if result2.get("status") not in ("error", "failed") and resp2.status_code < 400:
+                return result2
+
+            logger.warning("Both interactive attempts failed — falling back to text")
+        except Exception as exc:
+            logger.warning("Interactive send exception, falling back to text: %s", exc)
+
+    # Fallback: clean text with options (always works in sandbox)
     btn_lines = "\n".join(f"{b[1]}" for b in btn_list)
     return _send_gupshup_text(destination, f"{text}\n\n{btn_lines}")
 
