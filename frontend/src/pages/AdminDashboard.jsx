@@ -213,7 +213,7 @@ export default function AdminDashboard() {
     catch { toast.error("Failed"); }
   };
   const deleteWorker = async (id, name) => {
-    if (!window.confirm(`Delete worker profile for "${name}"? Their account will remain but worker profile will be removed.`)) return;
+    if (!window.confirm(`Permanently delete ALL data for "${name}"? This removes their account, worker profile, engagements and history. Cannot be undone.`)) return;
     try { await api.delete(`/admin/workers/${id}`); toast.success("Worker profile deleted"); fetchWorkers(workerPage); }
     catch { toast.error("Failed to delete worker profile"); }
   };
