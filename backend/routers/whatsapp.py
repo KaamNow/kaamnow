@@ -104,14 +104,20 @@ async def _lookup_pincode(pincode: str) -> Optional[dict]:
     """Call api.postalpincode.in and return district/state/block/post or None."""
     import asyncio
     try:
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         resp = await loop.run_in_executor(
             None,
-            lambda: requests.get(f"https://api.postalpincode.in/pincode/{pincode}", timeout=5),
+            lambda: requests.get(
+                f"https://api.postalpincode.in/pincode/{pincode}",
+                timeout=10,
+                verify=False,  # SSL cert on this public API unreliable from non-IN servers
+            ),
         )
         data = resp.json()
+        logger.info("Pincode lookup %s → status=%s", pincode, data[0].get("Status") if data else "empty")
         entry = data[0] if data else None
         if not entry or entry.get("Status") != "Success" or not entry.get("PostOffice"):
+            logger.warning("Pincode %s not found: %s", pincode, entry.get("Status") if entry else "no data")
             return None
         pos = entry["PostOffice"]
         head = next((p for p in pos if p.get("BranchType") == "Head Post Office"), pos[0])
@@ -121,7 +127,8 @@ async def _lookup_pincode(pincode: str) -> Optional[dict]:
             "block": head["Block"] if head.get("Block") and head["Block"] != "NA" else "",
             "post": head["Name"],
         }
-    except Exception:
+    except Exception as exc:
+        logger.error("Pincode lookup failed for %s: %s", pincode, exc)
         return None
 
 
