@@ -348,7 +348,7 @@ async def _cmd_job_detail(source_phone: str, number: int, state: dict) -> tuple[
 
     msg = _format_job_detail(job, lat, lng)
     new_state = {**state, "step": "job_detail", "viewed_job": job}
-    return (_reply(msg, [("APPLY", "✅ Apply"), ("JOBS", "🔙 Jobs List")]), new_state)
+    return (msg, new_state)
 
 
 async def _cmd_apply(source_phone: str, state: dict) -> tuple[str, dict]:
@@ -384,10 +384,11 @@ async def _cmd_apply(source_phone: str, state: dict) -> tuple[str, dict]:
 
     new_state = {**state, "step": "applied", "active_engagement_id": engagement["id"], "viewed_job": None}
     return (
-        _reply(
-            f"✅ *Interest bhej diya!*\n\nJob: {viewed_job['title']}\nCustomer ko notification gaya. Approve hone par WhatsApp aayega.",
-            [("WITHDRAW", "↩️ Withdraw"), ("JOBS", "💼 More Jobs")],
-        ),
+        f"✅ *Interest bhej diya!*\n\n"
+        f"Job: {viewed_job['title']}\n"
+        f"Customer ko notification gaya. Woh approve karenge to aapko WhatsApp ayega.\n\n"
+        f"Wapas lene ke liye: *WITHDRAW*\n"
+        f"Aur jobs ke liye: *JOBS*",
         new_state,
     )
 
@@ -689,10 +690,9 @@ async def _cmd_onboard(source_phone: str, message: str, state: dict) -> tuple[st
         if msg == "2":
             return ("Aapka poora naam kya hai?", {**state, "step": "wa_ob_name", "wa_role": "worker"})
         return (
-            _reply(
-                "Aap kya hain? 🙏",
-                [("1", "👤 Customer"), ("2", "👷 Worker")],
-            ),
+            "Sirf *1* ya *2* reply karein 🙏\n\n"
+            "1️⃣ Mujhe workers chahiye *(Customer)*\n"
+            "2️⃣ Main kaam dhundhta/dhundhti hun *(Worker)*",
             state,
         )
 
@@ -774,25 +774,6 @@ async def _handle_message(source_phone: str, message_text: str, state: dict) -> 
     msg_up = raw.upper()
     msg_low = raw.lower()
 
-    # ── Normalize button title aliases to commands ──
-    _ALIASES = {
-        "find jobs": "JOBS", "find job": "JOBS", "💼 find jobs": "JOBS",
-        "my status": "STATUS", "meri status": "STATUS", "📊 my status": "STATUS",
-        "help": "HELP", "❓ help": "HELP",
-        "find workers": "MENU", "🔍 find workers": "MENU",
-        "more jobs": "MORE", "💼 more jobs": "MORE",
-        "withdraw": "WITHDRAW", "↩️ withdraw": "WITHDRAW",
-        "apply": "APPLY", "✅ apply": "APPLY",
-        "jobs list": "JOBS", "🔙 jobs list": "JOBS",
-        "worker": "2", "👷 worker": "2",
-        "customer": "1", "👤 customer": "1",
-    }
-    if msg_low in _ALIASES:
-        raw = _ALIASES[msg_low]
-        msg_up = raw.upper()
-        msg_low = raw.lower()
-        logger.info("Alias normalized: %r → %r", message_text.strip(), raw)
-
     # ── Universal commands ──
     if msg_up in ("HELP", "?", "MADAD"):
         role = state.get("role")
@@ -822,10 +803,11 @@ async def _handle_message(source_phone: str, message_text: str, state: dict) -> 
             return await _cmd_onboard(source_phone, raw, state)
         # Any message from unknown number → start onboarding
         return (
-            _reply(
-                "Namaste! KaamNow mein swagat hai 🙏\n\nAap kya hain?",
-                [("1", "👤 Customer"), ("2", "👷 Worker")],
-            ),
+            "Namaste! KaamNow mein swagat hai 🙏\n\n"
+            "Aap kya hain?\n\n"
+            "1️⃣ Mujhe workers chahiye *(Customer)*\n"
+            "2️⃣ Main kaam dhundhta/dhundhti hun *(Worker)*\n\n"
+            "Reply *1* ya *2*",
             {"step": "wa_ob_role"},
         )
 
@@ -954,10 +936,11 @@ async def _handle_message(source_phone: str, message_text: str, state: dict) -> 
             name = user.get("name", "").split()[0] if user.get("name") else "Worker"
             pincode = (worker.get("address") or {}).get("pincode") or "set nahi"
             return (
-                _reply(
-                    f"Namaste {name}! 👷 KaamNow mein swagat hai.\n📍 Pincode: {pincode}",
-                    [("JOBS", "💼 Find Jobs"), ("STATUS", "📊 My Status"), ("HELP", "❓ Help")],
-                ),
+                f"Namaste {name}! 👷 KaamNow mein swagat hai.\n\n"
+                f"📍 Aapka pincode: {pincode}\n\n"
+                f"*JOBS* – Kaam dhundhen\n"
+                f"*STATUS* – Meri requests\n"
+                f"*HELP* – Sabhi commands\n",
                 {**state, "step": "worker_menu"},
             )
 
@@ -974,10 +957,10 @@ async def _handle_message(source_phone: str, message_text: str, state: dict) -> 
         if msg_up in ("HI", "HELLO", "NAMASTE", "HAI") or step in ("start", None):
             name = user.get("name", "").split()[0] if user.get("name") else "Customer"
             return (
-                _reply(
-                    f"Namaste {name}! KaamNow mein swagat hai 🙏",
-                    [("MENU", "🔍 Find Workers"), ("HELP", "❓ Help")],
-                ),
+                f"Namaste {name}! KaamNow mein swagat hai 🙏\n\n"
+                f"Workers dhundhne ke liye: *MENU*\n"
+                f"Help ke liye: *HELP*\n\n"
+                f"🌐 kaamnow.com/dashboard",
                 {**state, "step": "customer_menu"},
             )
 
@@ -1198,40 +1181,6 @@ def _extract_gupshup_incoming(body: dict) -> tuple[str, str]:
         # Last resort: try _format_gupshup_message on the inner payload dict
         text = _format_gupshup_message(inner)
 
-    # Handle button reply payloads (user tapped a quick-reply button)
-    # Gupshup sends multiple formats depending on version — try all
-    if not text:
-        inner_payload = inner.get("payload") if isinstance(inner.get("payload"), dict) else {}
-
-        # Format A: payload.type == "button_reply"
-        if inner_payload.get("type") == "button_reply":
-            text = inner_payload.get("id") or inner_payload.get("title") or ""
-
-        # Format B: payload.type == "interactive", payload.payload.button_reply
-        elif inner.get("type") == "interactive":
-            btn_reply = inner_payload.get("button_reply") or inner_payload
-            text = btn_reply.get("id") or btn_reply.get("title") or ""
-
-        # Format C: top-level button_reply
-        if not text and body.get("type") == "button_reply":
-            text = body.get("id") or body.get("title") or ""
-
-        # Format E: Gupshup quick_reply postback
-        if not text and inner.get("type") == "quick_reply":
-            text = inner_payload.get("postbackText") or inner_payload.get("title") or ""
-        if not text and body.get("type") == "quick_reply":
-            btn = inner.get("payload") or inner_payload
-            text = btn.get("postbackText") or btn.get("title") or ""
-
-        # Format D: payload.interactive.button_reply (v2 format)
-        if not text:
-            interactive_data = inner.get("interactive") or {}
-            btn_reply = interactive_data.get("button_reply") or {}
-            text = btn_reply.get("id") or btn_reply.get("title") or ""
-
-        if text:
-            logger.info("Button reply extracted: %r", text)
-
     if not src or not text:
         raise ValueError(f"Invalid Gupshup payload — src={src!r} text={text!r} body_keys={list(body.keys())}")
     return str(src), text
@@ -1260,62 +1209,6 @@ def _send_gupshup_text(destination: str, text: str) -> dict:
         return resp.json()
     except ValueError:
         return {"text": resp.text}
-
-
-def _send_gupshup_buttons(destination: str, text: str, buttons: list[tuple[str, str]]) -> dict:
-    """Send interactive buttons if FEATURE_WHATSAPP_BUTTONS=true, else clean text fallback.
-    buttons: list of (id, title) — id is the command bot receives, title shown to user.
-    """
-    if not settings.gupshup_api_url or not settings.gupshup_api_key or not settings.gupshup_source:
-        raise RuntimeError("Gupshup settings are not configured")
-
-    btn_list = buttons[:3]
-
-    if getattr(settings, "feature_whatsapp_buttons", True):
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "apikey": settings.gupshup_api_key,
-        }
-        base = {
-            "channel": settings.gupshup_channel,
-            "source": settings.gupshup_source,
-            "destination": destination,
-        }
-        if getattr(settings, "gupshup_app_id", None):
-            base["src.name"] = settings.gupshup_app_id
-
-        # Attempt 1: Gupshup native quick_reply format
-        qr_payload = {
-            "type": "quick_reply",
-            "content": {"type": "text", "text": text},
-            "options": [
-                {"type": "text", "title": btitle[:20], "postbackText": bid}
-                for bid, btitle in btn_list
-            ],
-        }
-        try:
-            form1 = {**base, "message": json.dumps(qr_payload)}
-            resp1 = requests.post(settings.gupshup_api_url, data=form1, headers=headers, timeout=10)
-            r1 = resp1.json() if resp1.content else {}
-            logger.info("Gupshup quick_reply → HTTP %s status=%s resp=%s",
-                        resp1.status_code, r1.get("status"), str(r1)[:120])
-            if r1.get("status") == "submitted":
-                return r1
-        except Exception as exc:
-            logger.warning("quick_reply attempt failed: %s", exc)
-
-        logger.warning("quick_reply not submitted by Gupshup — falling back to text")
-
-    # Fallback: clean text with options (always works)
-    btn_lines = "\n".join(f"{b[1]}" for b in btn_list)
-    return _send_gupshup_text(destination, f"{text}\n\n{btn_lines}")
-
-
-def _reply(text: str, buttons: list[tuple[str, str]] | None = None) -> dict | str:
-    """Return a reply dict with optional buttons, or plain string if no buttons."""
-    if buttons:
-        return {"text": text, "buttons": buttons}
-    return text
 
 
 def send_whatsapp(phone: str, text: str) -> None:
@@ -1348,9 +1241,7 @@ async def whatsapp_message(body: WhatsAppMessageIn, current_user: dict = Depends
 
     reply, new_state = await _handle_message(body.session_id, body.message, state)
     await _save_bot_state(body.session_id, new_state)
-    reply_text = reply["text"] if isinstance(reply, dict) else reply
-    reply_buttons = reply.get("buttons") if isinstance(reply, dict) else None
-    return {"reply": reply_text, "buttons": reply_buttons, "state": new_state}
+    return {"reply": reply, "state": new_state}
 
 
 @router.head("/gupshup")
@@ -1425,11 +1316,7 @@ async def gupshup_webhook(request: Request):
     await _save_bot_state(session_id, new_state)
 
     try:
-        if isinstance(reply, dict) and reply.get("buttons"):
-            response = _send_gupshup_buttons(source_phone, reply["text"], reply["buttons"])
-        else:
-            reply_text = reply["text"] if isinstance(reply, dict) else reply
-            response = _send_gupshup_text(source_phone, reply_text)
+        response = _send_gupshup_text(source_phone, reply)
         logger.info("Sent WhatsApp reply to %s", source_phone[-4:])
     except Exception as exc:
         logger.error("WhatsApp send failed: %s", exc)
