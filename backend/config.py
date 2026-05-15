@@ -41,6 +41,7 @@ class Settings(BaseModel):
     feature_engagement_flow: bool = False
     feature_otp_auth: bool = False
     feature_whatsapp_notifications: bool = False
+    feature_whatsapp_buttons: bool = False  # enable only after Gupshup enables interactive msgs on account
 
     class Config:
         extra = "ignore"
@@ -75,4 +76,5 @@ settings = Settings(
     feature_engagement_flow=_to_bool(os.getenv("FEATURE_ENGAGEMENT_FLOW"), False),
     feature_otp_auth=_to_bool(os.getenv("FEATURE_OTP_AUTH"), False),
     feature_whatsapp_notifications=_to_bool(os.getenv("FEATURE_WHATSAPP_NOTIFICATIONS"), False),
+    feature_whatsapp_buttons=_to_bool(os.getenv("FEATURE_WHATSAPP_BUTTONS"), False),
 )

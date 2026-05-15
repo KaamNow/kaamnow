@@ -1219,51 +1219,48 @@ def _send_gupshup_text(destination: str, text: str) -> dict:
 
 
 def _send_gupshup_buttons(destination: str, text: str, buttons: list[tuple[str, str]]) -> dict:
-    """Send a WhatsApp interactive button message (max 3 buttons).
-    buttons: list of (id, title) — id is what bot receives when tapped, title shown to user.
-    Falls back to plain text with numbered options if interactive fails.
+    """Send interactive buttons if FEATURE_WHATSAPP_BUTTONS=true, else clean text fallback.
+    buttons: list of (id, title) — id is the command bot receives, title shown to user.
     """
     if not settings.gupshup_api_url or not settings.gupshup_api_key or not settings.gupshup_source:
         raise RuntimeError("Gupshup settings are not configured")
 
     btn_list = buttons[:3]
-    try:
-        interactive = {
-            "type": "button",
-            "body": {"text": text},
-            "action": {
-                "buttons": [
-                    {"type": "reply", "reply": {"id": bid[:256], "title": btitle[:20]}}
-                    for bid, btitle in btn_list
-                ]
-            },
-        }
-        payload = {
-            "channel": settings.gupshup_channel,
-            "source": settings.gupshup_source,
-            "destination": destination,
-            "message": json.dumps({"interactive": interactive}),
-            "type": "interactive",
-        }
-        if getattr(settings, "gupshup_app_id", None):
-            payload["src.name"] = settings.gupshup_app_id
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "apikey": settings.gupshup_api_key,
-        }
-        resp = requests.post(settings.gupshup_api_url, data=payload, headers=headers, timeout=10)
-        result = resp.json() if resp.content else {}
-        if resp.status_code in (200, 202) and result.get("status") not in ("error", "failed"):
-            logger.info("Interactive button message sent to %s", destination[-4:])
-            return result
-        logger.warning("Interactive failed (%s) — falling back to text: %s", resp.status_code, result)
-    except Exception as exc:
-        logger.warning("Interactive send failed, falling back to text: %s", exc)
 
-    # Fallback: plain text with numbered options
-    numbered = "\n".join(f"{i+1}. {title}" for i, (_, title) in enumerate(btn_list))
-    fallback_text = f"{text}\n\n{numbered}"
-    return _send_gupshup_text(destination, fallback_text)
+    if getattr(settings, "feature_whatsapp_buttons", False):
+        try:
+            interactive = {
+                "type": "button",
+                "body": {"text": text},
+                "action": {
+                    "buttons": [
+                        {"type": "reply", "reply": {"id": bid[:256], "title": btitle[:20]}}
+                        for bid, btitle in btn_list
+                    ]
+                },
+            }
+            payload = {
+                "channel": settings.gupshup_channel,
+                "source": settings.gupshup_source,
+                "destination": destination,
+                "message": json.dumps({"type": "interactive", "interactive": interactive}),
+            }
+            if getattr(settings, "gupshup_app_id", None):
+                payload["src.name"] = settings.gupshup_app_id
+            headers = {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "apikey": settings.gupshup_api_key,
+            }
+            resp = requests.post(settings.gupshup_api_url, data=payload, headers=headers, timeout=10)
+            result = resp.json() if resp.content else {}
+            logger.info("Interactive buttons sent to %s: %s", destination[-4:], [b[0] for b in btn_list])
+            return result
+        except Exception as exc:
+            logger.warning("Interactive send failed, falling back to text: %s", exc)
+
+    # Default: clean text with options (sandbox safe, always works)
+    btn_lines = "\n".join(f"{b[1]}" for b in btn_list)
+    return _send_gupshup_text(destination, f"{text}\n\n{btn_lines}")
 
 
 def _reply(text: str, buttons: list[tuple[str, str]] | None = None) -> dict | str:
