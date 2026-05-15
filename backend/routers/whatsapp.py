@@ -40,6 +40,7 @@ from ..schemas import WhatsAppMessageIn
 from ..utils import utc_now_iso
 from ..whatsapp_notify import (
     notify_customer_booking_accepted,
+    notify_customer_booking_rejected,
     notify_worker_new_booking,
 )
 
@@ -91,6 +92,36 @@ async def _lookup_user_by_phone(phone: str) -> Optional[dict]:
 
 def _create_session_id(source: str) -> str:
     return f"whatsapp-{source.strip().lstrip('+')}"
+
+
+def _generate_avatar_color(name: str) -> str:
+    colors = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#96CEB4", "#FFEAA7", "#DDA0DD", "#98D8C8"]
+    return colors[sum(ord(c) for c in name) % len(colors)]
+
+
+async def _lookup_pincode(pincode: str) -> Optional[dict]:
+    """Call api.postalpincode.in and return district/state/block/post or None."""
+    import asyncio
+    try:
+        loop = asyncio.get_event_loop()
+        resp = await loop.run_in_executor(
+            None,
+            lambda: requests.get(f"https://api.postalpincode.in/pincode/{pincode}", timeout=5),
+        )
+        data = resp.json()
+        entry = data[0] if data else None
+        if not entry or entry.get("Status") != "Success" or not entry.get("PostOffice"):
+            return None
+        pos = entry["PostOffice"]
+        head = next((p for p in pos if p.get("BranchType") == "Head Post Office"), pos[0])
+        return {
+            "district": head["District"],
+            "state": head["State"],
+            "block": head["Block"] if head.get("Block") and head["Block"] != "NA" else "",
+            "post": head["Name"],
+        }
+    except Exception:
+        return None
 
 
 async def _save_bot_state(session_id: str, new_state: dict) -> None:
@@ -536,6 +567,190 @@ def _bot_reply_customer(state: dict, message: str) -> tuple[str, dict]:
     return ("MENU type karein naya request karne ke liye.", {"step": "start"})
 
 
+# ─── WhatsApp onboarding ──────────────────────────────────────────────────────
+
+_SKILL_MAP = {
+    1: ["harvesting", "weeding", "transplanting"],
+    2: ["mason", "carpentry", "painting", "plumbing"],
+    3: ["electrical", "wiring"],
+    4: ["cleaning", "domestic help"],
+    5: ["driver", "loading"],
+    6: ["helper", "digging"],
+}
+_CATEGORY_MAP = {1: "Farm", 2: "Construction", 3: "Construction", 4: "Home", 5: "Transport", 6: "Other"}
+
+
+async def _finish_customer_onboard(source_phone: str, state: dict) -> tuple[str, dict]:
+    phone_digits = "".join(c for c in source_phone if c.isdigit())
+    phone_10 = phone_digits[-10:] if len(phone_digits) >= 10 else phone_digits
+    existing = await db.users.find_one({"phone_primary": {"$regex": phone_10, "$options": "i"}})
+    if existing:
+        return (
+            f"✅ Aapka account already hai {state['wa_name']}!\nMENU type karein workers dhundhne ke liye.",
+            {"step": "customer_menu", "user_id": existing["id"], "role": existing.get("role", "customer")},
+        )
+    address = {
+        "village": state["wa_village"], "district": state["wa_district"],
+        "state": state["wa_state"], "block": state.get("wa_block", ""), "pincode": state["wa_pincode"],
+    }
+    user_id = str(uuid.uuid4())
+    await db.users.insert_one({
+        "id": user_id, "phone_primary": phone_10, "phone_verified": True,
+        "name": state["wa_name"], "role": "customer", "password_hash": None,
+        "pincode": state["wa_pincode"], "village": state["wa_village"], "address": address,
+        "photo_url": None, "preferred_language": "hi",
+        "avatar_color": _generate_avatar_color(state["wa_name"]),
+        "created_at": utc_now_iso(), "migration_status": "phone_primary", "source": "whatsapp",
+    })
+    return (
+        f"🎉 *Swagat hai {state['wa_name']}!*\n\n"
+        f"Account ban gaya ✅\n"
+        f"📍 {state['wa_village']}, {state['wa_district']}, {state['wa_state']}\n\n"
+        f"MENU type karein workers dhundhne ke liye 🙏",
+        {"step": "customer_menu", "user_id": user_id, "role": "customer"},
+    )
+
+
+async def _finish_worker_onboard(source_phone: str, state: dict) -> tuple[str, dict]:
+    phone_digits = "".join(c for c in source_phone if c.isdigit())
+    phone_10 = phone_digits[-10:] if len(phone_digits) >= 10 else phone_digits
+    existing_user = await db.users.find_one({"phone_primary": {"$regex": phone_10, "$options": "i"}})
+    if existing_user:
+        user_id = existing_user["id"]
+        existing_worker = await db.workers.find_one({"user_id": user_id})
+        if existing_worker:
+            return (
+                "✅ Aapka profile already hai!\nJOBS type karein kaam dekhne ke liye.",
+                {"step": "worker_menu", "user_id": user_id, "worker_id": existing_worker["id"], "role": "worker"},
+            )
+    else:
+        user_id = str(uuid.uuid4())
+        address = {
+            "village": state["wa_village"], "district": state["wa_district"],
+            "state": state["wa_state"], "block": state.get("wa_block", ""), "pincode": state["wa_pincode"],
+        }
+        await db.users.insert_one({
+            "id": user_id, "phone_primary": phone_10, "phone_verified": True,
+            "name": state["wa_name"], "role": "worker", "password_hash": None,
+            "pincode": state["wa_pincode"], "village": state["wa_village"], "address": address,
+            "photo_url": None, "preferred_language": "hi",
+            "avatar_color": _generate_avatar_color(state["wa_name"]),
+            "created_at": utc_now_iso(), "migration_status": "phone_primary", "source": "whatsapp",
+        })
+    worker_id = str(uuid.uuid4())
+    address = {
+        "village": state["wa_village"], "district": state["wa_district"],
+        "state": state["wa_state"], "block": state.get("wa_block", ""), "pincode": state["wa_pincode"],
+    }
+    await db.workers.insert_one({
+        "id": worker_id, "user_id": user_id, "name": state["wa_name"],
+        "skills": state["wa_skills"], "structured_skills": state["wa_structured_skills"],
+        "daily_rate": state["wa_rate"], "village": state["wa_village"],
+        "district": state["wa_district"], "state": state["wa_state"], "address": address,
+        "lat": 0.0, "lng": 0.0, "available": True, "availability_status": "available",
+        "trust_tier": 1, "avg_rating": 0.0, "total_jobs": 0,
+        "photo_url": None, "bio": "", "created_at": utc_now_iso(), "source": "whatsapp",
+    })
+    return (
+        f"🎉 *Profile ban gaya {state['wa_name']}!*\n\n"
+        f"👷 Worker Account ✅\n"
+        f"📍 {state['wa_village']}, {state['wa_district']}, {state['wa_state']}\n"
+        f"💰 ₹{state['wa_rate']}/day\n\n"
+        f"JOBS type karein kaam dekhne ke liye 💼\n"
+        f"HELP type karein sabhi commands ke liye",
+        {"step": "worker_menu", "user_id": user_id, "worker_id": worker_id, "role": "worker"},
+    )
+
+
+async def _cmd_onboard(source_phone: str, message: str, state: dict) -> tuple[str, dict]:
+    """State machine for WhatsApp onboarding. Steps prefixed wa_ob_."""
+    msg = message.strip()
+    msg_up = msg.upper()
+    step = state.get("step", "wa_ob_role")
+
+    if step == "wa_ob_role":
+        if msg == "1":
+            return ("Aapka poora naam kya hai?", {**state, "step": "wa_ob_name", "wa_role": "customer"})
+        if msg == "2":
+            return ("Aapka poora naam kya hai?", {**state, "step": "wa_ob_name", "wa_role": "worker"})
+        return (
+            "Sirf *1* ya *2* reply karein 🙏\n\n"
+            "1️⃣ Mujhe workers chahiye *(Customer)*\n"
+            "2️⃣ Main kaam dhundhta/dhundhti hun *(Worker)*",
+            state,
+        )
+
+    if step == "wa_ob_name":
+        if len(msg.strip()) < 2:
+            return ("Naam kam se kam 2 characters ka hona chahiye. Dobara bhejein:", state)
+        return ("Aapka area ka *pincode* kya hai? (6 digits)", {**state, "step": "wa_ob_pincode", "wa_name": msg.strip()})
+
+    if step == "wa_ob_pincode":
+        if not msg.isdigit() or len(msg) != 6:
+            return ("Sahi 6-digit pincode bhejein. Example: *411001*", state)
+        result = await _lookup_pincode(msg)
+        if not result:
+            return ("Yeh pincode nahi mila. Sahi pincode bhejein:", state)
+        new_state = {
+            **state, "step": "wa_ob_village",
+            "wa_pincode": msg, "wa_district": result["district"],
+            "wa_state": result["state"], "wa_block": result["block"], "wa_post": result["post"],
+        }
+        return (
+            f"✅ *{result['district']} District · {result['state']}*\n\n"
+            f"Apna village ya area ka naam type karein:",
+            new_state,
+        )
+
+    if step == "wa_ob_village":
+        if len(msg.strip()) < 2:
+            return ("Village ka naam kam se kam 2 characters ka hona chahiye:", state)
+        new_state = {**state, "wa_village": msg.strip()}
+        if state.get("wa_role") == "worker":
+            new_state["step"] = "wa_ob_rate"
+            return ("Daily rate kitna chahiye? (₹ mein, 100–5000)\nExample: *600*", new_state)
+        return await _finish_customer_onboard(source_phone, new_state)
+
+    if step == "wa_ob_rate":
+        if not msg.isdigit() or not (100 <= int(msg) <= 5000):
+            return ("100 se 5000 ke beech rate bhejein. Example: *600*", state)
+        new_state = {**state, "step": "wa_ob_skills", "wa_rate": int(msg)}
+        return (
+            "Kaunsa kaam karte hain? Number(s) bhejein:\n\n"
+            "1️⃣ Kheti / Farm\n"
+            "2️⃣ Construction / Nirman\n"
+            "3️⃣ Electrical\n"
+            "4️⃣ Safai / Cleaning\n"
+            "5️⃣ Transport / Driving\n"
+            "6️⃣ Other / Helper\n\n"
+            "Ek ya zyada: e.g. *2* ya *2,3*",
+            new_state,
+        )
+
+    if step == "wa_ob_skills":
+        nums = []
+        for part in msg.replace(" ", ",").split(","):
+            part = part.strip()
+            if part.isdigit() and 1 <= int(part) <= 6:
+                nums.append(int(part))
+        if not nums:
+            return ("Kam se kam ek number bhejein (1–6). Example: *2* ya *2,3*", state)
+        skills = [s for n in nums for s in _SKILL_MAP[n]]
+        structured = [{"category": _CATEGORY_MAP[n], "skill": s} for n in nums for s in _SKILL_MAP[n]]
+        new_state = {**state, "wa_skills": skills, "wa_structured_skills": structured}
+        return await _finish_worker_onboard(source_phone, new_state)
+
+    # Fallback: restart onboarding
+    return (
+        "Namaste! KaamNow mein swagat hai 🙏\n\n"
+        "Aap kya hain?\n\n"
+        "1️⃣ Mujhe workers chahiye *(Customer)*\n"
+        "2️⃣ Main kaam dhundhta/dhundhti hun *(Worker)*\n\n"
+        "Reply *1* ya *2*",
+        {"step": "wa_ob_role"},
+    )
+
+
 # ─── Main message dispatcher ──────────────────────────────────────────────────
 
 async def _handle_message(source_phone: str, message_text: str, state: dict) -> tuple[str, dict]:
@@ -567,19 +782,17 @@ async def _handle_message(source_phone: str, message_text: str, state: dict) -> 
     user, worker, state = await _identify_user(source_phone, state)
 
     if not user:
-        # Unknown user — guide to registration
-        if msg_up in ("HI", "HELLO", "NAMASTE", "HAI"):
-            return (
-                "Namaste! KaamNow mein aapka swagat hai 🙏\n\n"
-                "Aapka number platform par registered nahi hai.\n\n"
-                "Worker hain? Yahan join karein:\nkaamnow.com/worker/onboarding\n\n"
-                "Customer hain? Yahan join karein:\nkaamnow.com/signup\n\n"
-                "HELP type karein madad ke liye.",
-                {"step": "unregistered"},
-            )
+        # If mid-onboarding, continue the flow
+        if state.get("step", "").startswith("wa_ob_"):
+            return await _cmd_onboard(source_phone, raw, state)
+        # Any message from unknown number → start onboarding
         return (
-            "Aapka number registered nahi hai. kaamnow.com/signup par join karein.\nHELP type karein.",
-            {"step": "unregistered"},
+            "Namaste! KaamNow mein swagat hai 🙏\n\n"
+            "Aap kya hain?\n\n"
+            "1️⃣ Mujhe workers chahiye *(Customer)*\n"
+            "2️⃣ Main kaam dhundhta/dhundhti hun *(Worker)*\n\n"
+            "Reply *1* ya *2*",
+            {"step": "wa_ob_role"},
         )
 
     # ── Worker commands ──
@@ -630,18 +843,77 @@ async def _handle_message(source_phone: str, message_text: str, state: dict) -> 
                 return await _cmd_show_pincode(source_phone, state)
             return await _cmd_set_pincode(source_phone, pincode_val, state)
 
-        # ACCEPT (legacy - customer approved them)
+        # ACCEPT booking
         if msg_up == "ACCEPT":
             eng = await db.engagements.find_one(
                 {"worker_id": state.get("worker_id"), "status": "requested"},
                 sort=[("created_at", -1)],
             )
-            if eng:
-                return (
-                    f"✅ Booking already confirmed kaamnow.com par.\n\nJob: {eng.get('job_title')}\nSTATUS type karein details ke liye.",
-                    state,
-                )
-            return ("Koi pending booking nahi mili.", state)
+            if not eng:
+                return ("Koi pending booking nahi mili.", state)
+
+            now = utc_now_iso()
+            await db.engagements.update_one(
+                {"id": eng["id"]},
+                {"$set": {"status": "accepted", "accepted_at": now, "updated_at": now}},
+            )
+            updated_job = await db.jobs.find_one_and_update(
+                {"id": eng["job_id"]},
+                {"$push": {"accepted_worker_ids": state.get("worker_id")}, "$inc": {"filled_count": 1}},
+                return_document=True,
+            )
+            if updated_job and updated_job.get("filled_count", 0) >= updated_job.get("workers_needed", 1):
+                await db.jobs.update_one({"id": eng["job_id"]}, {"$set": {"status": "booked"}})
+
+            customer_user = await db.users.find_one({"id": eng["customer_id"]}, {"_id": 0})
+            if customer_user and customer_user.get("phone"):
+                threading.Thread(
+                    target=notify_customer_booking_accepted,
+                    args=(customer_user["phone"], eng),
+                    daemon=True,
+                ).start()
+
+            return (
+                f"✅ *Booking accept kar liya!*\n\n"
+                f"Job: {eng.get('job_title')}\n"
+                f"Customer ko WhatsApp bhej diya.\n\n"
+                f"STATUS – Meri bookings",
+                state,
+            )
+
+        # REJECT booking
+        if msg_up in ("REJECT", "DECLINE", "NAHI", "NO"):
+            eng = await db.engagements.find_one(
+                {"worker_id": state.get("worker_id"), "status": "requested"},
+                sort=[("created_at", -1)],
+            )
+            if not eng:
+                return ("Koi pending booking nahi mili.", state)
+
+            now = utc_now_iso()
+            await db.engagements.update_one(
+                {"id": eng["id"]},
+                {"$set": {"status": "rejected", "rejected_at": now, "updated_at": now}},
+            )
+            await db.jobs.update_one(
+                {"id": eng["job_id"], "status": "booked"},
+                {"$set": {"status": "open"}},
+            )
+
+            customer_user = await db.users.find_one({"id": eng["customer_id"]}, {"_id": 0})
+            if customer_user and customer_user.get("phone"):
+                threading.Thread(
+                    target=notify_customer_booking_rejected,
+                    args=(customer_user["phone"], eng),
+                    daemon=True,
+                ).start()
+
+            return (
+                f"↩️ *Booking reject kar diya.*\n\n"
+                f"Customer ko inform kar diya. Unka kaam wapas open ho gaya.\n\n"
+                f"JOBS – Aur kaam dhundhen",
+                state,
+            )
 
         # First message / unknown → show worker menu
         if state.get("step") in ("start", None, "unregistered") or msg_up in ("HI", "HELLO", "NAMASTE", "HAI"):

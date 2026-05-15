@@ -68,3 +68,9 @@ dump.rdb
 .cache/
 dist/
 mobile/.expo/
+
+# ── Codex automation ───────────────────────────────────────────────────────
+.codex_pending
+.codex_review_ready
+.claude/plans/
+.claude/codex-reviews/

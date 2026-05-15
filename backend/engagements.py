@@ -1,3 +1,4 @@
+import threading
 import uuid
 from typing import Literal, Optional
 
@@ -5,6 +6,11 @@ from fastapi import HTTPException
 
 from .db import db
 from .utils import utc_now_iso
+from .whatsapp_notify import (
+    notify_customer_work_completed,
+    notify_worker_job_completed,
+    notify_worker_rating_received,
+)
 
 
 async def _notify(user_id: str, title: str, body: str, kind: str, ref_id: str = None) -> None:
@@ -554,6 +560,24 @@ async def complete_engagement(engagement_id: str, user: dict) -> dict:
         engagement_id,
     )
 
+    # WhatsApp: customer prompt to rate + worker confirmation
+    customer_user = await db.users.find_one({"id": engagement["customer_id"]}, {"_id": 0, "phone": 1})
+    if customer_user and customer_user.get("phone"):
+        threading.Thread(
+            target=notify_customer_work_completed,
+            args=(customer_user["phone"], engagement),
+            daemon=True,
+        ).start()
+
+    if worker_doc and worker_doc.get("user_id"):
+        worker_user = await db.users.find_one({"id": worker_doc["user_id"]}, {"_id": 0, "phone": 1})
+        if worker_user and worker_user.get("phone"):
+            threading.Thread(
+                target=notify_worker_job_completed,
+                args=(worker_user["phone"], engagement),
+                daemon=True,
+            ).start()
+
     # Check if worker earned a tier upgrade (more jobs = possible promotion)
     if worker_doc and worker_doc.get("user_id"):
         await _check_tier(engagement["worker_id"], worker_doc["user_id"])
@@ -609,6 +633,13 @@ async def rate_engagement(engagement_id: str, rating: int, comment: str, user: d
                 "job_rated",
                 engagement_id,
             )
+            worker_user = await db.users.find_one({"id": worker_doc["user_id"]}, {"_id": 0, "phone": 1})
+            if worker_user and worker_user.get("phone"):
+                threading.Thread(
+                    target=notify_worker_rating_received,
+                    args=(worker_user["phone"], rating, comment or "", engagement.get("job_title", "Job")),
+                    daemon=True,
+                ).start()
 
             # ── Minimum rating enforcement ────────────────────────────
             if new_avg is not None:

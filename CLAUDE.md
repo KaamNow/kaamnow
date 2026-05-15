@@ -43,3 +43,55 @@ The graph lives in `graphify-out/` and is the canonical way to understand how th
 /graphify path "WhatsApp" "Booking"      # trace a connection
 /graphify explain "DummyDb"              # deep-dive a node
 ```
+
+---
+
+## ROLES (strict — never swap)
+
+**Claude = architect and planner only. Never writes application code.**
+**Codex = senior developer. Does all implementation.**
+
+---
+
+## WORKFLOW
+
+### Step 1 — Claude plans (query graphify, never read files speculatively)
+
+Before reading any source file, run:
+```
+/graphify query "<task description>"
+```
+Read only the files the graph identifies — maximum 4 files. Write the plan to `.claude/plans/current_plan.md`:
+
+```
+TASK: <one-line description>
+FILES_AFFECTED: <comma-separated file paths from graph output>
+GOD_NODES_TOUCHED: <none | DummyDb | cn() | Settings | run()>
+STEPS:
+1. <concrete change with file path and function name>
+2. ...
+CODEX_PROMPT: Read graphify-out/GRAPH_REPORT.md first to understand the codebase (723 nodes, 85 communities). Key files: <list>. God nodes involved: <list or none>. Then implement: <full task — specific file paths, function names, what to add/change/remove>
+```
+
+Call ExitPlanMode. Tell the user: "Plan ready. Type **approve** to start Codex."
+
+### Step 2 — Codex codes (automated on approval)
+
+When the user types approve / go / yes / run:
+1. Write `APPROVED` to `.claude/plans/approval.flag`
+2. The Stop hook triggers Codex automatically — do nothing else
+
+Codex reads the plan, loads the graph report, and implements everything.
+
+### Step 3 — Done
+
+Codex's changes land as unstaged files (any auto-commits are soft-reset by the hook). The user reviews the diff in VS Code and commits when satisfied.
+
+---
+
+## HARD RULES
+
+- Claude **never** calls Edit, Write, or MultiEdit on `backend/`, `frontend/`, or `mobile/` files
+- Always run `/graphify query` before reading any file
+- Never use `find` or `grep` to explore — the graph answers those questions cheaper
+- After any code change (by Codex), run `/graphify kaamnow --update` to keep the graph current
