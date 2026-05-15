@@ -100,36 +100,41 @@ def _generate_avatar_color(name: str) -> str:
     return colors[sum(ord(c) for c in name) % len(colors)]
 
 
+def _fetch_pincode_sync(pincode: str) -> Optional[dict]:
+    """Synchronous pincode fetch — tries HTTPS then HTTP with browser User-Agent."""
+    headers = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36"}
+    urls = [
+        f"https://api.postalpincode.in/pincode/{pincode}",
+        f"http://api.postalpincode.in/pincode/{pincode}",
+    ]
+    for url in urls:
+        try:
+            resp = requests.get(url, headers=headers, timeout=10, verify=False)
+            data = resp.json()
+            entry = data[0] if data else None
+            if not entry or entry.get("Status") != "Success" or not entry.get("PostOffice"):
+                logger.warning("Pincode %s not found via %s: %s", pincode, url, entry.get("Status") if entry else "no data")
+                return None
+            pos = entry["PostOffice"]
+            head = next((p for p in pos if p.get("BranchType") == "Head Post Office"), pos[0])
+            logger.info("Pincode %s → %s, %s", pincode, head["District"], head["State"])
+            return {
+                "district": head["District"],
+                "state": head["State"],
+                "block": head["Block"] if head.get("Block") and head["Block"] != "NA" else "",
+                "post": head["Name"],
+            }
+        except Exception as exc:
+            logger.warning("Pincode lookup via %s failed: %s", url, exc)
+    logger.error("All pincode lookup attempts failed for %s", pincode)
+    return None
+
+
 async def _lookup_pincode(pincode: str) -> Optional[dict]:
-    """Call api.postalpincode.in and return district/state/block/post or None."""
+    """Async wrapper — runs sync fetch in thread executor."""
     import asyncio
-    try:
-        loop = asyncio.get_running_loop()
-        resp = await loop.run_in_executor(
-            None,
-            lambda: requests.get(
-                f"https://api.postalpincode.in/pincode/{pincode}",
-                timeout=10,
-                verify=False,  # SSL cert on this public API unreliable from non-IN servers
-            ),
-        )
-        data = resp.json()
-        logger.info("Pincode lookup %s → status=%s", pincode, data[0].get("Status") if data else "empty")
-        entry = data[0] if data else None
-        if not entry or entry.get("Status") != "Success" or not entry.get("PostOffice"):
-            logger.warning("Pincode %s not found: %s", pincode, entry.get("Status") if entry else "no data")
-            return None
-        pos = entry["PostOffice"]
-        head = next((p for p in pos if p.get("BranchType") == "Head Post Office"), pos[0])
-        return {
-            "district": head["District"],
-            "state": head["State"],
-            "block": head["Block"] if head.get("Block") and head["Block"] != "NA" else "",
-            "post": head["Name"],
-        }
-    except Exception as exc:
-        logger.error("Pincode lookup failed for %s: %s", pincode, exc)
-        return None
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, _fetch_pincode_sync, pincode)
 
 
 async def _save_bot_state(session_id: str, new_state: dict) -> None:
