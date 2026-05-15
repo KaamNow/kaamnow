@@ -277,13 +277,16 @@ async def delete_worker_profile(worker_id: str, admin: dict = Depends(get_admin_
         raise HTTPException(status_code=404, detail="Worker not found")
     user_id = worker.get("user_id", "")
     name = worker.get("name", "")
+    user_doc = await db.users.find_one({"id": user_id}, {"_id": 0, "phone_primary": 1})
+    phone_digits = "".join(c for c in (user_doc or {}).get("phone_primary", "") if c.isdigit())
     await db.workers.delete_one({"id": worker_id})
     await db.users.delete_one({"id": user_id})
     await db.engagements.delete_many({"worker_id": worker_id})
     await db.notifications.delete_many({"user_id": user_id})
-    await db.bot_sessions.delete_many({"session_id": {"$regex": user_id[:8]}})
-    await db.otps.delete_many({"phone": {"$regex": ""}})  # cleared by user below
     await db.wa_notif_log.delete_many({"user_id": user_id})
+    if phone_digits:
+        await db.bot_sessions.delete_many({"session_id": {"$regex": phone_digits[-10:]}})
+        await db.otps.delete_many({"phone": {"$regex": phone_digits[-10:]}})
     await audit(admin, "worker.full_delete", worker_id, name)
     return {"ok": True, "deleted": name}
 

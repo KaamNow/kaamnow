@@ -1120,23 +1120,53 @@ def _format_gupshup_message(payload: Any) -> str:
 
 
 def _extract_gupshup_incoming(body: dict) -> tuple[str, str]:
-    src = body.get("src") or body.get("source") or body.get("from")
-    sender = body.get("sender")
-    if not src and isinstance(sender, dict):
-        src = sender.get("phone") or sender.get("id")
-    elif not src and sender:
-        src = sender
+    """
+    Handles multiple Gupshup payload formats:
+    - Standard: {"type":"message","payload":{"source":"91XX","payload":{"text":"hi"},"sender":{...}}}
+    - Legacy:   {"src":"91XX","message":{"text":"hi"}}
+    - Form-flat: {"source":"91XX","text":"hi"}
+    """
+    inner = body.get("payload") if isinstance(body.get("payload"), dict) else {}
 
+    # ── Extract source phone ──
+    src = (
+        body.get("src") or
+        body.get("source") or
+        body.get("from") or
+        inner.get("source") or
+        inner.get("src")
+    )
+    # Try sender dict at top level or inside payload
+    for loc in (body, inner):
+        if src:
+            break
+        sender = loc.get("sender")
+        if isinstance(sender, dict):
+            src = sender.get("phone") or sender.get("id")
+        elif sender and isinstance(sender, str):
+            src = sender
+
+    # ── Extract message text ──
     text = _format_gupshup_message(body)
+
+    if not text:
+        # Gupshup standard: payload.payload.text
+        msg_inner = inner.get("payload") or inner.get("message")
+        if isinstance(msg_inner, dict):
+            text = msg_inner.get("text") or msg_inner.get("body") or msg_inner.get("caption") or ""
+        elif isinstance(msg_inner, str):
+            text = msg_inner
+
     if not text and isinstance(body.get("message"), dict):
-        text = body["message"].get("text") or body["message"].get("payload") or body["message"].get("body") or ""
-    if not text and isinstance(body.get("payload"), dict):
-        p = body["payload"]
-        if isinstance(p.get("message"), dict):
-            text = p["message"].get("text") or p["message"].get("payload") or p["message"].get("body") or ""
+        m = body["message"]
+        text = m.get("text") or m.get("payload") or m.get("body") or ""
+
+    if not text:
+        # Last resort: try _format_gupshup_message on the inner payload dict
+        text = _format_gupshup_message(inner)
 
     if not src or not text:
-        raise ValueError("Invalid Gupshup payload")
+        raise ValueError(f"Invalid Gupshup payload — src={src!r} text={text!r} body_keys={list(body.keys())}")
     return str(src), text
 
 
@@ -1222,9 +1252,11 @@ async def gupshup_webhook(request: Request):
             body = json.loads(raw) if isinstance(raw, str) else dict(form)
         except Exception:
             body = dict(form)
+    logger.info("Gupshup webhook body keys=%s ct=%s", list(body.keys()), content_type[:40])
     try:
         source_phone, message_text = _extract_gupshup_incoming(body)
-    except ValueError:
+    except ValueError as e:
+        logger.error("Gupshup parse failed: %s | body=%s", e, str(body)[:300])
         raise HTTPException(status_code=400, detail="Unable to parse incoming WhatsApp payload")
 
     session_id = _create_session_id(source_phone)
