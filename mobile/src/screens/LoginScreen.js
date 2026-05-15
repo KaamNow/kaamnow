@@ -38,6 +38,24 @@ export default function LoginScreen() {
     try {
       const check = await api.get("/auth/check-phone", { params: { phone: fullPhone } });
       if (!check.data.exists || check.data.expired) { setNotRegistered(true); return; }
+      if (check.data.is_active === false) {
+        Alert.alert(
+          lang === "hi" ? "Account Deactivated" : "Account Deactivated",
+          lang === "hi"
+            ? "Aapka account deactivate hai. Kya aap ise reactivate karna chahte hain?"
+            : "Your account has been deactivated. Would you like to reactivate it?",
+          [
+            { text: lang === "hi" ? "Nahi" : "Cancel", style: "cancel" },
+            { text: lang === "hi" ? "Reactivate Karo" : "Reactivate", onPress: async () => {
+              setLoading(true);
+              try { await sendOTP(fullPhone); }
+              catch (err) { Alert.alert("Error", formatApiError(err)); }
+              finally { setLoading(false); }
+            }},
+          ]
+        );
+        return;
+      }
       const res = await sendOTP(fullPhone);
       if (res?.requires_optin) setRequiresOptin(true);
     } catch (err) {

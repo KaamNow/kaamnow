@@ -269,6 +269,17 @@ async def suspend_worker(worker_id: str, body: dict, admin: dict = Depends(get_a
     return {"ok": True}
 
 
+@router.delete("/workers/{worker_id}")
+async def delete_worker_profile(worker_id: str, admin: dict = Depends(get_admin_user)):
+    worker = await db.workers.find_one({"id": worker_id}, {"_id": 0, "user_id": 1, "name": 1})
+    if not worker:
+        raise HTTPException(status_code=404, detail="Worker not found")
+    await db.workers.delete_one({"id": worker_id})
+    await db.users.update_one({"id": worker["user_id"]}, {"$set": {"role": "customer"}})
+    await audit(admin, "worker.profile_deleted", worker_id, worker.get("name", ""))
+    return {"ok": True}
+
+
 # ---------------------------------------------------------------------------
 # WhatsApp
 # ---------------------------------------------------------------------------

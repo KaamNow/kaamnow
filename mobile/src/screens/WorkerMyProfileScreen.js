@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, Pressable,
-  Alert, TextInput, Image, RefreshControl, ActivityIndicator, Switch,
+  Alert, TextInput, Image, RefreshControl, ActivityIndicator, Switch, Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as ImagePicker from "expo-image-picker";
@@ -83,21 +83,16 @@ export default function WorkerMyProfileScreen({ navigation }) {
     ]);
   };
 
-  const doDeactivate = () => {
-    Alert.alert(
-      "Deactivate account?",
-      "Your profile will be hidden. You can reactivate within 30 days by logging in again. After 30 days it is permanently deleted.",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Deactivate", style: "destructive", onPress: async () => {
-          try {
-            await api.delete("/auth/me");
-            try { navigation?.navigate?.("Home"); } catch {}
-            await logout();
-          } catch (e) { Alert.alert("Error", formatApiError(e)); }
-        }},
-      ]
-    );
+  const [showDeactivateModal, setShowDeactivateModal] = useState(false);
+
+  const doDeactivate = () => setShowDeactivateModal(true);
+
+  const confirmDeactivate = async () => {
+    try {
+      setShowDeactivateModal(false);
+      await api.delete("/auth/me");
+      await logout();
+    } catch (e) { Alert.alert("Error", formatApiError(e)); }
   };
 
   const save = async () => {
@@ -409,6 +404,36 @@ export default function WorkerMyProfileScreen({ navigation }) {
           />
         </View>
       )}
+      {/* Deactivate TnC Modal */}
+      <Modal visible={showDeactivateModal} transparent animationType="slide" onRequestClose={() => setShowDeactivateModal(false)}>
+        <View style={s.modalOverlay}>
+          <View style={s.modalCard}>
+            <Text style={s.modalTitle}>⚠️ Deactivate Account?</Text>
+            <ScrollView style={s.modalScroll} showsVerticalScrollIndicator={false}>
+              <Text style={s.modalBody}>Please read before confirming:{"\n\n"}
+                <Text style={s.modalBold}>What happens when you deactivate:{"\n"}</Text>
+                {"• "}Your worker profile will be hidden immediately{"\n"}
+                {"• "}You will be logged out of the app{"\n"}
+                {"• "}All active bookings will be cancelled{"\n"}
+                {"• "}Customers will not be able to find or book you{"\n\n"}
+                <Text style={s.modalBold}>Reactivation:{"\n"}</Text>
+                {"• "}You can reactivate within 30 days by logging in again with your phone number{"\n"}
+                {"• "}After 30 days your data will be permanently deleted and cannot be recovered{"\n\n"}
+                <Text style={s.modalBold}>By tapping "Deactivate" you agree to KaamNow's Terms & Conditions and confirm you understand the above.
+                </Text>
+              </Text>
+            </ScrollView>
+            <View style={s.modalActions}>
+              <Pressable style={s.modalCancel} onPress={() => setShowDeactivateModal(false)}>
+                <Text style={s.modalCancelTxt}>Cancel</Text>
+              </Pressable>
+              <Pressable style={s.modalConfirm} onPress={confirmDeactivate}>
+                <Text style={s.modalConfirmTxt}>Deactivate</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -499,4 +524,15 @@ const s = StyleSheet.create({
   actionBtn: { flex:1, alignItems:"center", paddingVertical:16, gap:5 },
   actionBtnTxt: { fontFamily:fonts.bodyBold, fontSize:11, color:colors.saffron },
   actionSep: { width:1, backgroundColor:colors.border },
+  modalOverlay: { flex:1, backgroundColor:"rgba(0,0,0,0.55)", justifyContent:"flex-end" },
+  modalCard: { backgroundColor:"#fff", borderTopLeftRadius:24, borderTopRightRadius:24, padding:24, maxHeight:"80%" },
+  modalTitle: { fontFamily:fonts.bodyBold, fontSize:18, color:colors.text, marginBottom:16, textAlign:"center" },
+  modalScroll: { maxHeight:320 },
+  modalBody: { fontFamily:fonts.body, fontSize:14, color:colors.textSecondary, lineHeight:22 },
+  modalBold: { fontFamily:fonts.bodyBold, color:colors.text },
+  modalActions: { flexDirection:"row", gap:12, marginTop:20 },
+  modalCancel: { flex:1, paddingVertical:14, borderRadius:12, borderWidth:1.5, borderColor:colors.border, alignItems:"center" },
+  modalCancelTxt: { fontFamily:fonts.bodyBold, fontSize:14, color:colors.textSecondary },
+  modalConfirm: { flex:1, paddingVertical:14, borderRadius:12, backgroundColor:colors.danger, alignItems:"center" },
+  modalConfirmTxt: { fontFamily:fonts.bodyBold, fontSize:14, color:"#fff" },
 });

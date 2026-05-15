@@ -212,6 +212,12 @@ export default function AdminDashboard() {
     try { await api.patch(`/admin/workers/${id}/lift-restriction`); toast.success("Restriction lifted"); fetchWorkers(workerPage); }
     catch { toast.error("Failed"); }
   };
+  const deleteWorker = async (id, name) => {
+    if (!window.confirm(`Delete worker profile for "${name}"? Their account will remain but worker profile will be removed.`)) return;
+    try { await api.delete(`/admin/workers/${id}`); toast.success("Worker profile deleted"); fetchWorkers(workerPage); }
+    catch { toast.error("Failed to delete worker profile"); }
+  };
+
   const suspendWorker = async (id, status) => {
     const suspend = status !== "suspended";
     try { await api.patch(`/admin/workers/${id}/suspend`, { suspend }); toast.success(suspend ? "Suspended" : "Reactivated"); fetchWorkers(workerPage); }
@@ -402,6 +408,7 @@ export default function AdminDashboard() {
                               {w.availability_status==="suspended" ? <ShieldCheck size={13}/> : <ShieldOff size={13}/>}
                             </ActionBtn>
                             {w.phone && <ActionBtn onClick={() => setWaModal({phone:w.phone,name:w.name})} color="green" title="WhatsApp"><MessageSquare size={13}/></ActionBtn>}
+                            <ActionBtn onClick={() => deleteWorker(w.id, w.name)} color="red" title="Delete worker profile"><Trash2 size={13}/></ActionBtn>
                           </div>
                         </td>
                       </tr>
