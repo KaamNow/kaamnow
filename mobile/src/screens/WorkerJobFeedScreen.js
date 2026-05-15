@@ -48,10 +48,14 @@ export default function WorkerJobFeedScreen({ navigation }) {
   const [refreshing, setRefreshing]   = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
+  // Pending (what user is editing)
   const [category, setCategory] = useState("");
   const [skill, setSkill]       = useState("");
   const [pincode, setPincode]   = useState("");
-  const [workerPincode, setWorkerPincode] = useState(""); // auto-detected
+  const [workerPincode, setWorkerPincode] = useState("");
+
+  // Applied (what's actually sent to the API — only changes on explicit search)
+  const [applied, setApplied] = useState({ category: "", skill: "", pincode: "" });
 
   // Auto-detect worker's pincode on mount
   useEffect(() => {
@@ -59,7 +63,11 @@ export default function WorkerJobFeedScreen({ navigation }) {
     api.get("/workers/me/profile")
       .then(res => {
         const pc = res.data?.address?.pincode || res.data?.pincode || "";
-        if (pc) { setWorkerPincode(pc); setPincode(pc); }
+        if (pc) {
+          setWorkerPincode(pc);
+          setPincode(pc);
+          setApplied({ category: "", skill: "", pincode: pc });
+        }
       })
       .catch(() => {});
   }, [user]);
@@ -67,9 +75,9 @@ export default function WorkerJobFeedScreen({ navigation }) {
   const load = useCallback(async () => {
     try {
       const params = {};
-      if (category) params.category = category;
-      if (skill)    params.skills = skill;
-      if (pincode.length === 6) params.pincode = pincode;
+      if (applied.category) params.category = applied.category;
+      if (applied.skill)    params.skills = applied.skill;
+      if (applied.pincode?.length === 6) params.pincode = applied.pincode;
 
       const [feed, mine] = await Promise.all([
         api.get("/jobs/feed", { params }).catch(() => ({ data: [] })),
@@ -81,9 +89,16 @@ export default function WorkerJobFeedScreen({ navigation }) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [category, skill, pincode]);
+  }, [applied]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Explicit apply — worker must press search/apply
+  const applySearch = () => {
+    Keyboard.dismiss();
+    setApplied({ category, skill, pincode });
+    setFiltersOpen(false);
+  };
 
   const engagementFor = (jobId) =>
     engagements.find(e => e.job_id === jobId && ["requested","accepted"].includes(e.status));
@@ -113,11 +128,13 @@ export default function WorkerJobFeedScreen({ navigation }) {
     );
   };
 
-  const activeFilterCount = [!!category, !!skill, pincode.length === 6].filter(Boolean).length;
+  const activeFilterCount = [!!applied.category, !!applied.skill, applied.pincode?.length === 6 && applied.pincode !== workerPincode].filter(Boolean).length;
   const clearAll = () => {
     setCategory("");
     setSkill("");
     setPincode(workerPincode);
+    setApplied({ category: "", skill: "", pincode: workerPincode });
+    setFiltersOpen(false);
   };
 
   if (user?.role !== "worker") {
@@ -136,30 +153,49 @@ export default function WorkerJobFeedScreen({ navigation }) {
     <SafeAreaView edges={["top"]} style={s.safe}>
       {/* ── Header ── */}
       <View style={s.header}>
+        {/* Title row */}
         <View style={s.titleRow}>
           <View style={{ flex: 1 }}>
-            <Text style={s.screenLabel}>{lang === "hi" ? "JOB FEED" : "JOB FEED"}</Text>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 1 }}>
-              <Text style={s.title}>{lang === "hi" ? "पास के काम" : "Jobs near you"}</Text>
-              {workerPincode ? (
-                <View style={s.pincodePill}>
-                  <Ionicons name="location" size={10} color={colors.saffron} />
-                  <Text style={s.pincodePillTxt}>{workerPincode}</Text>
-                </View>
-              ) : null}
-            </View>
+            <Text style={s.screenLabel}>JOB FEED</Text>
+            <Text style={s.title}>{lang === "hi" ? "पास के काम" : "Jobs near you"}</Text>
           </View>
+          {activeFilterCount > 0 && (
+            <Pressable onPress={clearAll} style={s.resetPill}>
+              <Ionicons name="refresh-outline" size={12} color={colors.saffron} />
+              <Text style={s.resetPillTxt}>Reset</Text>
+            </Pressable>
+          )}
+        </View>
+
+        {/* Search bar: pincode + send button */}
+        <View style={s.searchRow}>
+          <Ionicons name="location-outline" size={16} color={colors.textMuted} style={{ marginLeft: 12 }} />
+          <TextInput
+            style={s.searchInput}
+            placeholder={lang === "hi" ? "Pincode डालो (6 digits)" : "Enter pincode (6 digits)"}
+            placeholderTextColor={colors.textMuted}
+            keyboardType="number-pad"
+            maxLength={6}
+            value={pincode}
+            onChangeText={v => setPincode(v.replace(/\D/g, "").slice(0, 6))}
+            onSubmitEditing={applySearch}
+            returnKeyType="search"
+          />
+          {workerPincode && pincode !== workerPincode && (
+            <Pressable onPress={() => setPincode(workerPincode)} style={s.myLocBtn}>
+              <Ionicons name="navigate" size={13} color={colors.saffron} />
+            </Pressable>
+          )}
           <Pressable
-            style={[s.filterBtn, activeFilterCount > 0 && s.filterBtnActive]}
-            onPress={() => setFiltersOpen(o => !o)}
+            style={[s.sendBtn, pincode.length === 6 && s.sendBtnActive]}
+            onPress={applySearch}
           >
-            <Ionicons name="options-outline" size={18} color={activeFilterCount > 0 ? "#fff" : colors.saffron} />
-            {activeFilterCount > 0 && <View style={s.filterDot} />}
+            <Ionicons name="arrow-forward" size={18} color={pincode.length === 6 ? "#fff" : colors.textMuted} />
           </Pressable>
         </View>
 
         {/* Category chips */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 12 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 10 }}>
           <View style={s.chipRow}>
             {CATEGORIES.map(c => (
               <Pressable key={c.v} onPress={() => setCategory(c.v)} style={[s.chip, category === c.v && s.chipOn]}>
@@ -170,50 +206,46 @@ export default function WorkerJobFeedScreen({ navigation }) {
           </View>
         </ScrollView>
 
-        {/* Expandable filters */}
+        {/* Skill filter row + Apply button */}
+        <View style={s.filterRow}>
+          <Pressable
+            style={[s.filterToggle, filtersOpen && s.filterToggleOn]}
+            onPress={() => setFiltersOpen(o => !o)}
+          >
+            <Ionicons name="construct-outline" size={13} color={filtersOpen ? "#fff" : colors.textSecondary} />
+            <Text style={[s.filterToggleTxt, filtersOpen && { color: "#fff" }]}>
+              {skill ? skill : (lang === "hi" ? "Skill filter" : "Skill filter")}
+            </Text>
+            {skill && <Ionicons name="checkmark-circle" size={13} color={filtersOpen ? "#fff" : colors.saffron} />}
+          </Pressable>
+          <Pressable style={s.applyBtn} onPress={applySearch}>
+            <Ionicons name="search-outline" size={14} color="#fff" />
+            <Text style={s.applyBtnTxt}>{lang === "hi" ? "खोजो" : "Search"}</Text>
+          </Pressable>
+        </View>
+
+        {/* Skill chips (collapsible) */}
         {filtersOpen && (
-          <View style={s.filterPanel}>
-            <Text style={s.filterLabel}>{lang === "hi" ? "Skill" : "Skill"}</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
-              <View style={s.chipRow}>
-                <Pressable onPress={() => setSkill("")} style={[s.chip, !skill && s.chipOn]}>
-                  <Text style={[s.chipTxt, !skill && s.chipTxtOn]}>{lang === "hi" ? "कोई भी" : "Any skill"}</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8, marginBottom: 4 }}>
+            <View style={s.chipRow}>
+              <Pressable onPress={() => setSkill("")} style={[s.chip, !skill && s.chipOn]}>
+                <Text style={[s.chipTxt, !skill && s.chipTxtOn]}>{lang === "hi" ? "सभी" : "All"}</Text>
+              </Pressable>
+              {SKILLS.map(sk => (
+                <Pressable key={sk} onPress={() => setSkill(sk)} style={[s.chip, skill === sk && s.chipOn]}>
+                  <Text style={[s.chipTxt, skill === sk && s.chipTxtOn]}>{sk}</Text>
                 </Pressable>
-                {SKILLS.map(sk => (
-                  <Pressable key={sk} onPress={() => setSkill(sk)} style={[s.chip, skill === sk && s.chipOn]}>
-                    <Text style={[s.chipTxt, skill === sk && s.chipTxtOn]}>{sk}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            </ScrollView>
-
-            <Text style={s.filterLabel}>{lang === "hi" ? "Pincode" : "Pincode"}</Text>
-            <TextInput
-              style={s.filterInput}
-              placeholder={lang === "hi" ? "6-अंक pincode" : "6-digit pincode"}
-              placeholderTextColor={colors.textMuted}
-              keyboardType="number-pad"
-              maxLength={6}
-              value={pincode}
-              onChangeText={v => setPincode(v.replace(/\D/g,"").slice(0,6))}
-            />
-
-            <View style={s.filterActions}>
-              <Pressable onPress={clearAll} style={s.clearBtn}>
-                <Ionicons name="refresh-outline" size={13} color={colors.textMuted} />
-                <Text style={s.clearTxt}>{lang === "hi" ? "Reset" : "Reset"}</Text>
-              </Pressable>
-              <Pressable onPress={() => { setFiltersOpen(false); load(); }} style={s.applyFilterBtn}>
-                <Text style={s.applyFilterTxt}>{lang === "hi" ? "Apply करो" : "Apply Filters"}</Text>
-              </Pressable>
+              ))}
             </View>
-          </View>
+          </ScrollView>
         )}
 
         <View style={s.countRow}>
           <Text style={s.countTxt}>
-            {loading ? (lang === "hi" ? "लोड हो रहा है…" : "Loading…") :
-              `${jobs.length} ${lang === "hi" ? "काम मिले" : jobs.length === 1 ? "job found" : "jobs found"}`}
+            {loading
+              ? (lang === "hi" ? "लोड हो रहा है…" : "Loading…")
+              : `${jobs.length} ${lang === "hi" ? "काम मिले" : jobs.length === 1 ? "job found" : "jobs found"}`}
+            {applied.pincode && applied.pincode !== workerPincode ? ` · ${applied.pincode}` : ""}
           </Text>
           {loading && <ActivityIndicator size="small" color={colors.saffron} />}
         </View>
@@ -419,15 +451,41 @@ const s = StyleSheet.create({
     borderRadius: 20, borderWidth: 1, borderColor: colors.saffron + "40",
   },
   pincodePillTxt: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.saffron },
-  filterBtn: {
-    width: 44, height: 44, borderRadius: 12, alignItems: "center", justifyContent: "center",
-    backgroundColor: colors.saffronTint, borderWidth: 1.5, borderColor: colors.saffron, position: "relative",
+  searchRow: {
+    flexDirection: "row", alignItems: "center", marginTop: 12,
+    backgroundColor: "#f9f8f5", borderRadius: 14, borderWidth: 1.5, borderColor: colors.border,
+    overflow: "hidden",
   },
-  filterBtnActive: { backgroundColor: colors.saffron },
-  filterDot: {
-    position: "absolute", top: 8, right: 8, width: 7, height: 7,
-    borderRadius: 4, backgroundColor: colors.money, borderWidth: 1.5, borderColor: "#fff",
+  searchInput: {
+    flex: 1, paddingVertical: 11, paddingHorizontal: 10,
+    fontFamily: fonts.body, fontSize: 14, color: colors.text,
   },
+  myLocBtn: { padding: 10 },
+  sendBtn: {
+    width: 46, height: 46, alignItems: "center", justifyContent: "center",
+    backgroundColor: "#f0ede6",
+  },
+  sendBtnActive: { backgroundColor: colors.saffron },
+  resetPill: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20,
+    borderWidth: 1.5, borderColor: colors.saffron + "60", backgroundColor: colors.saffronTint,
+  },
+  resetPillTxt: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.saffron },
+  filterRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10 },
+  filterToggle: {
+    flex: 1, flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 12, paddingVertical: 9, borderRadius: 12,
+    borderWidth: 1.5, borderColor: colors.border, backgroundColor: "#f9f8f5",
+  },
+  filterToggleOn: { backgroundColor: colors.textSecondary, borderColor: colors.textSecondary },
+  filterToggleTxt: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.textSecondary, flex: 1 },
+  applyBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    paddingHorizontal: 18, paddingVertical: 10, borderRadius: 12,
+    backgroundColor: colors.saffron,
+  },
+  applyBtnTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: "#fff" },
 
   chipRow: { flexDirection: "row", gap: 7, paddingBottom: 4 },
   chip: {
@@ -440,24 +498,6 @@ const s = StyleSheet.create({
   chipTxt: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.textSecondary },
   chipTxtOn: { color: "#fff" },
 
-  filterPanel: {
-    marginTop: 12, backgroundColor: "#f9f8f5", borderRadius: 12,
-    padding: 14, borderWidth: 1, borderColor: colors.border,
-  },
-  filterLabel: {
-    fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1.2,
-    textTransform: "uppercase", color: colors.textMuted, marginBottom: 8,
-  },
-  filterInput: {
-    backgroundColor: "#fff", borderWidth: 1.5, borderColor: colors.border,
-    borderRadius: 10, paddingVertical: 9, paddingHorizontal: 12,
-    fontFamily: fonts.body, fontSize: 14, color: colors.text, marginBottom: 4,
-  },
-  filterActions: { flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 10, marginTop: 12 },
-  clearBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5, borderColor: colors.border },
-  clearTxt: { fontFamily: fonts.bodySemi, fontSize: 12, color: colors.textSecondary },
-  applyFilterBtn: { backgroundColor: colors.saffron, paddingHorizontal: 20, paddingVertical: 9, borderRadius: 10 },
-  applyFilterTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: "#fff" },
 
   countRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 10 },
   countTxt: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted },

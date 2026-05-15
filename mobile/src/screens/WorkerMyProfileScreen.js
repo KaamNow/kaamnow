@@ -39,6 +39,10 @@ export default function WorkerMyProfileScreen({ navigation }) {
   const [dailyRate, setDailyRate] = useState("");
   const [skills, setSkills]     = useState([]);
   const [available, setAvailable] = useState(true);
+  const [village, setVillage]   = useState("");
+  const [district, setDistrict] = useState("");
+  const [state, setState]       = useState("");
+  const [block, setBlock]       = useState("");
   const [togglingAvail, setTogglingAvail] = useState(false);
 
   const load = useCallback(async () => {
@@ -49,6 +53,10 @@ export default function WorkerMyProfileScreen({ navigation }) {
       setDailyRate(String(r.data.daily_rate || ""));
       setSkills(r.data.skills || []);
       setAvailable(r.data.available !== false);
+      setVillage(r.data.address?.village || r.data.village || "");
+      setDistrict(r.data.address?.district || r.data.district || "");
+      setState(r.data.address?.state || r.data.state || "");
+      setBlock(r.data.address?.block || "");
     } catch { setProfile(null); }
     finally { setLoading(false); setRefreshing(false); }
   }, []);
@@ -101,10 +109,22 @@ export default function WorkerMyProfileScreen({ navigation }) {
     if (!skills.length) return Alert.alert("Pick at least one skill");
     setSaving(true);
     try {
-      await api.patch("/workers/profile", {
-        bio: bio.trim(), daily_rate: rate, skills,
-        structured_skills: skills.map(s => ({ category: skillCategory(s), skill: s })),
-      });
+      const address = {
+        village: village.trim(),
+        district: district.trim(),
+        state: state.trim(),
+        block: block.trim(),
+        pincode: profile?.address?.pincode || profile?.pincode || "",
+      };
+      await Promise.all([
+        api.patch("/workers/profile", {
+          bio: bio.trim(), daily_rate: rate, skills,
+          structured_skills: skills.map(s => ({ category: skillCategory(s), skill: s })),
+          village: village.trim(), district: district.trim(),
+          state: state.trim(), address,
+        }),
+        api.patch("/auth/me", { village: village.trim(), address }),
+      ]);
       await load(); setEditing(false);
     } catch (e) { Alert.alert("Error", formatApiError(e)); }
     finally { setSaving(false); }
@@ -316,6 +336,42 @@ export default function WorkerMyProfileScreen({ navigation }) {
                 placeholder="Describe your experience and availability…"
                 placeholderTextColor={colors.textMuted}
               />
+
+              <SectionHeader icon="location-outline" title="Address" />
+              <TextInput
+                style={s.input}
+                value={village}
+                onChangeText={setVillage}
+                placeholder="Village / Area"
+                placeholderTextColor={colors.textMuted}
+              />
+              <TextInput
+                style={[s.input, { marginTop: 8 }]}
+                value={district}
+                onChangeText={setDistrict}
+                placeholder="District"
+                placeholderTextColor={colors.textMuted}
+              />
+              <TextInput
+                style={[s.input, { marginTop: 8 }]}
+                value={state}
+                onChangeText={setState}
+                placeholder="State"
+                placeholderTextColor={colors.textMuted}
+              />
+              <TextInput
+                style={[s.input, { marginTop: 8 }]}
+                value={block}
+                onChangeText={setBlock}
+                placeholder="Block (optional)"
+                placeholderTextColor={colors.textMuted}
+              />
+              <View style={s.lockedRow}>
+                <Ionicons name="lock-closed-outline" size={12} color={colors.textMuted} />
+                <Text style={s.lockedTxt}>
+                  Pincode: {profile?.address?.pincode || profile?.pincode || "—"} · Phone: {profile?.phone || "—"} (cannot be changed here)
+                </Text>
+              </View>
             </>
           ) : (
             /* ── VIEW MODE: compact one-screen ──────────────────────── */
@@ -354,15 +410,29 @@ export default function WorkerMyProfileScreen({ navigation }) {
                 </View>
               </View>
 
-              {/* Location — single line */}
-              {(profile.address?.village || profile.village) && (
-                <View style={s.locLine}>
-                  <Ionicons name="location-outline" size={13} color={colors.textMuted} />
-                  <Text style={s.locLineTxt} numberOfLines={1}>
-                    {[profile.address?.village || profile.village, profile.address?.district, profile.address?.state].filter(Boolean).join(", ")}
-                  </Text>
+              {/* Address card */}
+              <View style={s.addrCard}>
+                <View style={s.addrRow}>
+                  <Ionicons name="location-outline" size={14} color={colors.saffron} />
+                  <View style={{ flex: 1 }}>
+                    {[
+                      { label: "Village", val: profile.address?.village || profile.village },
+                      { label: "Block", val: profile.address?.block },
+                      { label: "District", val: profile.address?.district || profile.district },
+                      { label: "State", val: profile.address?.state || profile.state },
+                      { label: "Pincode", val: profile.address?.pincode || profile.pincode },
+                    ].filter(r => r.val).map(r => (
+                      <View key={r.label} style={s.addrFieldRow}>
+                        <Text style={s.addrFieldLabel}>{r.label}</Text>
+                        <Text style={s.addrFieldVal}>{r.val}</Text>
+                      </View>
+                    ))}
+                    {!profile.address?.village && !profile.village && (
+                      <Text style={s.emptySub}>No address — tap Edit to add.</Text>
+                    )}
+                  </View>
                 </View>
-              )}
+              </View>
             </>
           )}
 
@@ -524,6 +594,13 @@ const s = StyleSheet.create({
   actionBtn: { flex:1, alignItems:"center", paddingVertical:16, gap:5 },
   actionBtnTxt: { fontFamily:fonts.bodyBold, fontSize:11, color:colors.saffron },
   actionSep: { width:1, backgroundColor:colors.border },
+  lockedRow: { flexDirection:"row", alignItems:"center", gap:5, marginTop:10, paddingHorizontal:2 },
+  lockedTxt: { fontFamily:fonts.body, fontSize:11, color:colors.textMuted, flex:1 },
+  addrCard: { backgroundColor:"#fff", borderRadius:12, borderWidth:1, borderColor:colors.border, padding:14, marginTop:8 },
+  addrRow: { flexDirection:"row", gap:10, alignItems:"flex-start" },
+  addrFieldRow: { flexDirection:"row", justifyContent:"space-between", paddingVertical:4, borderBottomWidth:1, borderBottomColor:colors.border + "60" },
+  addrFieldLabel: { fontFamily:fonts.bodyBold, fontSize:11, color:colors.textMuted, textTransform:"uppercase", letterSpacing:0.8 },
+  addrFieldVal: { fontFamily:fonts.bodySemi, fontSize:13, color:colors.text },
   modalOverlay: { flex:1, backgroundColor:"rgba(0,0,0,0.55)", justifyContent:"flex-end" },
   modalCard: { backgroundColor:"#fff", borderTopLeftRadius:24, borderTopRightRadius:24, padding:24, maxHeight:"80%" },
   modalTitle: { fontFamily:fonts.bodyBold, fontSize:18, color:colors.text, marginBottom:16, textAlign:"center" },
