@@ -1241,14 +1241,14 @@ async def gupshup_verify(
 ):
     # Bare ping with no params — Gupshup URL validation health check
     if not any([mode, challenge, verify_token, hub_mode, hub_challenge, hub_verify_token]):
-        return {"status": "ok"}
+        return Response(status_code=200)
     if not settings.gupshup_verify_token:
-        raise HTTPException(status_code=404, detail="WhatsApp verification not configured")
+        return Response(status_code=200)
     token = verify_token or hub_verify_token
     response_challenge = challenge or hub_challenge
     if token != settings.gupshup_verify_token:
-        raise HTTPException(status_code=403, detail="Invalid verify token")
-    return {"challenge": response_challenge}
+        return Response(status_code=200)
+    return Response(status_code=200)
 
 
 @router.post("/gupshup")
@@ -1288,4 +1288,4 @@ async def gupshup_webhook(request: Request):
         logger.error("WhatsApp send failed: %s", exc)
         raise HTTPException(status_code=502, detail="Failed to send WhatsApp reply")
 
-    return {"status": "ok", "reply": reply, "provider_response": response}
+    return Response(status_code=200)
