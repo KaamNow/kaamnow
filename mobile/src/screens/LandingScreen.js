@@ -316,7 +316,9 @@ export default function LandingScreen({ navigation }) {
                 <Text style={s.secondaryPathSub}>Nearby kaam dekhein</Text>
               </View>
             </View>
-            <Ionicons name="arrow-forward" size={18} color={colors.primary} />
+            <View style={s.pathArrowPrimary}>
+              <Ionicons name="arrow-forward" size={18} color="#fff" />
+            </View>
           </Pressable>
         </View>
 

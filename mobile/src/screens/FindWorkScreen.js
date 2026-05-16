@@ -3,11 +3,12 @@ import {
   View, Text, StyleSheet, FlatList, Pressable,
   Alert, RefreshControl, ActivityIndicator,
   TextInput, ScrollView, Linking, Keyboard,
-  KeyboardAvoidingView, Platform,
+  KeyboardAvoidingView, Platform, Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import api, { formatApiError } from "../api";
+import LocationBar from "../components/LocationBar";
 import { useAuth } from "../contexts/AuthContext";
 import { useLanguage } from "../contexts/LanguageContext";
 import { colors, fonts, spacing } from "../theme";
@@ -50,6 +51,11 @@ export default function FindWorkScreen({ navigation }) {
 
   // What's actually applied (shown in results)
   const [applied, setApplied] = useState({ query: "", pincode: "", cat: "" });
+
+  // Location modal
+  const [showLocModal, setShowLocModal] = useState(false);
+  const [tempPincode, setTempPincode]   = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
 
   /* ── Auto-detect worker pincode on mount ── */
   useEffect(() => {
@@ -153,6 +159,8 @@ export default function FindWorkScreen({ navigation }) {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
     <SafeAreaView edges={["top"]} style={s.safe}>
+      {/* ── HEADER BLOCK — fixed height, never overlaps results ── */}
+      <View style={s.header}>
 
       {/* ── Top bar ── */}
       <View style={s.topBar}>
@@ -168,53 +176,33 @@ export default function FindWorkScreen({ navigation }) {
         )}
       </View>
 
-      {/* ── Search row ── */}
-      <View style={s.searchWrap}>
-        <View style={s.searchBox}>
-          <Ionicons name="search-outline" size={16} color={colors.textMuted} />
-          <TextInput
-            ref={inputRef}
-            style={s.searchInput}
-            value={query}
-            onChangeText={setQuery}
-            placeholder={lang === "hi" ? "काम, जगह, skill खोजो…" : "Search job, location, skill…"}
-            placeholderTextColor={colors.textMuted}
-            returnKeyType="search"
-            onSubmitEditing={() => doSearch()}
-          />
-          {query.length > 0 && (
-            <Pressable onPress={() => setQuery("")} hitSlop={8}>
-              <Ionicons name="close-circle" size={17} color={colors.textMuted} />
-            </Pressable>
-          )}
-        </View>
-        <Pressable style={s.searchBtn} onPress={() => doSearch()}>
-          <Text style={s.searchBtnTxt}>{lang === "hi" ? "खोजो" : "Search"}</Text>
-        </Pressable>
-      </View>
+      {/* ── Location bar — tap to open pincode modal ── */}
+      <LocationBar
+        pincode={pincode}
+        onPress={() => { setTempPincode(pincode); setShowLocModal(true); }}
+        label={lang === "hi" ? "Jobs aapke paas" : "Jobs near you"}
+        compact
+        style={s.locationBar}
+      />
 
-      {/* ── Pincode row ── */}
-      <View style={s.pincodeWrap}>
-        <Ionicons name="location-outline" size={14} color={colors.textMuted} style={{ marginRight: 6 }} />
+      {/* ── Search box ── */}
+      <View style={[s.searchBox, searchFocused && s.searchBoxFocused]}>
+        <Ionicons name="search-outline" size={16} color={colors.textMuted} />
         <TextInput
-          style={s.pincodeInput}
-          value={pincode}
-          onChangeText={v => setPincode(v.replace(/\D/g,"").slice(0,6))}
-          placeholder={lang === "hi" ? "Pincode (6 अंक)" : "Pincode (6 digits)"}
+          ref={inputRef}
+          style={s.searchInput}
+          value={query}
+          onChangeText={setQuery}
+          placeholder={lang === "hi" ? "काम, skill खोजो…" : "Search job or skill…"}
           placeholderTextColor={colors.textMuted}
-          keyboardType="number-pad"
-          maxLength={6}
           returnKeyType="search"
+          onFocus={() => setSearchFocused(true)}
+          onBlur={() => setSearchFocused(false)}
           onSubmitEditing={() => doSearch()}
         />
-        {pincode.length > 0 && (
-          <Pressable onPress={() => setPincode("")} hitSlop={8} style={{ marginRight: 4 }}>
-            <Ionicons name="close-circle" size={16} color={colors.textMuted} />
-          </Pressable>
-        )}
-        {pincode.length === 6 && (
-          <Pressable style={s.applyBtn} onPress={() => doSearch()}>
-            <Text style={s.applyBtnTxt}>{lang === "hi" ? "Apply" : "Apply"}</Text>
+        {query.length > 0 && (
+          <Pressable onPress={() => setQuery("")} hitSlop={8}>
+            <Ionicons name="close-circle" size={17} color={colors.textMuted} />
           </Pressable>
         )}
       </View>
@@ -244,6 +232,10 @@ export default function FindWorkScreen({ navigation }) {
         </View>
       )}
 
+      </View>{/* end header */}
+
+      {/* ── RESULTS BLOCK — flex: 1 fills all remaining space ── */}
+      <View style={{ flex: 1 }}>
       {/* ── Results ── */}
       {loading ? (
         <View style={s.center}>
@@ -299,6 +291,82 @@ export default function FindWorkScreen({ navigation }) {
           keyboardDismissMode="on-drag"
         />
       )}
+      </View>{/* end results */}
+
+      {/* ── Location modal — same pattern as MarketplaceScreen ── */}
+      <Modal
+        visible={showLocModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowLocModal(false)}
+      >
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <Pressable style={s.locModalBg} onPress={() => setShowLocModal(false)}>
+            <Pressable style={s.locModalSheet} onPress={() => {}}>
+              <View style={s.locModalHandle} />
+              <Text style={s.locModalTitle}>
+                {lang === "hi" ? "Location चुनो" : "Set location"}
+              </Text>
+              <Text style={s.locModalSub}>
+                {lang === "hi"
+                  ? "Pincode dalein — us area ke jobs dikhenge"
+                  : "Enter pincode to see jobs in that area"}
+              </Text>
+              <View style={s.locModalInputWrap}>
+                <Ionicons name="location-outline" size={18} color={colors.saffron} />
+                <TextInput
+                  style={s.locModalInput}
+                  value={tempPincode}
+                  onChangeText={v => setTempPincode(v.replace(/\D/g, "").slice(0, 6))}
+                  placeholder={lang === "hi" ? "6-अंक pincode" : "6-digit pincode"}
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  autoFocus
+                />
+                {tempPincode.length > 0 ? (
+                  <Pressable onPress={() => setTempPincode("")} hitSlop={8}>
+                    <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+                  </Pressable>
+                ) : null}
+              </View>
+              <View style={s.locModalBtns}>
+                {pincode.length > 0 ? (
+                  <Pressable
+                    style={s.locModalClear}
+                    onPress={() => {
+                      setPincode("");
+                      doSearch({ pincode: "" });
+                      setShowLocModal(false);
+                    }}
+                  >
+                    <Text style={s.locModalClearText}>
+                      {lang === "hi" ? "Clear करो" : "Clear location"}
+                    </Text>
+                  </Pressable>
+                ) : null}
+                <Pressable
+                  style={[s.locModalApply, tempPincode.length !== 6 && { opacity: 0.4 }]}
+                  disabled={tempPincode.length !== 6}
+                  onPress={() => {
+                    setPincode(tempPincode);
+                    doSearch({ pincode: tempPincode });
+                    setShowLocModal(false);
+                  }}
+                >
+                  <Ionicons name="search-outline" size={16} color="#fff" />
+                  <Text style={s.locModalApplyText}>
+                    {lang === "hi" ? "यहाँ खोजो" : "Search here"}
+                  </Text>
+                </Pressable>
+              </View>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
     </KeyboardAvoidingView>
   );
@@ -409,29 +477,41 @@ const s = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10, paddingTop: 60 },
   loadingTxt: { fontFamily: fonts.body, fontSize: 13, color: colors.textMuted },
 
-  // Top bar
-  topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, paddingTop: 14, paddingBottom: 10, backgroundColor: "#fff" },
+  // Header block wrapper — contains all header rows, never overlaps results
+  header: { backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: colors.border },
+
+  // Top bar — compact
+  topBar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.lg, paddingTop: 12, paddingBottom: 8, backgroundColor: "#fff" },
   topLeft: {},
   overline: { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1.5, color: colors.saffron },
-  screenTitle: { fontFamily: fonts.display, fontSize: 22, color: colors.text, marginTop: 1 },
-  resetBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20, borderWidth: 1.5, borderColor: colors.saffron, backgroundColor: colors.saffronTint },
-  resetTxt: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.saffron },
+  screenTitle: { fontFamily: fonts.display, fontSize: 20, color: colors.text, marginTop: 1 },
+  resetBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20, borderWidth: 1.5, borderColor: colors.saffron, backgroundColor: colors.saffronTint },
+  resetTxt: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.saffron },
 
-  // Search
-  searchWrap: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: spacing.lg, paddingVertical: 10, backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: colors.border },
-  searchBox: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#f5f4f0", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1.5, borderColor: colors.border },
-  searchInput: { flex: 1, fontFamily: fonts.body, fontSize: 14, color: colors.text, padding: 0 },
-  searchBtn: { backgroundColor: colors.saffron, paddingHorizontal: 18, paddingVertical: 11, borderRadius: 12 },
-  searchBtnTxt: { fontFamily: fonts.bodyBold, fontSize: 14, color: "#fff" },
+  // Location bar
+  locationBar: { marginHorizontal: spacing.lg, marginTop: 6, marginBottom: 4 },
 
-  // Pincode
-  pincodeWrap: { flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.lg, paddingVertical: 8, backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: colors.border },
-  pincodeInput: { flex: 1, fontFamily: fonts.body, fontSize: 14, color: colors.text, padding: 0 },
-  applyBtn: { backgroundColor: colors.indigo, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 10 },
-  applyBtnTxt: { fontFamily: fonts.bodyBold, fontSize: 12, color: "#fff" },
+  // Search box — full width, no separate button, focused border
+  searchBox: { flexDirection: "row", alignItems: "center", gap: 8, marginHorizontal: spacing.lg, marginBottom: 6, backgroundColor: "#f5f4f0", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1.5, borderColor: colors.border },
+  searchBoxFocused: { borderColor: colors.saffron },
+  searchInput: { flex: 1, fontFamily: fonts.body, fontSize: 13, color: colors.text, padding: 0 },
 
-  // Category chips
-  chipScroll: { backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: colors.border },
+  // Location modal
+  locModalBg: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
+  locModalSheet: { backgroundColor: "#fff", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
+  locModalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: "center", marginBottom: 20 },
+  locModalTitle: { fontFamily: fonts.display, fontSize: 22, color: colors.text, marginBottom: 4 },
+  locModalSub: { fontFamily: fonts.body, fontSize: 13, color: colors.textSecondary, marginBottom: 20, lineHeight: 18 },
+  locModalInputWrap: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#f5f4f0", borderRadius: 12, borderWidth: 1.5, borderColor: colors.saffron, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 20 },
+  locModalInput: { flex: 1, fontFamily: fonts.body, fontSize: 18, color: colors.text, letterSpacing: 2 },
+  locModalBtns: { flexDirection: "row", gap: 10 },
+  locModalClear: { paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1.5, borderColor: colors.border, justifyContent: "center", minHeight: 50 },
+  locModalClearText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.textSecondary },
+  locModalApply: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.saffron, paddingVertical: 14, borderRadius: 12, minHeight: 50 },
+  locModalApplyText: { fontFamily: fonts.bodyBold, fontSize: 15, color: "#fff" },
+
+  // Category chips — fixed height so it never expands and overlaps results
+  chipScroll: { backgroundColor: "#fff", height: 52 },
   chipList: { paddingHorizontal: spacing.lg, paddingVertical: 6, gap: 8 },
   chip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 13, paddingVertical: 9, borderRadius: 20, borderWidth: 1.5, borderColor: colors.border, backgroundColor: "#fff", minHeight: 40 },
   chipActive: { backgroundColor: colors.saffron, borderColor: colors.saffron },

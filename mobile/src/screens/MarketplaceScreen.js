@@ -53,7 +53,6 @@ export default function MarketplaceScreen({ navigation, route }) {
   const [q, setQ] = useState("");
   const [pincode, setPincode] = useState(route?.params?.filterPincode || "");
   const [avail, setAvail] = useState("any");
-  const [filtersOpen, setFiltersOpen] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const [showLocModal, setShowLocModal] = useState(false);
   const [tempPincode, setTempPincode] = useState("");
@@ -109,13 +108,6 @@ export default function MarketplaceScreen({ navigation, route }) {
             <Text style={styles.title}>Find Workers</Text>
             <Text style={styles.subtitle}>Aapke area ke trusted workers</Text>
           </View>
-          <Pressable
-            style={[styles.filterIconBtn, activeFilterCount > 0 && styles.filterIconBtnActive]}
-            onPress={() => setFiltersOpen((open) => !open)}
-          >
-            <Ionicons name="options-outline" size={20} color={activeFilterCount > 0 ? "#fff" : colors.primary} />
-            {activeFilterCount > 0 ? <View style={styles.filterDot} /> : null}
-          </Pressable>
         </View>
 
         <LocationBar
@@ -160,58 +152,28 @@ export default function MarketplaceScreen({ navigation, route }) {
           </View>
         </ScrollView>
 
-        {filtersOpen ? (
-          <View style={styles.filterPanel}>
-            <Text style={styles.filterLabel}>Availability</Text>
-            <View style={styles.availRow}>
-              {AVAIL_OPTS.map((option) => (
-                <Pressable
-                  key={option.v}
-                  onPress={() => setAvail(option.v)}
-                  style={[styles.availChip, avail === option.v && styles.availChipActive]}
-                >
-                  <Text style={[styles.availChipText, avail === option.v && styles.availChipTextActive]}>
-                    {option.l}
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-            <Pressable
-              style={styles.filterChangeLocBtn}
-              onPress={() => {
-                setFiltersOpen(false);
-                setTempPincode(pincode);
-                setShowLocModal(true);
-              }}
-            >
-              <Ionicons name="location-outline" size={14} color={colors.primary} />
-              <Text style={styles.filterChangeLocText}>
-                {pincode.length === 6 ? `Location: ${pincode} — Change` : "Set location"}
-              </Text>
-              <Ionicons name="chevron-forward" size={14} color={colors.primary} />
-            </Pressable>
-            {hasAnyFilter ? (
-              <Pressable onPress={clearAll} style={styles.clearBtn}>
-                <Ionicons name="refresh-outline" size={14} color={colors.danger} />
-                <Text style={[styles.clearText, { color: colors.danger }]}>Reset Filters</Text>
-              </Pressable>
-            ) : null}
-          </View>
-        ) : null}
 
         <View style={styles.countRow}>
           <Text style={styles.countText}>
             {workers.length} {lang === "hi" ? "कारीगर मिले" : "workers found"}
           </Text>
-          <Pressable
-            onPress={() => setAvail((value) => (value === "true" ? "any" : "true"))}
-            style={[styles.availablePill, avail === "true" && styles.availablePillActive]}
-          >
-            <View style={[styles.availableDot, avail === "true" && styles.availableDotActive]} />
-            <Text style={[styles.availablePillText, avail === "true" && styles.availablePillTextActive]}>
-              Available now
-            </Text>
-          </Pressable>
+          <View style={styles.countActions}>
+            <Pressable
+              onPress={() => setAvail((value) => (value === "true" ? "any" : "true"))}
+              style={[styles.availablePill, avail === "true" && styles.availablePillActive]}
+            >
+              <View style={[styles.availableDot, avail === "true" && styles.availableDotActive]} />
+              <Text style={[styles.availablePillText, avail === "true" && styles.availablePillTextActive]}>
+                Available now
+              </Text>
+            </Pressable>
+            {hasAnyFilter ? (
+              <Pressable onPress={clearAll} style={styles.resetPill}>
+                <Ionicons name="refresh-outline" size={12} color={colors.danger} />
+                <Text style={styles.resetPillText}>Reset</Text>
+              </Pressable>
+            ) : null}
+          </View>
         </View>
       </View>
 
@@ -502,6 +464,28 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   availablePillTextActive: { color: colors.success },
+  countActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  resetPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    minHeight: 34,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.danger + "50",
+    backgroundColor: "#FFF1F2",
+  },
+  resetPillText: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 11,
+    color: colors.danger,
+  },
   listContent: {
     padding: spacing.lg,
     paddingBottom: 80,

@@ -3,8 +3,8 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
-  Keyboard,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   RefreshControl,
@@ -46,14 +46,17 @@ export default function WorkerJobFeedScreen({ navigation }) {
   const [engagements, setEngagements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [showLocModal, setShowLocModal] = useState(false);
+  const [tempPincode, setTempPincode] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
 
+  const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
   const [skill, setSkill] = useState("");
   const [pincode, setPincode] = useState("");
   const [workerPincode, setWorkerPincode] = useState("");
 
-  const [applied, setApplied] = useState({ category: "", skill: "", pincode: "" });
+  const [applied, setApplied] = useState({ category: "", skill: "", pincode: "", query: "" });
 
   useEffect(() => {
     if (user?.role !== "worker") return;
@@ -63,7 +66,7 @@ export default function WorkerJobFeedScreen({ navigation }) {
         if (pc) {
           setWorkerPincode(pc);
           setPincode(pc);
-          setApplied({ category: "", skill: "", pincode: pc });
+          setApplied({ category: "", skill: "", pincode: pc, query: "" });
         }
       })
       .catch(() => {});
@@ -75,6 +78,7 @@ export default function WorkerJobFeedScreen({ navigation }) {
       if (applied.category) params.category = applied.category;
       if (applied.skill) params.skills = applied.skill;
       if (applied.pincode?.length === 6) params.pincode = applied.pincode;
+      if (applied.query?.trim()) params.search = applied.query.trim();
 
       const [feed, mine] = await Promise.all([
         api.get("/jobs/feed", { params }).catch(() => ({ data: [] })),
@@ -89,12 +93,6 @@ export default function WorkerJobFeedScreen({ navigation }) {
   }, [applied]);
 
   useEffect(() => { load(); }, [load]);
-
-  const applySearch = () => {
-    Keyboard.dismiss();
-    setApplied({ category, skill, pincode });
-    setFiltersOpen(false);
-  };
 
   const engagementFor = (jobId) =>
     engagements.find((engagement) => engagement.job_id === jobId && ["requested", "accepted"].includes(engagement.status));
@@ -136,18 +134,18 @@ export default function WorkerJobFeedScreen({ navigation }) {
 
   const activeFilterCount = [
     !!applied.category,
-    !!applied.skill,
     applied.pincode?.length === 6 && applied.pincode !== workerPincode,
+    !!applied.query?.trim(),
   ].filter(Boolean).length;
 
-  const hasAnyFilter = activeFilterCount > 0 || !!skill || !!category || (pincode && pincode !== workerPincode);
+  const hasAnyFilter = activeFilterCount > 0;
 
   const clearAll = () => {
     setCategory("");
     setSkill("");
+    setQuery("");
     setPincode(workerPincode);
-    setApplied({ category: "", skill: "", pincode: workerPincode });
-    setFiltersOpen(false);
+    setApplied({ category: "", skill: "", pincode: workerPincode, query: "" });
   };
 
   if (user?.role !== "worker") {
@@ -181,35 +179,36 @@ export default function WorkerJobFeedScreen({ navigation }) {
 
           <LocationBar
             pincode={applied.pincode || pincode || workerPincode}
-            label="Current area"
+            onPress={() => { setTempPincode(pincode || workerPincode); setShowLocModal(true); }}
+            label={lang === "hi" ? "Aapke paas ke kaam" : "Jobs near you"}
             compact
             style={styles.locationBar}
           />
 
-          <View style={styles.searchRow}>
-            <Ionicons name="location-outline" size={17} color={colors.textMuted} style={styles.searchIcon} />
+          {/* ── Search box ── */}
+          <View style={[styles.searchBox, searchFocused && styles.searchBoxFocused]}>
+            <Ionicons name="search-outline" size={16} color={colors.textMuted} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Pincode ya skill search karein"
+              value={query}
+              onChangeText={setQuery}
+              placeholder={lang === "hi" ? "Kaam, skill search karein…" : "Search job or skill…"}
               placeholderTextColor={colors.textMuted}
-              keyboardType="number-pad"
-              maxLength={6}
-              value={pincode}
-              onChangeText={(value) => setPincode(value.replace(/\D/g, "").slice(0, 6))}
-              onSubmitEditing={applySearch}
               returnKeyType="search"
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+              onSubmitEditing={() =>
+                setApplied((prev) => ({ ...prev, query: query.trim() }))
+              }
             />
-            {workerPincode && pincode !== workerPincode ? (
-              <Pressable onPress={() => setPincode(workerPincode)} style={styles.myLocBtn}>
-                <Ionicons name="navigate" size={14} color={colors.primary} />
+            {query.length > 0 ? (
+              <Pressable
+                onPress={() => { setQuery(""); setApplied((prev) => ({ ...prev, query: "" })); }}
+                hitSlop={8}
+              >
+                <Ionicons name="close-circle" size={17} color={colors.textMuted} />
               </Pressable>
             ) : null}
-            <Pressable
-              style={[styles.searchBtn, pincode.length === 6 && styles.searchBtnActive]}
-              onPress={applySearch}
-            >
-              <Ionicons name="arrow-forward" size={18} color={pincode.length === 6 ? "#fff" : colors.textMuted} />
-            </Pressable>
           </View>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroller}>
@@ -221,51 +220,38 @@ export default function WorkerJobFeedScreen({ navigation }) {
                   label={item.l[lang] || item.l.en}
                   icon={item.icon}
                   selected={category === item.v}
-                  onPress={() => setCategory(item.v)}
+                  onPress={() => {
+                    setCategory(item.v);
+                    setApplied((prev) => ({ ...prev, category: item.v }));
+                  }}
                 />
               ))}
             </View>
           </ScrollView>
 
-          <View style={styles.filterRow}>
-            <Pressable
-              style={[styles.filterToggle, filtersOpen && styles.filterToggleActive]}
-              onPress={() => setFiltersOpen((open) => !open)}
-            >
-              <Ionicons name="construct-outline" size={14} color={filtersOpen ? "#fff" : colors.textSecondary} />
-              <Text style={[styles.filterToggleText, filtersOpen && styles.filterToggleTextActive]} numberOfLines={1}>
-                {skill || "Skill filter"}
-              </Text>
-              {skill ? <Ionicons name="checkmark-circle" size={14} color={filtersOpen ? "#fff" : colors.primary} /> : null}
-            </Pressable>
-            <Pressable style={styles.applyBtn} onPress={applySearch}>
-              <Ionicons name="search-outline" size={14} color="#fff" />
-              <Text style={styles.applyBtnText}>Search</Text>
-            </Pressable>
-          </View>
-
-          {filtersOpen ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.skillScroller}>
-              <View style={styles.chipRow}>
-                <ServiceCategoryCard
-                  size="chip"
-                  label="All"
-                  icon="grid-outline"
-                  selected={!skill}
-                  onPress={() => setSkill("")}
-                />
-                {SKILLS.map((item) => (
-                  <ServiceCategoryCard
-                    key={item}
-                    size="chip"
-                    label={item}
-                    icon="construct-outline"
-                    selected={skill === item}
-                    onPress={() => setSkill(item)}
-                  />
-                ))}
-              </View>
-            </ScrollView>
+          {/* ── Applied filters row ── */}
+          {hasAnyFilter ? (
+            <View style={styles.appliedRow}>
+              <Text style={styles.appliedLabel}>{lang === "hi" ? "Filter:" : "Results for:"}</Text>
+              {applied.query ? (
+                <View style={styles.appliedTag}>
+                  <Text style={styles.appliedTagTxt}>"{applied.query}"</Text>
+                </View>
+              ) : null}
+              {applied.pincode && applied.pincode !== workerPincode ? (
+                <View style={styles.appliedTag}>
+                  <Ionicons name="location" size={10} color={colors.primary} />
+                  <Text style={styles.appliedTagTxt}> {applied.pincode}</Text>
+                </View>
+              ) : null}
+              {applied.category ? (
+                <View style={styles.appliedTag}>
+                  <Text style={styles.appliedTagTxt}>
+                    {CATEGORIES.find((c) => c.v === applied.category)?.l[lang] || applied.category}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
           ) : null}
 
           <View style={styles.countRow}>
@@ -273,7 +259,7 @@ export default function WorkerJobFeedScreen({ navigation }) {
               {loading
                 ? (lang === "hi" ? "लोड हो रहा है..." : "Loading...")
                 : `${jobs.length} ${lang === "hi" ? "kaam mile" : jobs.length === 1 ? "job found" : "jobs found"}`}
-              {applied.pincode ? ` · ${applied.pincode}` : ""}
+              {applied.pincode && applied.pincode !== workerPincode ? ` · ${applied.pincode}` : ""}
             </Text>
             {loading ? <ActivityIndicator size="small" color={colors.primary} /> : null}
           </View>
@@ -316,6 +302,80 @@ export default function WorkerJobFeedScreen({ navigation }) {
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
         />
+      {/* ── Location modal ── */}
+      <Modal
+        visible={showLocModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowLocModal(false)}
+      >
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <Pressable style={styles.locModalBg} onPress={() => setShowLocModal(false)}>
+            <Pressable style={styles.locModalSheet} onPress={() => {}}>
+              <View style={styles.locModalHandle} />
+              <Text style={styles.locModalTitle}>
+                {lang === "hi" ? "Location chunein" : "Set location"}
+              </Text>
+              <Text style={styles.locModalSub}>
+                {lang === "hi"
+                  ? "Pincode dalein — us area ke jobs dikhenge"
+                  : "Enter pincode to see jobs in that area"}
+              </Text>
+              <View style={styles.locModalInputWrap}>
+                <Ionicons name="location-outline" size={18} color={colors.primary} />
+                <TextInput
+                  style={styles.locModalInput}
+                  value={tempPincode}
+                  onChangeText={(v) => setTempPincode(v.replace(/\D/g, "").slice(0, 6))}
+                  placeholder={lang === "hi" ? "6-अंक pincode" : "6-digit pincode"}
+                  placeholderTextColor={colors.textMuted}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  autoFocus
+                />
+                {tempPincode.length > 0 ? (
+                  <Pressable onPress={() => setTempPincode("")} hitSlop={8}>
+                    <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+                  </Pressable>
+                ) : null}
+              </View>
+              <View style={styles.locModalBtns}>
+                {pincode && pincode !== workerPincode ? (
+                  <Pressable
+                    style={styles.locModalClear}
+                    onPress={() => {
+                      setPincode(workerPincode);
+                      setApplied((prev) => ({ ...prev, pincode: workerPincode }));
+                      setShowLocModal(false);
+                    }}
+                  >
+                    <Text style={styles.locModalClearText}>
+                      {lang === "hi" ? "My location" : "My location"}
+                    </Text>
+                  </Pressable>
+                ) : null}
+                <Pressable
+                  style={[styles.locModalApply, tempPincode.length !== 6 && { opacity: 0.4 }]}
+                  disabled={tempPincode.length !== 6}
+                  onPress={() => {
+                    setPincode(tempPincode);
+                    setApplied((prev) => ({ ...prev, pincode: tempPincode }));
+                    setShowLocModal(false);
+                  }}
+                >
+                  <Ionicons name="search-outline" size={16} color="#fff" />
+                  <Text style={styles.locModalApplyText}>
+                    {lang === "hi" ? "Yahan dhoondhein" : "Search here"}
+                  </Text>
+                </Pressable>
+              </View>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
       </AppScreen>
     </KeyboardAvoidingView>
   );
@@ -364,65 +424,72 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
   },
   resetPillText: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.primary },
-  locationBar: { marginBottom: spacing.md },
-  searchRow: {
-    minHeight: 48,
+  locationBar: { marginBottom: spacing.sm },
+
+  // Search box
+  searchBox: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 8,
     backgroundColor: colors.surface,
     borderRadius: radius.md,
     borderWidth: 1.5,
     borderColor: colors.border,
-    overflow: "hidden",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    marginBottom: spacing.sm,
     ...shadow.xs,
   },
-  searchIcon: { marginLeft: 12 },
+  searchBoxFocused: { borderColor: colors.primary },
   searchInput: {
     flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 10,
     fontFamily: fonts.body,
-    fontSize: 14,
+    fontSize: 13,
     color: colors.text,
+    padding: 0,
   },
-  myLocBtn: { minWidth: 40, minHeight: 44, alignItems: "center", justifyContent: "center" },
-  searchBtn: {
-    width: 48,
-    height: 48,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.surface2,
-  },
-  searchBtnActive: { backgroundColor: colors.primary },
-  categoryScroller: { marginTop: spacing.md },
-  skillScroller: { marginTop: spacing.sm, marginBottom: 2 },
-  chipRow: { flexDirection: "row", gap: 8, paddingBottom: 5 },
-  filterRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: spacing.sm },
-  filterToggle: {
-    flex: 1,
-    minHeight: 44,
+
+  // Applied filters row
+  appliedRow: {
     flexDirection: "row",
     alignItems: "center",
+    flexWrap: "wrap",
     gap: 6,
-    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: colors.primaryLight,
     borderRadius: radius.md,
-    borderWidth: 1.5,
-    borderColor: colors.border,
+    paddingHorizontal: 10,
+    marginBottom: spacing.sm,
+  },
+  appliedLabel: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.textMuted },
+  appliedTag: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: colors.surface,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.primary + "50",
   },
-  filterToggleActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  filterToggleText: { flex: 1, fontFamily: fonts.bodyBold, fontSize: 12, color: colors.textSecondary },
-  filterToggleTextActive: { color: "#fff" },
-  applyBtn: {
-    minHeight: 44,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 18,
-    borderRadius: radius.md,
-    backgroundColor: colors.primary,
-  },
-  applyBtnText: { fontFamily: fonts.bodyBold, fontSize: 13, color: "#fff" },
+  appliedTagTxt: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.primary },
+
+  categoryScroller: { marginTop: spacing.xs },
+  chipRow: { flexDirection: "row", gap: 8, paddingBottom: 5 },
+
+  // Location modal
+  locModalBg: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
+  locModalSheet: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: spacing.xl, paddingBottom: 40 },
+  locModalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: "center", marginBottom: 20 },
+  locModalTitle: { fontFamily: fonts.display, fontSize: 22, color: colors.text, marginBottom: 4 },
+  locModalSub: { fontFamily: fonts.body, fontSize: 13, color: colors.textSecondary, marginBottom: 20, lineHeight: 18 },
+  locModalInputWrap: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.surface2, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.primary, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 20 },
+  locModalInput: { flex: 1, fontFamily: fonts.body, fontSize: 18, color: colors.text, letterSpacing: 2 },
+  locModalBtns: { flexDirection: "row", gap: 10 },
+  locModalClear: { paddingVertical: 14, paddingHorizontal: 16, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.border, justifyContent: "center", minHeight: 50 },
+  locModalClearText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.textSecondary },
+  locModalApply: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.primary, paddingVertical: 14, borderRadius: radius.md, minHeight: 50 },
+  locModalApplyText: { fontFamily: fonts.bodyBold, fontSize: 15, color: "#fff" },
   countRow: {
     flexDirection: "row",
     alignItems: "center",

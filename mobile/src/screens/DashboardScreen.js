@@ -420,7 +420,7 @@ export default function DashboardScreen({ navigation, route }) {
         {/* ── Header ── */}
         <View style={styles.workerHeader}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.workerTitle}>Mera Kaam</Text>
+            <Text style={styles.workerTitle}>My Work</Text>
             <Text style={styles.workerSubtitle}>Aapke applied aur accepted kaam</Text>
           </View>
           <Pressable
@@ -436,7 +436,7 @@ export default function DashboardScreen({ navigation, route }) {
         <View style={styles.workerSummaryRow}>
           <WorkerSummaryStat label="Active" value={activeEngs.length} color={colors.success} />
           <WorkerSummaryStat label="Pending" value={pendingEngs.length} color={colors.warning} />
-          <WorkerSummaryStat label="Done" value={completedEngs.length} color="#1E40AF" />
+          <WorkerSummaryStat label="Completed" value={completedEngs.length} color="#1E40AF" />
           <WorkerSummaryStat label="Cancelled" value={cancelledEngs.length} color={colors.textMuted} />
         </View>
 
