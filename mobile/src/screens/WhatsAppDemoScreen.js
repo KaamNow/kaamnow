@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
+  Image,
   StyleSheet,
   ScrollView,
   TextInput,
@@ -92,7 +93,7 @@ export default function WhatsAppDemoScreen() {
         style={{ flex: 1 }}
       >
         <View style={styles.chatHeader}>
-          <View style={styles.botAvatar}><Text style={styles.botAvatarText}>K</Text></View>
+          <Image source={require("../../assets/icon.png")} style={styles.botAvatar} resizeMode="contain" />
           <View style={{ flex: 1 }}>
             <Text style={styles.botName}>KaamNow Bot</Text>
             <Text style={styles.botStatus}>{user ? `online · ${user.name}` : "online · guest"}</Text>
@@ -153,8 +154,7 @@ const styles = StyleSheet.create({
   lead: { fontFamily: fonts.body, fontSize: 13, color: colors.textSecondary, marginTop: 6, lineHeight: 18 },
   code: { fontFamily: "Courier", backgroundColor: "#F3F4F6", paddingHorizontal: 4, fontSize: 12 },
   chatHeader: { flexDirection: "row", alignItems: "center", gap: 10, padding: 14, backgroundColor: colors.indigo },
-  botAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.saffron, alignItems: "center", justifyContent: "center" },
-  botAvatarText: { fontFamily: fonts.display, fontSize: 18, color: "#fff" },
+  botAvatar: { width: 40, height: 40, borderRadius: 20 },
   botName: { fontFamily: fonts.bodyBold, fontSize: 14, color: "#fff" },
   botStatus: { fontFamily: fonts.body, fontSize: 11, color: "rgba(255,255,255,0.8)" },
   resetText: { color: "#fff", fontFamily: fonts.bodyBold, fontSize: 12, textDecorationLine: "underline" },

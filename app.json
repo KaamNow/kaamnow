@@ -1,3 +1,12 @@
 {
-  "expo": {}
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "e3488ace-e7ad-4919-ad70-af37afc967bb"
+      }
+    },
+    "android": {
+      "package": "com.kaamnow.kaamnow"
+    }
+  }
 }

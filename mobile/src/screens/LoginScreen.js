@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import {
-  View, Text, ScrollView, StyleSheet,
+  View, Text, ScrollView, StyleSheet, Image,
   KeyboardAvoidingView, Platform, Alert,
   Pressable, Modal, TextInput, Linking,
 } from "react-native";
@@ -162,7 +162,7 @@ export default function LoginScreen() {
           </Pressable>
 
           <View style={[s.brand, isOtpStep && s.brandCompact]}>
-            <View style={s.logoBadge}><Text style={s.logoK}>K</Text></View>
+            <Image source={require("../../assets/icon.png")} style={s.logoImg} resizeMode="contain" />
             <Text style={s.brandName}>KaamNow</Text>
             <Text style={s.tagline}>काम की बात KaamNow के साथ</Text>
           </View>
@@ -339,8 +339,7 @@ const s = StyleSheet.create({
 
   brand: { alignItems: "center", marginTop: 10, marginBottom: 34 },
   brandCompact: { marginTop: 0, marginBottom: 24 },
-  logoBadge: { width: 64, height: 64, borderRadius: 18, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", ...shadow.sm },
-  logoK: { fontFamily: fonts.display, fontSize: 34, color: "#fff" },
+  logoImg: { width: 64, height: 64, borderRadius: 18 },
   brandName: { marginTop: 12, fontFamily: fonts.displayBold, fontSize: 24, color: colors.text },
   tagline: { marginTop: 3, fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.textMuted },
 

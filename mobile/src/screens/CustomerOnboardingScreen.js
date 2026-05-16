@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -73,9 +74,7 @@ export default function CustomerOnboardingScreen({ navigation }) {
           </Pressable>
 
           <View style={styles.brand}>
-            <View style={styles.logoBadge}>
-              <Text style={styles.logoK}>K</Text>
-            </View>
+            <Image source={require("../../assets/icon.png")} style={styles.logoImg} resizeMode="contain" />
             <Text style={styles.brandName}>KaamNow</Text>
           </View>
 
@@ -182,16 +181,7 @@ const styles = StyleSheet.create({
     marginLeft: -10,
   },
   brand: { alignItems: "center", marginBottom: 22 },
-  logoBadge: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-    ...shadow.sm,
-  },
-  logoK: { fontFamily: fonts.display, fontSize: 30, color: "#fff" },
+  logoImg: { width: 56, height: 56, borderRadius: 16 },
   brandName: { marginTop: 10, fontFamily: fonts.displayBold, fontSize: 22, color: colors.text },
   stepPill: {
     alignSelf: "flex-start",

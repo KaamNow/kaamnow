@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, fonts, radius, spacing } from "../theme";
 
@@ -18,9 +18,7 @@ export default function AppHeader({
       <View style={styles.left}>
         {showLogo ? (
           <>
-            <View style={styles.logoMark}>
-              <Text style={styles.logoLetter}>K</Text>
-            </View>
+            <Image source={require("../../assets/icon.png")} style={styles.logoImg} resizeMode="contain" />
             <Text style={styles.logoText}>KaamNow</Text>
           </>
         ) : null}
@@ -75,19 +73,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flex: 1,
   },
-  logoMark: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  logoLetter: {
-    fontFamily: fonts.display,
-    fontSize: 19,
-    color: "#fff",
-  },
+  logoImg: { width: 36, height: 36, borderRadius: 10 },
   logoText: {
     marginLeft: 10,
     fontFamily: fonts.displayBold,

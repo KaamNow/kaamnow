@@ -205,7 +205,7 @@ export default function LandingScreen({ navigation }) {
   const Header = () => (
     <View style={s.header}>
       <View style={s.logoRow}>
-        <View style={s.logoBadge}><Text style={s.logoK}>K</Text></View>
+        <Image source={require("../../assets/icon.png")} style={s.logoImg} resizeMode="contain" />
         <View>
           <Text style={s.logoText}>KaamNow</Text>
           <Text style={s.logoTagline}>{t.tagline}</Text>
@@ -977,8 +977,7 @@ const s = StyleSheet.create({
   // Header
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: spacing.lg, paddingTop: 10, paddingBottom: 8 },
   logoRow: { flexDirection: "row", alignItems: "center", gap: 9 },
-  logoBadge: { width: 36, height: 36, borderRadius: 10, backgroundColor: colors.saffron, alignItems: "center", justifyContent: "center" },
-  logoK: { fontFamily: fonts.display, fontSize: 19, color: "#fff" },
+  logoImg: { width: 36, height: 36, borderRadius: 10 },
   logoText: { fontFamily: fonts.display, fontSize: 16, color: colors.text },
   logoTagline: { fontFamily: fonts.body, fontSize: 10, color: colors.textMuted },
   langPill: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 11, paddingVertical: 6, borderRadius: 20, backgroundColor: colors.saffronTint, borderWidth: 1, borderColor: colors.border },

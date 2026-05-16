@@ -1,6 +1,7 @@
 import { useState } from "react";
 import {
   Alert,
+  Image,
   KeyboardAvoidingView,
   Linking,
   Modal,
@@ -104,9 +105,7 @@ export default function PhoneSignupScreen({ navigation, route }) {
           </Pressable>
 
           <View style={[styles.brand, step === 2 && styles.brandCompact]}>
-            <View style={styles.logoBadge}>
-              <Text style={styles.logoK}>K</Text>
-            </View>
+            <Image source={require("../../assets/icon.png")} style={styles.logoImg} resizeMode="contain" />
             <Text style={styles.brandName}>KaamNow</Text>
             <Text style={styles.tagline}>काम की बात KaamNow के साथ</Text>
           </View>
@@ -225,16 +224,7 @@ const styles = StyleSheet.create({
   },
   brand: { alignItems: "center", marginTop: 10, marginBottom: 34 },
   brandCompact: { marginTop: 0, marginBottom: 24 },
-  logoBadge: {
-    width: 64,
-    height: 64,
-    borderRadius: 18,
-    backgroundColor: colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-    ...shadow.sm,
-  },
-  logoK: { fontFamily: fonts.display, fontSize: 34, color: "#fff" },
+  logoImg: { width: 64, height: 64, borderRadius: 18 },
   brandName: { marginTop: 12, fontFamily: fonts.displayBold, fontSize: 24, color: colors.text },
   tagline: { marginTop: 3, fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.textMuted },
   titleBlock: { marginBottom: 22 },
