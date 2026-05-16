@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ..auth import get_current_user
 from ..db import db
-from ..engagements import create_engagement_request
+from ..engagements import create_engagement_request, _notify
 from ..schemas import JobIn, JobOut
 from ..utils import utc_now_iso
 from ..whatsapp_notify import notify_worker_job_alert
@@ -227,8 +227,7 @@ async def _alert_matching_workers(job: dict) -> None:
         now = utc_now_iso()
         for w in matched:
             uid = w.get("user_id")
-            phone = phone_by_uid.get(uid)
-            if not phone:
+            if not uid:
                 continue
 
             # Dedup: skip if already sent for this job+worker
@@ -236,20 +235,32 @@ async def _alert_matching_workers(job: dict) -> None:
             if already_sent:
                 continue
 
-            # Log before sending
+            # In-app notification (always, no phone needed)
+            await _notify(
+                uid,
+                "New job near you!",
+                f"{job.get('title', 'A new job')} in {job.get('village', 'your area')} — ₹{job.get('daily_rate', '?')}/day",
+                "job_alert",
+                job_id,
+            )
+
+            # Log before sending WhatsApp
+            phone = phone_by_uid.get(uid)
             await db.wa_notif_log.insert_one({
                 "job_id": job_id,
                 "user_id": uid,
-                "phone": phone,
+                "phone": phone or "",
                 "sent_at": now,
                 "kind": "job_alert",
             })
 
-            threading.Thread(
-                target=notify_worker_job_alert,
-                args=(phone, job),
-                daemon=True,
-            ).start()
+            # WhatsApp (only if phone available)
+            if phone:
+                threading.Thread(
+                    target=notify_worker_job_alert,
+                    args=(phone, job),
+                    daemon=True,
+                ).start()
 
     except Exception as exc:
         import logging
