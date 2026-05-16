@@ -19,6 +19,7 @@ import {
   Manrope_700Bold,
 } from "@expo-google-fonts/manrope";
 
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "./src/contexts/AuthContext";
 import { LanguageProvider } from "./src/contexts/LanguageContext";
 import { colors, fonts } from "./src/theme";
@@ -64,12 +65,13 @@ const TAB_OPTS = {
 function Tabs() {
   const { user } = useAuth();
   const role = user?.role || "guest";
+  const insets = useSafeAreaInsets();
 
   const sharedOpts = {
     headerShown: false,
     tabBarActiveTintColor: colors.saffron,
     tabBarInactiveTintColor: colors.textMuted,
-    tabBarStyle: { backgroundColor: "#fff", borderTopColor: colors.border, height: 64, paddingBottom: 8, paddingTop: 6 },
+    tabBarStyle: { backgroundColor: "#fff", borderTopColor: colors.border, height: 64 + insets.bottom, paddingBottom: 8 + insets.bottom, paddingTop: 6 },
     tabBarLabelStyle: { fontFamily: fonts.bodyBold, fontSize: 11 },
   };
 
