@@ -3,13 +3,13 @@ import {
   View, Text, StyleSheet, ScrollView, Pressable,
   RefreshControl, ActivityIndicator,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import api from "../api";
 import { useAuth } from "../contexts/AuthContext";
 import { useLanguage } from "../contexts/LanguageContext";
-import { colors, fonts, spacing } from "../theme";
+import AppScreen from "../components/AppScreen";
+import { colors, fonts, radius, shadow, spacing } from "../theme";
 
 const DAY_LABELS    = { en: ["Su","Mo","Tu","We","Th","Fr","Sa"], hi: ["र","सो","मं","बु","गु","शु","श"] };
 const MONTH_NAMES   = {
@@ -124,13 +124,13 @@ export default function CalendarScreen({ navigation }) {
   };
 
   if (loading) return (
-    <SafeAreaView style={s.safe}>
-      <View style={s.center}><ActivityIndicator color={colors.saffron} size="large" /></View>
-    </SafeAreaView>
+    <AppScreen style={s.safe}>
+      <View style={s.center}><ActivityIndicator color={colors.primary} size="large" /></View>
+    </AppScreen>
   );
 
   return (
-    <SafeAreaView edges={["top"]} style={s.safe}>
+    <AppScreen edges={["top"]} style={s.safe}>
       <ScrollView
         contentContainerStyle={{ paddingBottom: 80 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
@@ -174,11 +174,11 @@ export default function CalendarScreen({ navigation }) {
             {/* Month nav */}
             <View style={s.calNav}>
               <Pressable onPress={prevMonth} style={s.navBtn}>
-                <Ionicons name="chevron-back" size={20} color={colors.saffron} />
+                <Ionicons name="chevron-back" size={20} color={colors.primary} />
               </Pressable>
               <Text style={s.calMonth}>{months[month]} {year}</Text>
               <Pressable onPress={nextMonth} style={s.navBtn}>
-                <Ionicons name="chevron-forward" size={20} color={colors.saffron} />
+                <Ionicons name="chevron-forward" size={20} color={colors.primary} />
               </Pressable>
             </View>
 
@@ -219,7 +219,7 @@ export default function CalendarScreen({ navigation }) {
                       <View style={s.dotsRow}>
                         {dots.slice(0, 3).map((item, di) => {
                           const status = item.engagement_status || item.status || "open";
-                          return <View key={di} style={[s.dot, { backgroundColor: STATUS_DOT[status] || colors.saffron }]} />;
+                          return <View key={di} style={[s.dot, { backgroundColor: STATUS_DOT[status] || colors.primary }]} />;
                         })}
                       </View>
                     )}
@@ -266,7 +266,7 @@ export default function CalendarScreen({ navigation }) {
                     const isJob = !!item.title; // jobs have title, engagements have job_title
                     const title = item.title || item.job_title || "Job";
                     const status = item.engagement_status || item.status || "open";
-                    const dotColor = STATUS_DOT[status] || colors.saffron;
+                    const dotColor = STATUS_DOT[status] || colors.primary;
                     return (
                       <View key={i} style={[s.itemCard, { borderLeftColor: dotColor }]}>
                         <View style={s.itemHeader}>
@@ -300,7 +300,7 @@ export default function CalendarScreen({ navigation }) {
           )}
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </AppScreen>
   );
 }
 
@@ -317,46 +317,75 @@ function HeroStat({ icon, val, label }) {
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  // Hero
+
+  // Hero gradient
   hero: { padding: spacing.xl, paddingTop: spacing.lg, paddingBottom: spacing.xl, position: "relative", overflow: "hidden" },
   heroCircle: { position: "absolute", width: 200, height: 200, borderRadius: 100, backgroundColor: "rgba(255,255,255,0.07)", top: -50, right: -50 },
   heroTitle: { fontFamily: fonts.display, fontSize: 24, color: "#fff", marginBottom: 2 },
   heroSub: { fontFamily: fonts.body, fontSize: 13, color: "rgba(255,255,255,0.7)", marginBottom: 20 },
   heroStats: { flexDirection: "row", backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 14, paddingVertical: 14, paddingHorizontal: 10 },
   heroDivider: { width: 1, backgroundColor: "rgba(255,255,255,0.2)" },
+
   // Calendar card
-  calCard: { backgroundColor: "#fff", borderRadius: 18, borderWidth: 1, borderColor: colors.border, padding: 18, marginBottom: 20, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
+  calCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 18,
+    marginBottom: 20,
+    ...shadow.sm,
+  },
   calNav: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
-  navBtn: { padding: 8, borderRadius: 10, backgroundColor: colors.saffronTint },
+  navBtn: { padding: 8, borderRadius: 10, backgroundColor: colors.primaryLight, minWidth: 36, minHeight: 36, alignItems: "center", justifyContent: "center" },
   calMonth: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.text },
   dayHeaders: { flexDirection: "row", marginBottom: 8 },
-  dayHeader: { flex: 1, textAlign: "center", fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 0.5, textTransform: "uppercase", color: colors.textMuted },
+  dayHeader: { flex: 1, textAlign: "center", fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 0.5, color: colors.textMuted },
   grid: { flexDirection: "row", flexWrap: "wrap" },
   gridCell: { width: "14.28%", aspectRatio: 1, alignItems: "center", justifyContent: "center" },
   gridBtn: { borderRadius: 10 },
-  gridToday: { borderWidth: 2, borderColor: colors.saffron },
-  gridSelected: { backgroundColor: colors.saffron },
+  gridToday: { borderWidth: 2, borderColor: colors.primary },
+  gridSelected: { backgroundColor: colors.primary },
   gridDayText: { fontFamily: fonts.bodySemi, fontSize: 13, color: colors.text },
-  gridTodayText: { color: colors.saffron, fontFamily: fonts.bodyBold },
+  gridTodayText: { color: colors.primary, fontFamily: fonts.bodyBold },
   gridSelectedText: { color: "#fff", fontFamily: fonts.bodyBold },
   dotsRow: { flexDirection: "row", gap: 2, marginTop: 2 },
   dot: { width: 5, height: 5, borderRadius: 3 },
+
   // Legend
   legend: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border },
   legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
   legendDot: { width: 8, height: 8, borderRadius: 4 },
   legendText: { fontFamily: fonts.body, fontSize: 10, color: colors.textMuted },
+
   // Selected day
   selectedDate: { fontFamily: fonts.display, fontSize: 18, color: colors.text, marginBottom: 12 },
-  emptyDay: { backgroundColor: "#fff", borderRadius: 12, borderWidth: 1, borderColor: colors.border, padding: 20, alignItems: "center" },
+  emptyDay: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 20,
+    alignItems: "center",
+    ...shadow.xs,
+  },
   emptyDayText: { fontFamily: fonts.body, color: colors.textMuted, fontSize: 13 },
+
   // Item cards
-  itemCard: { backgroundColor: "#fff", borderRadius: 12, borderWidth: 1, borderColor: colors.border, borderLeftWidth: 4, padding: 14 },
+  itemCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderLeftWidth: 4,
+    padding: 14,
+    ...shadow.xs,
+  },
   itemHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 },
-  itemTitle: { fontFamily: fonts.display, fontSize: 15, color: colors.text, flex: 1, marginRight: 8 },
+  itemTitle: { fontFamily: fonts.bodySemi, fontSize: 15, color: colors.text, flex: 1, marginRight: 8 },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  statusText: { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 0.8, textTransform: "uppercase" },
+  statusText: { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 0.5 },
   itemMeta: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted },
-  contactRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 8, backgroundColor: "#ecfdf5", padding: 8, borderRadius: 8 },
-  contactText: { fontFamily: fonts.bodyBold, fontSize: 12, color: "#15803d" },
+  contactRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 8, backgroundColor: colors.successLight, padding: 8, borderRadius: 8 },
+  contactText: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.success },
 });

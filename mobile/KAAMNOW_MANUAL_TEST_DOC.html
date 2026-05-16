@@ -1,0 +1,1235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>KaamNow Android — Manual Testing Document</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, sans-serif; font-size: 11pt; color: #1a1a1a; background: #fff; padding: 40px; max-width: 1100px; margin: auto; }
+  h1 { font-size: 20pt; font-weight: bold; color: #0F766E; margin-bottom: 4px; }
+  h2 { font-size: 14pt; font-weight: bold; color: #0F766E; margin-top: 32px; margin-bottom: 8px; border-bottom: 2px solid #0F766E; padding-bottom: 4px; }
+  h3 { font-size: 11pt; font-weight: bold; color: #374151; margin-top: 18px; margin-bottom: 6px; }
+  p { font-size: 10pt; color: #4B5563; margin-bottom: 6px; line-height: 1.5; }
+  .subtitle { font-size: 11pt; color: #6B7280; margin-bottom: 2px; }
+  .date-row { font-size: 10pt; color: #9CA3AF; margin-bottom: 24px; }
+  .info-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+  .info-table td { border: 1px solid #D1D5DB; padding: 7px 12px; font-size: 10pt; }
+  .info-table td:first-child { font-weight: bold; background: #F3F4F6; width: 200px; color: #374151; }
+  .info-table td:last-child { background: #fff; min-width: 260px; }
+  table.test { width: 100%; border-collapse: collapse; margin-top: 8px; margin-bottom: 20px; }
+  table.test thead tr { background: #0F766E; color: #fff; }
+  table.test thead th { padding: 8px 10px; font-size: 10pt; text-align: left; border: 1px solid #0D5F59; }
+  table.test tbody tr { background: #fff; }
+  table.test tbody tr:nth-child(even) { background: #F9FAFB; }
+  table.test tbody td { border: 1px solid #E5E7EB; padding: 7px 10px; font-size: 10pt; vertical-align: top; }
+  .tc { width: 48px; font-weight: bold; color: #6B7280; white-space: nowrap; }
+  .test-name { width: 220px; }
+  .expected { }
+  .status { width: 90px; text-align: center; }
+  .notes { width: 180px; color: #9CA3AF; font-style: italic; font-size: 9pt; }
+  .pass  { background: #D1FAE5; color: #065F46; font-weight: bold; text-align: center; padding: 3px 8px; border-radius: 4px; }
+  .fail  { background: #FEE2E2; color: #991B1B; font-weight: bold; text-align: center; padding: 3px 8px; border-radius: 4px; }
+  .blocked { background: #FEF3C7; color: #92400E; font-weight: bold; text-align: center; padding: 3px 8px; border-radius: 4px; }
+  .skip  { background: #F3F4F6; color: #6B7280; font-weight: bold; text-align: center; padding: 3px 8px; border-radius: 4px; }
+  .status-cell { text-align: center; }
+  .blocker-table { width: 100%; border-collapse: collapse; margin-top: 8px; margin-bottom: 20px; }
+  .blocker-table th { background: #7F1D1D; color: #fff; padding: 8px 10px; text-align: left; border: 1px solid #991B1B; font-size: 10pt; }
+  .blocker-table td { border: 1px solid #FCA5A5; padding: 7px 10px; font-size: 10pt; background: #FFF5F5; vertical-align: top; }
+  .minor-table { width: 100%; border-collapse: collapse; margin-top: 8px; margin-bottom: 20px; }
+  .minor-table th { background: #78350F; color: #fff; padding: 8px 10px; text-align: left; border: 1px solid #92400E; font-size: 10pt; }
+  .minor-table td { border: 1px solid #FDE68A; padding: 7px 10px; font-size: 10pt; background: #FFFBEB; vertical-align: top; }
+  .decision-table { width: 100%; border-collapse: collapse; margin-top: 8px; margin-bottom: 20px; }
+  .decision-table th { background: #1F2937; color: #fff; padding: 8px 10px; text-align: left; border: 1px solid #374151; font-size: 10pt; }
+  .decision-table td { border: 1px solid #D1D5DB; padding: 10px; font-size: 10pt; background: #fff; }
+  .section-note { background: #F0FDFA; border-left: 4px solid #0F766E; padding: 8px 12px; font-size: 10pt; color: #374151; margin-bottom: 10px; border-radius: 0 4px 4px 0; }
+  .legend { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 10pt; }
+  .legend-dot { width: 14px; height: 14px; border-radius: 3px; display: inline-block; }
+  .seq-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  .seq-table td { border: 1px solid #E5E7EB; padding: 7px 12px; font-size: 10pt; }
+  .seq-table td:first-child { font-weight: bold; background: #F3F4F6; width: 40px; text-align: center; color: #0F766E; }
+  hr { border: none; border-top: 1px solid #E5E7EB; margin: 28px 0; }
+  .stamp { font-size: 10pt; color: #9CA3AF; margin-top: 6px; }
+  .priority-high { color: #DC2626; font-weight: bold; }
+  .priority-med  { color: #D97706; font-weight: bold; }
+  .priority-low  { color: #6B7280; }
+</style>
+</head>
+<body>
+
+<h1>KaamNow Android — Manual Testing Document</h1>
+<p class="subtitle">APK Pre-Release QA · mobileapp branch</p>
+<p class="date-row">Version: c4ef05b &nbsp;|&nbsp; Prepared: 2026-05-16 &nbsp;|&nbsp; Static checks: 31/31 PASS</p>
+
+<hr>
+
+<!-- DEVICE INFO -->
+<h2>1. Test Device Info</h2>
+<table class="info-table">
+  <tr><td>Device model</td><td></td></tr>
+  <tr><td>Android version</td><td></td></tr>
+  <tr><td>RAM</td><td></td></tr>
+  <tr><td>Screen size / resolution</td><td></td></tr>
+  <tr><td>Build type</td><td>Expo Go &nbsp;/&nbsp; APK (circle one)</td></tr>
+  <tr><td>Network during test</td><td>4G &nbsp;/&nbsp; WiFi (circle one)</td></tr>
+  <tr><td>WhatsApp installed</td><td>Yes &nbsp;/&nbsp; No</td></tr>
+  <tr><td>Test date</td><td></td></tr>
+  <tr><td>Tester name</td><td></td></tr>
+  <tr><td>Backend URL used</td><td></td></tr>
+</table>
+<p>💡 <strong>Recommended low-end device:</strong> Redmi 9A / Realme C11 class (2–3 GB RAM, 720p, Android 10–12)</p>
+
+<hr>
+
+<!-- STATUS LEGEND -->
+<h2>2. Status Legend</h2>
+<div class="legend">
+  <div class="legend-item"><span class="legend-dot" style="background:#D1FAE5;"></span> PASS — Works as expected</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#FEE2E2;"></span> FAIL — Does not work</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#FEF3C7;"></span> BLOCKED — Cannot test (dependency missing)</div>
+  <div class="legend-item"><span class="legend-dot" style="background:#F3F4F6;"></span> SKIP — Not applicable for this device/build</div>
+</div>
+<p>Write <strong>PASS / FAIL / BLOCKED / SKIP</strong> in the Status column. Add notes for any FAIL.</p>
+
+<hr>
+
+<!-- SECTION 1: OTP -->
+<h2>Section 1 — OTP Input <span class="priority-high">⚡ HIGH PRIORITY</span></h2>
+<div class="section-note">LoginScreen uses a custom inline 6-box OTP implementation with <code>otpRefs</code> array. Must be tested on real Android hardware — emulator keyboard behaviour differs.</div>
+
+<table class="test">
+  <thead>
+    <tr>
+      <th class="tc">#</th>
+      <th class="test-name">Test</th>
+      <th>Steps</th>
+      <th>Expected Result</th>
+      <th class="status">Status</th>
+      <th class="notes">Notes / Bug</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="tc">OTP-1</td>
+      <td>Auto-advance on digit entry</td>
+      <td>Login → enter phone → "Send Code" → type first digit in box 1</td>
+      <td>Focus jumps to box 2 automatically</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">OTP-2</td>
+      <td>All 6 digits fill in sequence</td>
+      <td>Type all 6 digits one by one</td>
+      <td>Each digit fills its box, focus advances to next</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">OTP-3</td>
+      <td>Backspace on filled box</td>
+      <td>Fill 3 boxes, press backspace on box 3</td>
+      <td>Digit in box 3 clears, focus stays on box 3</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">OTP-4</td>
+      <td>Backspace on empty box</td>
+      <td>Box 3 is empty, press backspace</td>
+      <td>Focus moves back to box 2</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">OTP-5</td>
+      <td>Tap any box directly</td>
+      <td>Tap box 4 directly after filling boxes 1–2</td>
+      <td>Cursor lands in box 4</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">OTP-6</td>
+      <td>Paste full 6-digit OTP</td>
+      <td>Copy a 6-digit number → long-press box 1 → Paste</td>
+      <td>All 6 boxes fill instantly, focus moves to last box</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">OTP-7</td>
+      <td>Paste partial OTP (3 digits)</td>
+      <td>Copy 3-digit number → paste into box 1</td>
+      <td>First 3 boxes fill, no crash, remaining boxes empty</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">OTP-8</td>
+      <td>Android SMS OTP autofill</td>
+      <td>Request OTP via WhatsApp → check if Android suggests autofill</td>
+      <td>If prompted, autofill populates all 6 boxes (format-dependent)</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">OTP-9</td>
+      <td>Submit incomplete OTP</td>
+      <td>Fill only 4 boxes → tap "Verify & Log in"</td>
+      <td>Alert: "6-digit code dalein" — API not called</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">OTP-10</td>
+      <td>Keyboard does not hide OTP boxes</td>
+      <td>Open OTP screen → Android keyboard opens</td>
+      <td>All 6 OTP boxes remain visible above keyboard</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- SECTION 2: WHATSAPP -->
+<h2>Section 2 — WhatsApp CTA <span class="priority-high">⚡ HIGH PRIORITY</span></h2>
+<div class="section-note">Number: <strong>+91 78348 11114</strong> · URL: <code>https://wa.me/917834811114?text=Hi%20KaamNow</code> · Fallback Alert if WhatsApp not installed.</div>
+
+<table class="test">
+  <thead>
+    <tr>
+      <th class="tc">#</th>
+      <th class="test-name">Test</th>
+      <th>Steps</th>
+      <th>Expected Result</th>
+      <th class="status">Status</th>
+      <th class="notes">Notes / Bug</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="tc">WA-1</td>
+      <td>WhatsApp opens (installed)</td>
+      <td>Guest home → tap green WhatsApp card (WhatsApp installed)</td>
+      <td>WhatsApp app opens — NOT browser, NOT internal demo screen</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">WA-2</td>
+      <td>Correct number</td>
+      <td>After WA-1, check which contact/number is shown</td>
+      <td>Chat opens with <strong>+91 78348 11114</strong></td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">WA-3</td>
+      <td>Prefilled text</td>
+      <td>After WA-1, check message box in WhatsApp</td>
+      <td>Message box shows <strong>"Hi KaamNow"</strong> pre-typed</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">WA-4</td>
+      <td>Fallback when WhatsApp not installed</td>
+      <td>Uninstall WhatsApp → guest home → tap WhatsApp card</td>
+      <td>Alert: "WhatsApp install karein ya +91 78348 11114 par manually message karein."</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">WA-5</td>
+      <td>Button copy — English</td>
+      <td>Guest home (EN mode) → read WhatsApp card text</td>
+      <td>Button: "WhatsApp se shuru karein" / Sub: "Bot par message karein"</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">WA-6</td>
+      <td>Button copy — Hindi</td>
+      <td>Switch to हिं mode → read WhatsApp card</td>
+      <td>Button: "WhatsApp से शुरू करें" / Sub: "Bot पर message करें"</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">WA-7</td>
+      <td>Internal demo NOT opened</td>
+      <td>Verify WA-1 again — confirm no internal WhatsApp Demo screen</td>
+      <td>External WhatsApp app opens, NOT the in-app demo/chat screen</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- SECTION 3: HINDI -->
+<h2>Section 3 — Hindi / Hinglish Rendering <span class="priority-med">🔶 MEDIUM PRIORITY</span></h2>
+<div class="section-note">Manrope and Outfit fonts. Box glyphs □ = font missing glyph. Check especially on Android API 26–28.</div>
+
+<table class="test">
+  <thead>
+    <tr>
+      <th class="tc">#</th>
+      <th class="test-name">Screen</th>
+      <th>What to Check</th>
+      <th>Expected Result</th>
+      <th class="status">Status</th>
+      <th class="notes">Notes / Bug</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="tc">HI-1</td>
+      <td>LoginScreen</td>
+      <td>Switch to हिं → read all labels</td>
+      <td>"Login करो", "OTP भेजो", "Code भेजा" — no □ box glyphs</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">HI-2</td>
+      <td>RoleSelectionScreen</td>
+      <td>Read role card text</td>
+      <td>"Kaam Dene Wale", "Kaam Karne Wale" render cleanly</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">HI-3</td>
+      <td>WorkerOnboarding</td>
+      <td>Read step subtitles</td>
+      <td>Hindi hints visible, no clipping or overflow</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">HI-4</td>
+      <td>LandingScreen (Guest, हिं)</td>
+      <td>Toggle language → read tagline and chips</td>
+      <td>"बिहार का भरोसेमंद काम का मंच", Hindi category chips visible</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">HI-5</td>
+      <td>FindWorkScreen (हिं)</td>
+      <td>Category chip: राजमिस्त्री (longest label)</td>
+      <td>Full text visible in chip, not clipped</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">HI-6</td>
+      <td>Worker Dashboard</td>
+      <td>Read section titles</td>
+      <td>"Mera Kaam", "Chal raha kaam", "Abhi koi kaam nahi" all readable</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">HI-7</td>
+      <td>WorkerMyProfileScreen</td>
+      <td>Read hero title</td>
+      <td>"Meri Profile", "Profile strong rakhein" display correctly</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">HI-8</td>
+      <td>Language toggle</td>
+      <td>Toggle EN→हिं→EN on Landing screen</td>
+      <td>All copy switches correctly, no leftover mixed language</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- SECTION 4: KEYBOARD -->
+<h2>Section 4 — Keyboard Safety <span class="priority-high">⚡ HIGH PRIORITY</span></h2>
+<div class="section-note">All 10 input screens have KeyboardAvoidingView. Keyboard must not cover the active input.</div>
+
+<table class="test">
+  <thead>
+    <tr>
+      <th class="tc">#</th>
+      <th class="test-name">Screen / Field</th>
+      <th>Steps</th>
+      <th>Expected Result</th>
+      <th class="status">Status</th>
+      <th class="notes">Notes / Bug</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="tc">KB-1</td>
+      <td>LoginScreen — Phone input</td>
+      <td>Tap phone field → keyboard opens</td>
+      <td>+91 prefix and input field visible above keyboard</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">KB-2</td>
+      <td>LoginScreen — OTP boxes</td>
+      <td>OTP step → keyboard opens</td>
+      <td>All 6 OTP boxes visible above keyboard</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">KB-3</td>
+      <td>PhoneSignupScreen</td>
+      <td>Tap phone field</td>
+      <td>Phone input remains visible, no keyboard overlap</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">KB-4</td>
+      <td>WorkerOnboarding — Daily rate</td>
+      <td>Step 1 → tap rate field</td>
+      <td>Rate input visible above number keyboard</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">KB-5</td>
+      <td>WorkerOnboarding — Pincode + Village</td>
+      <td>Step 2 → tap pincode, then village</td>
+      <td>Both fields accessible, live lookup result visible</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">KB-6</td>
+      <td>CustomerOnboarding — Pincode</td>
+      <td>Tap pincode field</td>
+      <td>Pincode input visible, district/state auto-fill shows</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">KB-7</td>
+      <td>PostJob Step 3 — Rate + Pincode</td>
+      <td>Tap rate field, then pincode</td>
+      <td>Both fields accessible, no covered-by-keyboard issue</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">KB-8</td>
+      <td>WorkerMyProfile — Bio field</td>
+      <td>Edit mode → tap bio (multiline)</td>
+      <td>Bio field scrolls into view when keyboard opens</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">KB-9</td>
+      <td>CustomerProfile — Name field</td>
+      <td>Edit mode → tap name</td>
+      <td>Name field visible above keyboard</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">KB-10</td>
+      <td>Marketplace — Pincode modal</td>
+      <td>Tap LocationBar → modal opens → pincode input auto-focuses</td>
+      <td>Modal sheet stays above keyboard, input visible</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">KB-11</td>
+      <td>FindWorkScreen — Search input</td>
+      <td>Tap search box</td>
+      <td>Search input stays visible above keyboard, results below</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">KB-12</td>
+      <td>WorkerJobFeedScreen — Search</td>
+      <td>Tap search input</td>
+      <td>Input visible, category chips still accessible</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- SECTION 5: NAVIGATION -->
+<h2>Section 5 — Navigation Flows <span class="priority-high">⚡ HIGH PRIORITY</span></h2>
+
+<table class="test">
+  <thead>
+    <tr>
+      <th class="tc">#</th>
+      <th class="test-name">Flow</th>
+      <th>Steps</th>
+      <th>Expected Result</th>
+      <th class="status">Status</th>
+      <th class="notes">Notes / Bug</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="tc">NAV-1</td>
+      <td>Guest → Find Workers</td>
+      <td>Guest home → bottom tab "Find Workers"</td>
+      <td>MarketplaceScreen with worker list loads</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">NAV-2</td>
+      <td>Guest → Find Work</td>
+      <td>Guest home → bottom tab "Find Work"</td>
+      <td>FindWorkScreen with job list loads</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">NAV-3</td>
+      <td>Guest → Worker card → Profile</td>
+      <td>Find Workers → tap any worker card</td>
+      <td>WorkerProfileScreen with gradient hero and booking section</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">NAV-4</td>
+      <td>Customer signup full flow</td>
+      <td>Join free → Phone → OTP → Role: Customer → Onboarding → Home</td>
+      <td>Lands on Customer home (LandingScreen customer state)</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">NAV-5</td>
+      <td>Worker signup full flow</td>
+      <td>Join free → Phone → OTP → Role: Worker → 3-step Onboarding → Home</td>
+      <td>Lands on Worker home (LandingScreen worker state)</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">NAV-6</td>
+      <td>Customer Post Job</td>
+      <td>Customer home → Post a Job → 4 steps → Post</td>
+      <td>Job posted alert, navigates to Find Workers tab</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">NAV-7</td>
+      <td>Worker Apply to Job</td>
+      <td>Worker → Find Jobs tab → tap "Apply karo"</td>
+      <td>Interest sent alert, card updates to "Pending review"</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">NAV-8</td>
+      <td>Worker Withdraw application</td>
+      <td>Worker Dashboard → pending card → "Withdraw"</td>
+      <td>Confirmation alert → application removed from list</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">NAV-9</td>
+      <td>Customer Accept worker</td>
+      <td>Customer Dashboard → Responses → "Accept"</td>
+      <td>Worker moves to Active section</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">NAV-10</td>
+      <td>Mark Job Done + Rate worker</td>
+      <td>Customer Dashboard → Active job → detail modal → "Mark Done" → rating modal</td>
+      <td>Rating modal appears with 5 stars, can submit comment</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">NAV-11</td>
+      <td>Android back on Login OTP step</td>
+      <td>Login → send OTP → press Android back button</td>
+      <td>Returns to phone entry step 1, NOT to previous screen</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">NAV-12</td>
+      <td>Android back on any modal</td>
+      <td>Open any bottom sheet modal → press Android back</td>
+      <td>Modal closes, does not exit the screen</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">NAV-13</td>
+      <td>Bottom tab switching</td>
+      <td>Switch between all 4 tabs rapidly</td>
+      <td>No flicker, correct screen loads, no crash</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">NAV-14</td>
+      <td>Worker Browse Jobs CTA</td>
+      <td>Worker Dashboard → "Naya kaam dhoondhein" gradient card</td>
+      <td>Navigates to WorkerJobFeedScreen (Find Jobs tab)</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- SECTION 6: ANDROID ACTIONS -->
+<h2>Section 6 — Android-Specific Actions <span class="priority-high">⚡ HIGH PRIORITY</span></h2>
+
+<table class="test">
+  <thead>
+    <tr>
+      <th class="tc">#</th>
+      <th class="test-name">Test</th>
+      <th>Steps</th>
+      <th>Expected Result</th>
+      <th class="status">Status</th>
+      <th class="notes">Notes / Bug</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="tc">AND-1</td>
+      <td>Call Customer (worker view)</td>
+      <td>Worker Dashboard → active job card → "Call Customer"</td>
+      <td>Android phone dialer opens with customer's number</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">AND-2</td>
+      <td>Call Worker (customer view)</td>
+      <td>Customer Dashboard → active booking → detail modal → tap phone</td>
+      <td>Android phone dialer opens with worker's number</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">AND-3</td>
+      <td>Call from hired job card</td>
+      <td>FindWorkScreen → hired job card → "Call" button</td>
+      <td>Android phone dialer opens</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">AND-4</td>
+      <td>Worker photo — take camera</td>
+      <td>WorkerMyProfile → tap avatar → "Take a photo"</td>
+      <td>Camera opens, photo taken, saved as profile picture</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">AND-5</td>
+      <td>Worker photo — choose gallery</td>
+      <td>WorkerMyProfile → tap avatar → "Choose from library"</td>
+      <td>Gallery opens, selected photo appears as profile picture</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">AND-6</td>
+      <td>Customer photo upload</td>
+      <td>CustomerProfile → tap avatar → take or choose photo</td>
+      <td>Photo uploads and appears in hero avatar</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">AND-7</td>
+      <td>Worker photo remove</td>
+      <td>WorkerMyProfile (has photo) → tap avatar → "Remove photo"</td>
+      <td>Photo removed, initials fallback appears immediately</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">AND-8</td>
+      <td>Bottom tab + gesture navigation</td>
+      <td>On device with Android gesture nav bar (pill at bottom)</td>
+      <td>Bottom tab bar is fully above the gesture nav area, not overlapping</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">AND-9</td>
+      <td>App background → foreground</td>
+      <td>Open app → press Home → wait 30s → reopen app</td>
+      <td>App resumes on same screen, no crash, data intact</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">AND-10</td>
+      <td>Network lost mid-operation</td>
+      <td>Turn off WiFi/data mid-save or mid-search</td>
+      <td>Alert shown with error message, no crash, no freeze</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">AND-11</td>
+      <td>Worker availability toggle</td>
+      <td>Worker home → tap Available / Busy toggle</td>
+      <td>Toggle switches, backend updates, UI shows correct color (green/grey)</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- SECTION 7: PERFORMANCE -->
+<h2>Section 7 — Low-End Device Performance <span class="priority-med">🔶 MEDIUM PRIORITY</span></h2>
+<div class="section-note">Test on 2–3 GB RAM device. API 26–29. No emulator for this section.</div>
+
+<table class="test">
+  <thead>
+    <tr>
+      <th class="tc">#</th>
+      <th class="test-name">Test</th>
+      <th>Steps</th>
+      <th>Expected Result</th>
+      <th class="status">Status</th>
+      <th class="notes">Notes / Bug</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="tc">PERF-1</td>
+      <td>App cold start time</td>
+      <td>Kill app → open fresh</td>
+      <td>Splash → home screen in under 5 seconds</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">PERF-2</td>
+      <td>Marketplace scroll (30+ workers)</td>
+      <td>Find Workers → scroll quickly through list</td>
+      <td>Smooth scroll, no white card flashes, no jank</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">PERF-3</td>
+      <td>WorkerJobFeed scroll (20+ jobs)</td>
+      <td>Worker → Find Jobs → scroll through job list</td>
+      <td>Cards render without delay, smooth scroll</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">PERF-4</td>
+      <td>Dashboard pull-to-refresh</td>
+      <td>Dashboard → pull down to refresh</td>
+      <td>Spinner appears, data reloads within 3s on 4G</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">PERF-5</td>
+      <td>Search input — fast typing</td>
+      <td>Marketplace search → type quickly</td>
+      <td>No input lag, no dropped characters</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">PERF-6</td>
+      <td>Worker photo loading</td>
+      <td>Find Workers → workers with photos</td>
+      <td>Photos load within 2s, no white square placeholder stuck</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">PERF-7</td>
+      <td>PostJob category grid tap</td>
+      <td>Post Job → tap category</td>
+      <td>Selected state shows instantly, auto-advances to step 2</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- SECTION 8: MISSING DATA -->
+<h2>Section 8 — Missing Data Safety <span class="priority-med">🔶 MEDIUM PRIORITY</span></h2>
+
+<table class="test">
+  <thead>
+    <tr>
+      <th class="tc">#</th>
+      <th class="test-name">Scenario</th>
+      <th>Steps</th>
+      <th>Expected Result</th>
+      <th class="status">Status</th>
+      <th class="notes">Notes / Bug</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="tc">NULL-1</td>
+      <td>Worker with no photo</td>
+      <td>Find Workers → worker without photo → tap → profile</td>
+      <td>Initials shown in WorkerCard and WorkerProfileScreen hero — no crash</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">NULL-2</td>
+      <td>Worker with 0 rating</td>
+      <td>Find new worker with no jobs done</td>
+      <td>"0.0" rating shown, no NaN, no crash</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">NULL-3</td>
+      <td>Worker with no skills</td>
+      <td>WorkerMyProfile view mode — worker has no skills</td>
+      <td>"No skills — tap Edit to add." message shown</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">NULL-4</td>
+      <td>Customer with no address</td>
+      <td>CustomerProfile view mode — no location set</td>
+      <td>Amber location nudge card shown "Location add karein"</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">NULL-5</td>
+      <td>Empty job feed</td>
+      <td>Worker job feed — pincode with no jobs</td>
+      <td>EmptyState: "Is area mein koi kaam nahin", pincode change hint</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">NULL-6</td>
+      <td>Empty worker list</td>
+      <td>Marketplace — pincode with no workers</td>
+      <td>EmptyState: "Koi worker nahin mila — filter change karo"</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">NULL-7</td>
+      <td>Worker dashboard — no engagements</td>
+      <td>New worker account with no applications</td>
+      <td>"Abhi koi kaam nahi" EmptyState + "Browse Jobs" CTA visible</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">NULL-8</td>
+      <td>Customer dashboard — no jobs posted</td>
+      <td>New customer account</td>
+      <td>"Abhi koi job post nahi hai" EmptyState + "Post a Job" CTA</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- SECTION 9: VISUAL -->
+<h2>Section 9 — Visual Consistency <span class="priority-low">◻ LOW PRIORITY</span></h2>
+
+<table class="test">
+  <thead>
+    <tr>
+      <th class="tc">#</th>
+      <th class="test-name">Check</th>
+      <th>Where to Look</th>
+      <th>Expected Result</th>
+      <th class="status">Status</th>
+      <th class="notes">Notes / Bug</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td class="tc">VIS-1</td>
+      <td>Chip selected — no checkmark</td>
+      <td>Find Workers → select a skill chip</td>
+      <td>Teal background + teal text only. NO floating green ✓ circle</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">VIS-2</td>
+      <td>Find Work chip emoji visible</td>
+      <td>FindWorkScreen → category chips row</td>
+      <td>Emoji icons at correct size (not tiny), text not clipped</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">VIS-3</td>
+      <td>FindWork header no overlap</td>
+      <td>FindWorkScreen → scroll down</td>
+      <td>Job cards appear immediately below header, no overlap</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">VIS-4</td>
+      <td>Worker dashboard stats</td>
+      <td>Worker Dashboard top area</td>
+      <td>4 stat boxes: Active / Pending / Done / Cancelled</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">VIS-5</td>
+      <td>WorkerMyProfile completion card</td>
+      <td>WorkerMyProfile — incomplete profile</td>
+      <td>Completion % card visible. Hidden once all 5 items are done.</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">VIS-6</td>
+      <td>CustomerProfile location nudge</td>
+      <td>CustomerProfile — no address saved</td>
+      <td>Amber nudge card "Location add karein" visible above edit button</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">VIS-7</td>
+      <td>Path card arrows</td>
+      <td>Guest Landing → two main cards</td>
+      <td>Both "Find Workers" and "Find Work" have the same green circle + white arrow</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">VIS-8</td>
+      <td>Marketplace location modal</td>
+      <td>Find Workers → tap LocationBar</td>
+      <td>Clean bottom sheet opens with single pincode input — no side-by-side buttons</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">VIS-9</td>
+      <td>Available Now + Reset pills</td>
+      <td>Find Workers → apply any filter</td>
+      <td>"Available now" pill and "Reset" pill side by side. Reset only visible when filter is active.</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td class="tc">VIS-10</td>
+      <td>Bottom nav icons</td>
+      <td>Switch between all tabs</td>
+      <td>Active tab shows filled icon, inactive shows outline icon</td>
+      <td class="status-cell"></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+
+<hr>
+
+<!-- BLOCKERS -->
+<h2>🔴 Critical Blockers — APK Cannot Ship if These FAIL</h2>
+
+<table class="blocker-table">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Issue</th>
+      <th>Related Test</th>
+      <th>Status</th>
+      <th>Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>B-1</td>
+      <td>OTP 6-box auto-advance does not work on Android</td>
+      <td>OTP-1, OTP-2</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>B-2</td>
+      <td>WhatsApp CTA opens browser or crashes instead of WhatsApp app</td>
+      <td>WA-1</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>B-3</td>
+      <td>Keyboard covers OTP boxes — cannot enter OTP</td>
+      <td>KB-2</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>B-4</td>
+      <td>Save on WorkerMyProfile crashes or silently fails</td>
+      <td>NAV flow</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>B-5</td>
+      <td>Save on CustomerProfile crashes or silently fails</td>
+      <td>NAV flow</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>B-6</td>
+      <td>Worker interest/apply crashes or does not send</td>
+      <td>NAV-7</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>B-7</td>
+      <td>Customer accept/reject worker crashes</td>
+      <td>NAV-9</td>
+      <td></td>
+      <td></td>
+    </tr>
+    <tr>
+      <td>B-8</td>
+      <td>Photo upload fails on camera or gallery (permission or API error)</td>
+      <td>AND-4, AND-5, AND-6</td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- MINOR BUGS -->
+<h2>🟡 Known Minor Issues — Acceptable for First APK</h2>
+
+<table class="minor-table">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Issue</th>
+      <th>Impact</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>M-1</td>
+      <td>WorkerMyProfileScreen phone number is displayed but not tappable to call</td>
+      <td>Visual display only — user must copy number manually to call</td>
+      <td>Known — low priority</td>
+    </tr>
+    <tr>
+      <td>M-2</td>
+      <td>Legacy <code>colors.saffron</code> alias used in DashboardScreen detail modal icon</td>
+      <td>No visual difference — saffron and primary are same hex #0F766E</td>
+      <td>Known — dead alias</td>
+    </tr>
+    <tr>
+      <td>M-3</td>
+      <td>Unused style keys in MarketplaceScreen (filterPanel, filterRow etc.)</td>
+      <td>Dead code only, no visual impact</td>
+      <td>Known — cleanup later</td>
+    </tr>
+    <tr>
+      <td>M-4</td>
+      <td>Hindi text may show system fallback font on Android API 26 (Manrope glyph coverage)</td>
+      <td>Some Devanagari characters may use system font instead of Manrope — slight visual difference only</td>
+      <td>Untested — needs device check</td>
+    </tr>
+    <tr>
+      <td>M-5</td>
+      <td>SafeAreaView import remains in DashboardScreen (unused after worker branch redesign)</td>
+      <td>Lint warning only — no runtime effect</td>
+      <td>Known — cleanup later</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr>
+
+<!-- DECISION -->
+<h2>✅ APK Readiness Decision</h2>
+<p style="margin-bottom:12px;">Complete after all tests above. Tick the result for each category.</p>
+
+<table class="decision-table">
+  <thead>
+    <tr>
+      <th>Category</th>
+      <th>Total Tests</th>
+      <th>Pass</th>
+      <th>Fail</th>
+      <th>Blocked</th>
+      <th>Result</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>OTP Input</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>☐ PASS &nbsp; ☐ FAIL</td>
+    </tr>
+    <tr>
+      <td>WhatsApp CTA</td>
+      <td>7</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>☐ PASS &nbsp; ☐ FAIL</td>
+    </tr>
+    <tr>
+      <td>Hindi Rendering</td>
+      <td>8</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>☐ PASS &nbsp; ☐ FAIL</td>
+    </tr>
+    <tr>
+      <td>Keyboard Safety</td>
+      <td>12</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>☐ PASS &nbsp; ☐ FAIL</td>
+    </tr>
+    <tr>
+      <td>Navigation Flows</td>
+      <td>14</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>☐ PASS &nbsp; ☐ FAIL</td>
+    </tr>
+    <tr>
+      <td>Android Actions (Call, Photo)</td>
+      <td>11</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>☐ PASS &nbsp; ☐ FAIL</td>
+    </tr>
+    <tr>
+      <td>Performance</td>
+      <td>7</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>☐ PASS &nbsp; ☐ FAIL</td>
+    </tr>
+    <tr>
+      <td>Missing Data Safety</td>
+      <td>8</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>☐ PASS &nbsp; ☐ FAIL</td>
+    </tr>
+    <tr>
+      <td>Visual Consistency</td>
+      <td>10</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td>☐ PASS &nbsp; ☐ FAIL</td>
+    </tr>
+    <tr style="background:#F3F4F6; font-weight:bold;">
+      <td>TOTAL</td>
+      <td>87</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>Final Decision</h3>
+<table class="decision-table">
+  <tbody>
+    <tr>
+      <td style="width:180px; font-weight:bold;">Decision</td>
+      <td>
+        ☐ &nbsp;<strong>READY FOR APK</strong> — All blockers pass, minor issues logged<br>
+        ☐ &nbsp;<strong>FIX BEFORE APK</strong> — One or more blockers failed<br>
+        ☐ &nbsp;<strong>NOT READY</strong> — Multiple blockers failed
+      </td>
+    </tr>
+    <tr>
+      <td style="font-weight:bold;">Blockers found</td>
+      <td style="min-height:60px; line-height:2;">1.&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>2.&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<br>3.&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td>
+    </tr>
+    <tr>
+      <td style="font-weight:bold;">Tester sign-off</td>
+      <td>Name: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Date: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</td>
+    </tr>
+  </tbody>
+</table>
+
+<hr>
+
+<!-- TEST SEQUENCE -->
+<h2>Recommended Test Sequence (run in this order)</h2>
+<table class="seq-table">
+  <tr><td>1</td><td>Cold start — watch startup time from kill to home screen</td></tr>
+  <tr><td>2</td><td>Guest home — read WhatsApp card copy, check path card arrows</td></tr>
+  <tr><td>3</td><td>Tap WhatsApp CTA — confirm WhatsApp app opens with correct number and text</td></tr>
+  <tr><td>4</td><td>Language toggle EN → हिं → EN — check Hindi rendering on Landing</td></tr>
+  <tr><td>5</td><td>Find Workers — search, tap LocationBar (pincode modal), Available Now, Reset</td></tr>
+  <tr><td>6</td><td>Find Work — category chips (check emoji size), search, pincode modal</td></tr>
+  <tr><td>7</td><td>Guest → "Join free" → Phone signup → OTP screen (run all OTP tests)</td></tr>
+  <tr><td>8</td><td>Role selection → Customer → Customer onboarding (pincode + village)</td></tr>
+  <tr><td>9</td><td>Customer home → Post Job (all 4 steps) → confirm posted</td></tr>
+  <tr><td>10</td><td>Customer Profile → edit name → edit location → save → confirm saved</td></tr>
+  <tr><td>11</td><td>Customer Dashboard — check stats, review responses if any</td></tr>
+  <tr><td>12</td><td>Logout</td></tr>
+  <tr><td>13</td><td>Login as existing worker → OTP (re-run OTP tests if needed)</td></tr>
+  <tr><td>14</td><td>Worker home — availability toggle (green/grey), check UI updates</td></tr>
+  <tr><td>15</td><td>Worker job feed — search, category filter, pincode modal, apply to a job</td></tr>
+  <tr><td>16</td><td>Worker dashboard — view active/pending/history sections</td></tr>
+  <tr><td>17</td><td>Worker My Profile — edit skills, rate, bio → save → confirm saved</td></tr>
+  <tr><td>18</td><td>Worker photo upload — take camera photo</td></tr>
+  <tr><td>19</td><td>Android back button through multiple screens</td></tr>
+  <tr><td>20</td><td>App background → wait 30s → foreground — confirm no crash</td></tr>
+</table>
+
+<hr>
+<p class="stamp">KaamNow · mobileapp branch · Generated 2026-05-16 · support@kaamnow.com</p>
+<p class="stamp">87 test cases across 9 sections · Static check: 31/31 PASS</p>
+
+</body>
+</html>

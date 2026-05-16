@@ -1,28 +1,27 @@
 import { View, Text, StyleSheet, ScrollView, Linking, Pressable } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../contexts/AuthContext";
-import { colors, fonts, radius, spacing, sizes } from "../theme";
-import Overline from "../components/Overline";
+import AppScreen from "../components/AppScreen";
+import { colors, fonts, radius, shadow, spacing } from "../theme";
 
 const SUPPORT_ITEMS = [
   {
     icon: "logo-whatsapp",
     color: "#25D366",
     title: "WhatsApp Support",
-    subtitle: "Chat with us instantly",
+    subtitle: "Chat karein — seedha team se",
     action: () => Linking.openURL("https://wa.me/919999999999"),
   },
   {
     icon: "call-outline",
-    color: colors.indigo,
+    color: colors.primary,
     title: "Call Us",
     subtitle: "+91 99999 99999 · Mon–Sat 9am–6pm",
     action: () => Linking.openURL("tel:+919999999999"),
   },
   {
     icon: "mail-outline",
-    color: colors.saffron,
+    color: colors.primary,
     title: "Email",
     subtitle: "support@kaamnow.com",
     action: () => Linking.openURL("mailto:support@kaamnow.com"),
@@ -56,20 +55,37 @@ export default function ContactSupportScreen() {
   const { user } = useAuth();
 
   return (
-    <SafeAreaView edges={["top"]} style={styles.safe}>
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 60 }}>
-        <Overline>Help & Support</Overline>
-        <Text style={styles.h1}>How can we help?</Text>
+    <AppScreen edges={["top"]} style={styles.safe}>
+      <ScrollView
+        contentContainerStyle={{ padding: spacing.lg, paddingBottom: 60 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* ── Intro ── */}
+        <View style={styles.intro}>
+          <View style={styles.introIcon}>
+            <Ionicons name="headset-outline" size={22} color={colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.introTitle}>Kis baat mein madad chahiye?</Text>
+            <Text style={styles.introSub}>KaamNow team se madad paayein</Text>
+          </View>
+        </View>
+
         {user && (
-          <Text style={styles.userNote}>
-            Logged in as {user.name} · {user.phone_primary}
-          </Text>
+          <View style={styles.userChip}>
+            <Ionicons name="person-circle-outline" size={14} color={colors.primary} />
+            <Text style={styles.userChipTxt}>{user.name || "User"} · {user.phone_primary}</Text>
+          </View>
         )}
 
-        {/* Contact channels */}
-        <Text style={styles.section}>Contact us</Text>
+        {/* ── Contact channels ── */}
+        <Text style={styles.sectionTitle}>Support se baat karein</Text>
         {SUPPORT_ITEMS.map((item) => (
-          <Pressable key={item.title} style={styles.card} onPress={item.action}>
+          <Pressable
+            key={item.title}
+            style={({ pressed }) => [styles.card, pressed && { opacity: 0.88 }]}
+            onPress={item.action}
+          >
             <View style={[styles.iconCircle, { backgroundColor: item.color + "20" }]}>
               <Ionicons name={item.icon} size={22} color={item.color} />
             </View>
@@ -81,64 +97,113 @@ export default function ContactSupportScreen() {
           </Pressable>
         ))}
 
-        {/* FAQs */}
-        <Text style={styles.section}>Frequently asked questions</Text>
+        {/* ── FAQs ── */}
+        <Text style={styles.sectionTitle}>Aksar pooche gaye sawaal</Text>
         {FAQS.map((faq) => (
           <View key={faq.q} style={styles.faqCard}>
-            <Text style={styles.faqQ}>{faq.q}</Text>
+            <View style={styles.faqQRow}>
+              <Ionicons name="help-circle-outline" size={16} color={colors.primary} style={{ marginTop: 1 }} />
+              <Text style={styles.faqQ}>{faq.q}</Text>
+            </View>
             <Text style={styles.faqA}>{faq.a}</Text>
           </View>
         ))}
 
-        <Text style={styles.footer}>KaamNow · Built for Bharat 🇮🇳</Text>
+        <Text style={styles.footer}>KaamNow · Bihar se Bharat tak 🇮🇳</Text>
       </ScrollView>
-    </SafeAreaView>
+    </AppScreen>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  h1: { fontFamily: fonts.display, fontSize: sizes.h2, color: colors.text, marginTop: 4, marginBottom: 4 },
-  userNote: { fontFamily: fonts.body, fontSize: sizes.small, color: colors.textMuted, marginBottom: 8 },
-  section: {
-    fontFamily: fonts.bodyBold,
-    fontSize: 11,
-    letterSpacing: 1.4,
-    textTransform: "uppercase",
-    color: colors.textSecondary,
-    marginTop: spacing.xl,
-    marginBottom: spacing.md,
-  },
-  card: {
-    backgroundColor: "#fff",
+
+  intro: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 16,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    ...shadow.xs,
+  },
+  introIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: colors.primaryLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  introTitle: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.text },
+  introSub: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginTop: 2 },
+
+  userChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    alignSelf: "flex-start",
+    backgroundColor: colors.primaryLight,
+    borderRadius: radius.pill,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginBottom: spacing.lg,
+  },
+  userChipTxt: { fontFamily: fonts.bodySemi, fontSize: 12, color: colors.primary },
+
+  sectionTitle: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 16,
+    color: colors.text,
+    marginBottom: spacing.md,
+    marginTop: spacing.lg,
+  },
+
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
     marginBottom: 10,
+    minHeight: 72,
+    ...shadow.xs,
   },
   iconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 48,
+    height: 48,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
   },
   cardText: { flex: 1 },
   cardTitle: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.text },
-  cardSubtitle: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  cardSubtitle: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginTop: 3 },
+
   faqCard: {
-    backgroundColor: "#fff",
+    backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 16,
+    padding: spacing.md,
     marginBottom: 10,
+    ...shadow.xs,
   },
-  faqQ: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.text, marginBottom: 6 },
-  faqA: { fontFamily: fonts.body, fontSize: 13, color: colors.textSecondary, lineHeight: 20 },
-  footer: { fontFamily: fonts.body, fontSize: sizes.small, color: colors.textMuted, textAlign: "center", marginTop: spacing.xl },
+  faqQRow: { flexDirection: "row", alignItems: "flex-start", gap: 8, marginBottom: 8 },
+  faqQ: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.text, flex: 1, lineHeight: 20 },
+  faqA: { fontFamily: fonts.body, fontSize: 13, color: colors.textSecondary, lineHeight: 20, paddingLeft: 24 },
+
+  footer: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.textMuted,
+    textAlign: "center",
+    marginTop: spacing.xl,
+  },
 });
