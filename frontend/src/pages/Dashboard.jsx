@@ -543,6 +543,33 @@ function StatCard({ label, value, icon: Icon, color }) {
   );
 }
 
+function ReviewBlock({ label, rating, comment, imageUrls = [], emptyText }) {
+  const ratingValue = typeof rating === "object" ? rating?.stars : rating;
+  return (
+    <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+      <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">{label}</div>
+      {ratingValue ? (
+        <>
+          <div className="flex items-center gap-1 text-sm font-bold text-[#ff6b35]">
+            <Star size={13} className="fill-[#ff6b35]" />
+            {ratingValue}/5
+          </div>
+          {comment && <p className="mt-1 text-xs text-gray-600 italic">"{comment}"</p>}
+          {imageUrls?.length > 0 && (
+            <div className="mt-2 flex gap-2 flex-wrap">
+              {imageUrls.map(url => (
+                <img key={url} src={url} alt="Review" className="w-12 h-12 rounded-lg object-cover border border-gray-200" />
+              ))}
+            </div>
+          )}
+        </>
+      ) : (
+        <p className="text-xs text-gray-400">{emptyText}</p>
+      )}
+    </div>
+  );
+}
+
 /* ─── Main Component ───────────────────────────────────────────────────── */
 import StarRating from "@/components/StarRating";
 
@@ -565,7 +592,6 @@ export default function Dashboard() {
   const [ratingValue, setRatingValue] = useState(5);
   const [ratingComment, setRatingComment] = useState("");
   const [ratingImages, setRatingImages] = useState([]);
-  const [ratingUploading, setRatingUploading] = useState(false);
   const [submittingRating, setSubmittingRating] = useState(false);
 
   const [pendingEngagements, setPendingEngagements] = useState([]);
@@ -645,15 +671,31 @@ export default function Dashboard() {
     if (!ratingBooking) return;
     setSubmittingRating(true);
     try {
+      const imageUrls = [];
+      for (const image of ratingImages) {
+        if (image.url) {
+          imageUrls.push(image.url);
+          continue;
+        }
+        const fd = new FormData();
+        fd.append("file", image.file);
+        const res = await api.post(`/engagements/${ratingBooking.id}/rating-photo`, fd, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+        if (res.data?.photo_url) imageUrls.push(res.data.photo_url);
+      }
       await api.post(`/engagements/${ratingBooking.id}/rate`, {
         rating: ratingValue,
         comment: ratingComment,
-        image_urls: ratingImages
+        image_urls: imageUrls
       });
       toast.success("Thanks for your feedback!");
       setRatingBooking(null);
       setRatingValue(5);
       setRatingComment("");
+      ratingImages.forEach(image => {
+        if (!image.url) URL.revokeObjectURL(image.preview);
+      });
       setRatingImages([]);
       reload();
     } catch (e) {
@@ -663,32 +705,39 @@ export default function Dashboard() {
     }
   };
 
-  const uploadRatingPhoto = async (file) => {
+  const stageRatingPhoto = (file) => {
     if (!ratingBooking || !file) return;
     if (ratingImages.length >= 3) {
       toast.error("You can add up to 3 review photos.");
       return;
     }
-    const fd = new FormData();
-    fd.append("file", file);
-    setRatingUploading(true);
-    try {
-      const res = await api.post(`/engagements/${ratingBooking.id}/rating-photo`, fd, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      if (res.data?.photo_url) setRatingImages(prev => [...prev, res.data.photo_url].slice(0, 3));
-    } catch (e) {
-      toast.error(formatApiError(e));
-    } finally {
-      setRatingUploading(false);
-    }
+    setRatingImages(prev => [...prev, { file, preview: URL.createObjectURL(file) }].slice(0, 3));
   };
 
   const closeRatingModal = () => {
     setRatingBooking(null);
     setRatingValue(5);
     setRatingComment("");
+    ratingImages.forEach(image => {
+      if (!image.url) URL.revokeObjectURL(image.preview);
+    });
     setRatingImages([]);
+  };
+
+  const startRating = (booking) => {
+    const existingRating = booking.rating;
+    const existingComment = booking.comment || "";
+    const existingImages = booking.rating_image_urls || [];
+    if (existingRating && !window.confirm("You already submitted this review. Updating it will replace your previous rating and review. Continue?")) {
+      return;
+    }
+    ratingImages.forEach(image => {
+      if (!image.url) URL.revokeObjectURL(image.preview);
+    });
+    setRatingBooking(booking);
+    setRatingValue(typeof existingRating === "object" ? existingRating?.stars || 5 : existingRating || 5);
+    setRatingComment(existingComment);
+    setRatingImages(existingImages.map(url => ({ url, preview: url })));
   };
 
   const activeBookings = bookings.filter(b => b.status === "confirmed");
@@ -822,7 +871,7 @@ export default function Dashboard() {
               pendingEngagements={workerApplied}
               reload={reload}
               setTab={setTab}
-              onRate={setRatingBooking}
+              onRate={startRating}
               onCancelDirectHire={cancelEngagement}
             />
           )}
@@ -920,7 +969,8 @@ export default function Dashboard() {
             <div className="space-y-3">
               {pastBookings.length === 0 && <div className="kn-card p-12 text-center text-gray-500">No past activity found.</div>}
               {pastBookings.map(b => (
-                <div key={b.id} className="kn-card p-5 flex items-center justify-between">
+                <div key={b.id} className="kn-card p-5">
+                  <div className="flex items-center justify-between gap-4">
                   <div className="flex items-center gap-4">
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center ${b.status === "completed" ? "bg-green-100 text-green-600" : "bg-red-100 text-red-600"}`}>
                       {b.status === "completed" ? <CheckCircle2 size={20} /> : <XCircle size={20} />}
@@ -932,11 +982,6 @@ export default function Dashboard() {
                   </div>
                   <div className="text-right">
                     <div className="font-bold">₹{b.daily_rate}</div>
-                    {b.status === "completed" && !b.rating && (
-                      <button onClick={() => setRatingBooking(b)} className="text-xs font-bold text-[#ff6b35] hover:underline flex items-center gap-1 ml-auto">
-                        <Star size={12} /> Rate worker
-                      </button>
-                    )}
                     {b.rating && (
                       <div className="flex items-center gap-1 text-xs text-[#ff6b35] font-bold">
                         <Star size={12} className="fill-[#ff6b35]" />
@@ -944,6 +989,30 @@ export default function Dashboard() {
                       </div>
                     )}
                   </div>
+                  </div>
+                  {b.status === "completed" && (
+                    <div className="mt-4 grid gap-3 md:grid-cols-2">
+                      <ReviewBlock
+                        label="Your review for worker"
+                        rating={b.rating}
+                        comment={b.comment}
+                        imageUrls={b.rating_image_urls}
+                        emptyText="You have not reviewed this worker yet."
+                      />
+                      <ReviewBlock
+                        label="Worker review for you"
+                        rating={b.customer_rating}
+                        comment={b.customer_comment}
+                        imageUrls={b.customer_rating_image_urls}
+                        emptyText="Worker has not reviewed yet."
+                      />
+                    </div>
+                  )}
+                  {b.status === "completed" && (
+                    <button onClick={() => startRating(b)} className="mt-3 text-xs font-bold text-[#ff6b35] hover:underline flex items-center gap-1">
+                      <Star size={12} /> {b.rating ? "Edit your review" : "Rate worker"}
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -1014,12 +1083,15 @@ export default function Dashboard() {
                 <div className="mb-6">
                   <label className="text-xs font-bold text-gray-400 uppercase block mb-2">Photos (Optional)</label>
                   <div className="flex items-center gap-3 flex-wrap">
-                    {ratingImages.map((url) => (
-                      <div key={url} className="relative w-16 h-16 rounded-xl overflow-hidden border border-gray-200">
-                        <img src={url} alt="Review" className="w-full h-full object-cover" />
+                    {ratingImages.map((image) => (
+                      <div key={image.preview} className="relative w-16 h-16 rounded-xl overflow-hidden border border-gray-200">
+                        <img src={image.preview} alt="Review" className="w-full h-full object-cover" />
                         <button
                           type="button"
-                          onClick={() => setRatingImages(prev => prev.filter(x => x !== url))}
+                          onClick={() => {
+                            if (!image.url) URL.revokeObjectURL(image.preview);
+                            setRatingImages(prev => prev.filter(x => x.preview !== image.preview));
+                          }}
                           className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white text-xs leading-none"
                         >
                           ×
@@ -1032,15 +1104,15 @@ export default function Dashboard() {
                           type="file"
                           accept="image/*"
                           className="hidden"
-                          disabled={ratingUploading}
+                          disabled={submittingRating}
                           onChange={(e) => {
                             const file = e.target.files?.[0];
                             e.target.value = "";
-                            uploadRatingPhoto(file);
+                            stageRatingPhoto(file);
                           }}
                         />
                         <Camera size={16} />
-                        <span className="text-[10px] font-bold">{ratingUploading ? "..." : "Add"}</span>
+                        <span className="text-[10px] font-bold">Add</span>
                       </label>
                     )}
                   </div>
