@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import * as ImagePicker from "expo-image-picker";
 import api, { formatApiError } from "../api";
 import AppScreen from "../components/AppScreen";
 import EmptyState from "../components/EmptyState";
@@ -48,6 +49,8 @@ export default function DashboardScreen({ navigation, route }) {
   const [ratingModal, setRatingModal]   = useState(null);
   const [ratingVal, setRatingVal]       = useState(5);
   const [ratingComment, setRatingComment] = useState("");
+  const [ratingImageUrls, setRatingImageUrls] = useState([]);
+  const [ratingUploading, setRatingUploading] = useState(false);
   const [detailItem, setDetailItem]     = useState(null);
   const scrollRef    = useRef(null);
   const sectionY     = useRef({ active: 0, pending: 0, history: 0 });
@@ -85,26 +88,66 @@ export default function DashboardScreen({ navigation, route }) {
     { text: "No", style: "cancel" },
     { text: "Withdraw", style: "destructive", onPress: async () => { try { await api.post(`/engagements/${id}/cancel`); load(); } catch (e) { Alert.alert("Error", formatApiError(e)); } } },
   ]);
-  const completeEng = async (id, workerName) => {
+  const resetRatingModal = () => {
+    setRatingModal(null);
+    setRatingVal(5);
+    setRatingComment("");
+    setRatingImageUrls([]);
+  };
+  const completeEng = async (id, targetName) => {
     try {
       await api.post(`/engagements/${id}/complete`);
       load();
-      // Auto-prompt customer to rate immediately after marking done
       if (user?.role === "customer") {
-        setRatingVal(5);
-        setRatingComment("");
-        setRatingModal({ id, workerName: workerName || "" });
+        setRatingModal({ id, targetName: targetName || "", targetRole: "worker" });
       } else {
-        Alert.alert("✅ Job marked complete!");
+        setRatingModal({ id, targetName: targetName || "", targetRole: "customer" });
       }
     } catch (e) { Alert.alert("Error", formatApiError(e)); }
+  };
+  const pickRatingPhoto = async () => {
+    if (!ratingModal) return;
+    if (ratingImageUrls.length >= 3) {
+      Alert.alert("Limit reached", "You can add up to 3 review photos.");
+      return;
+    }
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) return Alert.alert("Permission needed", "Please allow photo library access.");
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.75,
+    });
+    if (result.canceled || !result.assets?.[0]?.uri) return;
+
+    const asset = result.assets[0];
+    const form = new FormData();
+    form.append("file", {
+      uri: asset.uri,
+      name: asset.fileName || `review-${Date.now()}.jpg`,
+      type: asset.mimeType || "image/jpeg",
+    });
+    setRatingUploading(true);
+    try {
+      const res = await api.post(`/engagements/${ratingModal.id}/rating-photo`, form, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      if (res.data?.photo_url) setRatingImageUrls(prev => [...prev, res.data.photo_url].slice(0, 3));
+    } catch (e) {
+      Alert.alert("Upload failed", formatApiError(e));
+    } finally {
+      setRatingUploading(false);
+    }
   };
   const submitRating = async () => {
     const r = ratingVal;
     if (!r || r < 1 || r > 5) return Alert.alert("Rating 1–5 please");
     try {
-      await api.post(`/engagements/${ratingModal.id}/rate`, { rating: r, comment: ratingComment.trim() });
-      setRatingModal(null); setRatingVal(5); setRatingComment("");
+      await api.post(`/engagements/${ratingModal.id}/rate`, {
+        rating: r,
+        comment: ratingComment.trim(),
+        image_urls: ratingImageUrls,
+      });
+      resetRatingModal();
       load(); Alert.alert("Thanks for rating!");
     } catch (e) { Alert.alert("Error", formatApiError(e)); }
   };
@@ -252,7 +295,7 @@ export default function DashboardScreen({ navigation, route }) {
                       key={e.id}
                       e={e}
                       onPress={() => setDetailItem(e)}
-                      onRate={() => setRatingModal({ id: e.id, workerName: e.worker_name })}
+                      onRate={() => setRatingModal({ id: e.id, targetName: e.worker_name, targetRole: "worker" })}
                     />
                   ))}
                 </View>
@@ -288,7 +331,7 @@ export default function DashboardScreen({ navigation, route }) {
                       key={e.id}
                       e={e}
                       onPress={() => setDetailItem(e)}
-                      onRate={() => setRatingModal({ id: e.id, workerName: e.worker_name })}
+                      onRate={() => setRatingModal({ id: e.id, targetName: e.worker_name, targetRole: "worker" })}
                     />
                   ))}
                 </View>
@@ -373,7 +416,7 @@ export default function DashboardScreen({ navigation, route }) {
                         </Pressable>
                       )}
                       {status === "completed" && !detailItem.rating && (
-                        <Pressable style={styles.btnSaffron} onPress={() => { setDetailItem(null); setRatingModal({ id: detailItem.id, workerName: detailItem.worker_name }); }}>
+                        <Pressable style={styles.btnSaffron} onPress={() => { setDetailItem(null); setRatingModal({ id: detailItem.id, targetName: detailItem.worker_name, targetRole: "worker" }); }}>
                           <Text style={styles.btnSaffronText}>⭐ Rate Worker</Text>
                         </Pressable>
                       )}
@@ -389,14 +432,18 @@ export default function DashboardScreen({ navigation, route }) {
           </Pressable>
         </Modal>
 
-        <Modal transparent visible={!!ratingModal} animationType="slide" onRequestClose={() => setRatingModal(null)}>
+        <Modal transparent visible={!!ratingModal} animationType="slide" onRequestClose={resetRatingModal}>
           <View style={styles.ratingModalBackdrop}>
             <View style={styles.modalCard}>
               <Text style={styles.modalTitle}>
-                {lang === "hi" ? `${(ratingModal?.workerName || "").split(" ")[0]} को rate करो` : `Rate ${(ratingModal?.workerName || "").split(" ")[0]}`}
+                {lang === "hi"
+                  ? `${(ratingModal?.targetName || ratingModal?.workerName || "").split(" ")[0]} को rate करो`
+                  : `Rate ${(ratingModal?.targetName || ratingModal?.workerName || "").split(" ")[0]}`}
               </Text>
               <Text style={styles.modalSub}>
-                {lang === "hi" ? "काम कैसा था?" : "How was the work?"}
+                {ratingModal?.targetRole === "customer"
+                  ? (lang === "hi" ? "Customer aur kaam ka experience kaisa tha?" : "How was the customer and work environment?")
+                  : (lang === "hi" ? "काम कैसा था?" : "How was the work?")}
               </Text>
 
               <View style={styles.starsRow}>
@@ -417,11 +464,28 @@ export default function DashboardScreen({ navigation, route }) {
                 style={styles.commentInput} multiline maxLength={200}
               />
 
+              <View style={styles.ratingImagesRow}>
+                {ratingImageUrls.map(url => (
+                  <View key={url} style={styles.ratingImageWrap}>
+                    <Image source={{ uri: url }} style={styles.ratingImageThumb} />
+                    <Pressable style={styles.ratingImageRemove} onPress={() => setRatingImageUrls(prev => prev.filter(x => x !== url))}>
+                      <Ionicons name="close" size={12} color="#fff" />
+                    </Pressable>
+                  </View>
+                ))}
+                {ratingImageUrls.length < 3 && (
+                  <Pressable onPress={pickRatingPhoto} disabled={ratingUploading} style={styles.ratingAddPhoto}>
+                    <Ionicons name="camera-outline" size={18} color={colors.saffron} />
+                    <Text style={styles.ratingAddPhotoText}>{ratingUploading ? "Uploading..." : "Add photo"}</Text>
+                  </Pressable>
+                )}
+              </View>
+
               <Pressable onPress={submitRating} style={styles.submitRatingBtn}>
                 <Ionicons name="star" size={16} color="#fff" />
                 <Text style={styles.submitRatingTxt}>{lang === "hi" ? "Submit करो" : "Submit Rating"}</Text>
               </Pressable>
-              <Pressable onPress={() => setRatingModal(null)} style={{ marginTop: 12, alignItems: "center" }}>
+              <Pressable onPress={resetRatingModal} style={{ marginTop: 12, alignItems: "center" }}>
                 <Text style={{ fontFamily: fonts.bodySemi, color: colors.textMuted, fontSize: 13 }}>
                   {lang === "hi" ? "अभी नहीं" : "Skip for now"}
                 </Text>
@@ -491,7 +555,7 @@ export default function DashboardScreen({ navigation, route }) {
                     key={e.id}
                     e={e}
                     onPress={() => setDetailItem(e)}
-                    onComplete={() => completeEng(e.id)}
+                    onComplete={() => completeEng(e.id, e.customer_name)}
                     onCancel={() => cancelEng(e.id)}
                   />
                 ))}
@@ -579,6 +643,7 @@ export default function DashboardScreen({ navigation, route }) {
                     key={e.id}
                     e={e}
                     onPress={() => setDetailItem(e)}
+                    onRate={() => setRatingModal({ id: e.id, targetName: e.customer_name, targetRole: "customer" })}
                   />
                 ))}
               </View>
@@ -675,14 +740,19 @@ export default function DashboardScreen({ navigation, route }) {
                       </Pressable>
                     )}
                     {isCustomer && status === "completed" && !detailItem.rating && (
-                      <Pressable style={styles.btnSaffron} onPress={() => { setDetailItem(null); setRatingModal({ id: detailItem.id, workerName: detailItem.worker_name }); }}>
+                      <Pressable style={styles.btnSaffron} onPress={() => { setDetailItem(null); setRatingModal({ id: detailItem.id, targetName: detailItem.worker_name, targetRole: "worker" }); }}>
                         <Text style={styles.btnSaffronText}>⭐ Rate Worker</Text>
                       </Pressable>
                     )}
                     {!isCustomer && status === "accepted" && (
-                      <Pressable style={[styles.btnSaffron, { flexDirection: "row", gap: 6 }]} onPress={() => { setDetailItem(null); completeEng(detailItem.id, detailItem.worker_name); }}>
+                      <Pressable style={[styles.btnSaffron, { flexDirection: "row", gap: 6 }]} onPress={() => { setDetailItem(null); completeEng(detailItem.id, detailItem.customer_name); }}>
                         <Ionicons name="checkmark-circle-outline" size={16} color="#fff" />
                         <Text style={styles.btnGreenText}>Mark Job Done</Text>
+                      </Pressable>
+                    )}
+                    {!isCustomer && status === "completed" && !detailItem.customer_rating && (
+                      <Pressable style={styles.btnSaffron} onPress={() => { setDetailItem(null); setRatingModal({ id: detailItem.id, targetName: detailItem.customer_name, targetRole: "customer" }); }}>
+                        <Text style={styles.btnSaffronText}>⭐ Rate Customer</Text>
                       </Pressable>
                     )}
                     {!isCustomer && ["requested","accepted"].includes(status) && (
@@ -703,14 +773,18 @@ export default function DashboardScreen({ navigation, route }) {
       </Modal>
 
       {/* ══ RATING MODAL ════════════════════════════════════════════════ */}
-      <Modal transparent visible={!!ratingModal} animationType="slide" onRequestClose={() => setRatingModal(null)}>
+      <Modal transparent visible={!!ratingModal} animationType="slide" onRequestClose={resetRatingModal}>
         <View style={styles.ratingModalBackdrop}>
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>
-              {lang === "hi" ? `${(ratingModal?.workerName || "").split(" ")[0]} को rate करो` : `Rate ${(ratingModal?.workerName || "").split(" ")[0]}`}
+              {lang === "hi"
+                ? `${(ratingModal?.targetName || ratingModal?.workerName || "").split(" ")[0]} को rate करो`
+                : `Rate ${(ratingModal?.targetName || ratingModal?.workerName || "").split(" ")[0]}`}
             </Text>
             <Text style={styles.modalSub}>
-              {lang === "hi" ? "काम कैसा था?" : "How was the work?"}
+              {ratingModal?.targetRole === "customer"
+                ? (lang === "hi" ? "Customer aur kaam ka experience kaisa tha?" : "How was the customer and work environment?")
+                : (lang === "hi" ? "काम कैसा था?" : "How was the work?")}
             </Text>
 
             {/* Stars */}
@@ -733,12 +807,29 @@ export default function DashboardScreen({ navigation, route }) {
               style={styles.commentInput} multiline maxLength={200}
             />
 
+            <View style={styles.ratingImagesRow}>
+              {ratingImageUrls.map(url => (
+                <View key={url} style={styles.ratingImageWrap}>
+                  <Image source={{ uri: url }} style={styles.ratingImageThumb} />
+                  <Pressable style={styles.ratingImageRemove} onPress={() => setRatingImageUrls(prev => prev.filter(x => x !== url))}>
+                    <Ionicons name="close" size={12} color="#fff" />
+                  </Pressable>
+                </View>
+              ))}
+              {ratingImageUrls.length < 3 && (
+                <Pressable onPress={pickRatingPhoto} disabled={ratingUploading} style={styles.ratingAddPhoto}>
+                  <Ionicons name="camera-outline" size={18} color={colors.saffron} />
+                  <Text style={styles.ratingAddPhotoText}>{ratingUploading ? "Uploading..." : "Add photo"}</Text>
+                </Pressable>
+              )}
+            </View>
+
             {/* Buttons */}
             <Pressable onPress={submitRating} style={styles.submitRatingBtn}>
               <Ionicons name="star" size={16} color="#fff" />
               <Text style={styles.submitRatingTxt}>{lang === "hi" ? "Submit करो" : "Submit Rating"}</Text>
             </Pressable>
-            <Pressable onPress={() => setRatingModal(null)} style={{ marginTop: 12, alignItems: "center" }}>
+            <Pressable onPress={resetRatingModal} style={{ marginTop: 12, alignItems: "center" }}>
               <Text style={{ fontFamily: fonts.bodySemi, color: colors.textMuted, fontSize: 13 }}>
                 {lang === "hi" ? "अभी नहीं" : "Skip for now"}
               </Text>
@@ -1198,9 +1289,12 @@ function WorkerPendingPremiumCard({ e, onPress, onWithdraw, onAccept, onDecline 
   );
 }
 
-function WorkerHistoryCard({ e, onPress }) {
+function WorkerHistoryCard({ e, onPress, onRate }) {
   const status = e.engagement_status || e.status;
   const isDone = status === "completed";
+  const receivedRating = e.worker_rating?.stars || e.rating;
+  const receivedComment = e.worker_rating?.comment || e.comment;
+  const customerRated = !!(e.customer_rating?.stars || e.customer_rating);
   return (
     <Pressable
       onPress={onPress}
@@ -1231,15 +1325,21 @@ function WorkerHistoryCard({ e, onPress }) {
           <StatusBadge status={status} size="small" />
         </View>
       </View>
-      {isDone && e.rating ? (
+      {isDone && receivedRating ? (
         <View style={styles.workerRatingPill}>
           <Ionicons name="star" size={12} color="#F59E0B" />
-          <Text style={styles.workerRatingText}>{e.rating}/5</Text>
-          {e.comment ? (
-            <Text style={styles.workerRatingComment} numberOfLines={1}>"{e.comment}"</Text>
+          <Text style={styles.workerRatingText}>{receivedRating}/5</Text>
+          {receivedComment ? (
+            <Text style={styles.workerRatingComment} numberOfLines={1}>"{receivedComment}"</Text>
           ) : null}
         </View>
-      ) : isDone && !e.rating ? (
+      ) : null}
+      {isDone && !customerRated ? (
+        <Pressable style={styles.workerRateCustomerBtn} onPress={onRate}>
+          <Ionicons name="star-outline" size={13} color="#fff" />
+          <Text style={styles.workerRateCustomerText}>Rate Customer</Text>
+        </Pressable>
+      ) : isDone && !receivedRating ? (
         <Text style={styles.workerAwaitingRating}>Awaiting customer rating</Text>
       ) : null}
     </Pressable>
@@ -1654,6 +1754,12 @@ const styles = StyleSheet.create({
   starsRow: { flexDirection: "row", justifyContent: "center", gap: 8, marginBottom: 10 },
   ratingLabel: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.text, textAlign: "center", marginBottom: 18 },
   commentInput: { backgroundColor: "#fafaf7", borderWidth: 1.5, borderColor: colors.border, borderRadius: 12, padding: 12, fontFamily: fonts.body, fontSize: 14, color: colors.text, minHeight: 72, textAlignVertical: "top", marginBottom: 16 },
+  ratingImagesRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 16 },
+  ratingImageWrap: { width: 58, height: 58, borderRadius: 12, overflow: "hidden", borderWidth: 1, borderColor: colors.border },
+  ratingImageThumb: { width: "100%", height: "100%" },
+  ratingImageRemove: { position: "absolute", top: 4, right: 4, width: 20, height: 20, borderRadius: 10, backgroundColor: "rgba(0,0,0,0.62)", alignItems: "center", justifyContent: "center" },
+  ratingAddPhoto: { height: 58, minWidth: 112, borderRadius: 12, borderWidth: 1.5, borderStyle: "dashed", borderColor: colors.saffron, alignItems: "center", justifyContent: "center", paddingHorizontal: 12, gap: 3 },
+  ratingAddPhotoText: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.saffron },
   submitRatingBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.saffron, paddingVertical: 14, borderRadius: 14 },
   submitRatingTxt: { fontFamily: fonts.bodyBold, fontSize: 15, color: "#fff" },
 
@@ -1995,6 +2101,8 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontStyle: "italic",
   },
+  workerRateCustomerBtn: { marginTop: 10, alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: colors.saffron, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },
+  workerRateCustomerText: { fontFamily: fonts.bodyBold, fontSize: 11, color: "#fff" },
   workerSupportLink: {
     minHeight: 44,
     flexDirection: "row",

@@ -564,6 +564,8 @@ export default function Dashboard() {
   const [ratingBooking, setRatingBooking] = useState(null);
   const [ratingValue, setRatingValue] = useState(5);
   const [ratingComment, setRatingComment] = useState("");
+  const [ratingImages, setRatingImages] = useState([]);
+  const [ratingUploading, setRatingUploading] = useState(false);
   const [submittingRating, setSubmittingRating] = useState(false);
 
   const [pendingEngagements, setPendingEngagements] = useState([]);
@@ -645,18 +647,48 @@ export default function Dashboard() {
     try {
       await api.post(`/engagements/${ratingBooking.id}/rate`, {
         rating: ratingValue,
-        comment: ratingComment
+        comment: ratingComment,
+        image_urls: ratingImages
       });
       toast.success("Thanks for your feedback!");
       setRatingBooking(null);
       setRatingValue(5);
       setRatingComment("");
+      setRatingImages([]);
       reload();
     } catch (e) {
       toast.error(formatApiError(e));
     } finally {
       setSubmittingRating(false);
     }
+  };
+
+  const uploadRatingPhoto = async (file) => {
+    if (!ratingBooking || !file) return;
+    if (ratingImages.length >= 3) {
+      toast.error("You can add up to 3 review photos.");
+      return;
+    }
+    const fd = new FormData();
+    fd.append("file", file);
+    setRatingUploading(true);
+    try {
+      const res = await api.post(`/engagements/${ratingBooking.id}/rating-photo`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      if (res.data?.photo_url) setRatingImages(prev => [...prev, res.data.photo_url].slice(0, 3));
+    } catch (e) {
+      toast.error(formatApiError(e));
+    } finally {
+      setRatingUploading(false);
+    }
+  };
+
+  const closeRatingModal = () => {
+    setRatingBooking(null);
+    setRatingValue(5);
+    setRatingComment("");
+    setRatingImages([]);
   };
 
   const activeBookings = bookings.filter(b => b.status === "confirmed");
@@ -979,9 +1011,44 @@ export default function Dashboard() {
                   />
                 </div>
 
+                <div className="mb-6">
+                  <label className="text-xs font-bold text-gray-400 uppercase block mb-2">Photos (Optional)</label>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {ratingImages.map((url) => (
+                      <div key={url} className="relative w-16 h-16 rounded-xl overflow-hidden border border-gray-200">
+                        <img src={url} alt="Review" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setRatingImages(prev => prev.filter(x => x !== url))}
+                          className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white text-xs leading-none"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                    {ratingImages.length < 3 && (
+                      <label className="w-16 h-16 rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-1 text-gray-400 cursor-pointer hover:border-[#ff6b35] hover:text-[#ff6b35] transition">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          disabled={ratingUploading}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            e.target.value = "";
+                            uploadRatingPhoto(file);
+                          }}
+                        />
+                        <Camera size={16} />
+                        <span className="text-[10px] font-bold">{ratingUploading ? "..." : "Add"}</span>
+                      </label>
+                    )}
+                  </div>
+                </div>
+
                 <div className="flex gap-3">
                   <button
-                    onClick={() => setRatingBooking(null)}
+                    onClick={closeRatingModal}
                     className="flex-1 btn-outline"
                   >
                     Cancel

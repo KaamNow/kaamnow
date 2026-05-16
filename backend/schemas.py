@@ -165,6 +165,7 @@ class RatingIn(BaseModel):
     booking_id: str
     rating: int = Field(ge=1, le=5)
     comment: Optional[str] = ""
+    image_urls: List[str] = Field(default_factory=list)
 
 
 class WaitlistIn(BaseModel):

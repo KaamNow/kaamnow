@@ -472,6 +472,7 @@ function PastEngagementCard({ eng, onRate }) {
     ? eng.customer_rating?.stars
     : eng.customer_rating;
   const custComment = typeof eng.customer_rating === "object" ? eng.customer_rating?.comment : null;
+  const custImages = typeof eng.customer_rating === "object" ? (eng.customer_rating?.image_urls || []) : [];
 
   return (
     <div
@@ -535,6 +536,13 @@ function PastEngagementCard({ eng, onRate }) {
               <div className="pt-1">
                 <div className="text-xs text-gray-400 font-medium mb-1">Customer review</div>
                 <p className="text-xs text-gray-600 italic">"{custComment}"</p>
+              </div>
+            )}
+            {custImages.length > 0 && (
+              <div className="flex gap-2 pt-1">
+                {custImages.map(url => (
+                  <img key={url} src={url} alt="Review" className="w-14 h-14 rounded-lg object-cover border border-gray-100" />
+                ))}
               </div>
             )}
             {isCompleted && !custRating && (
@@ -799,6 +807,8 @@ export default function WorkerDashboard() {
   const [ratingEng, setRatingEng] = useState(null);
   const [ratingValue, setRatingValue] = useState(5);
   const [ratingComment, setRatingComment] = useState("");
+  const [ratingImages, setRatingImages] = useState([]);
+  const [ratingUploading, setRatingUploading] = useState(false);
   const [submittingRating, setSubmittingRating] = useState(false);
 
   const loadData = useCallback(async () => {
@@ -930,18 +940,48 @@ export default function WorkerDashboard() {
     try {
       await api.post(`/engagements/${ratingEng.id}/rate`, {
         rating: ratingValue,
-        comment: ratingComment
+        comment: ratingComment,
+        image_urls: ratingImages
       });
       toast.success("Rating submitted!");
       setRatingEng(null);
       setRatingValue(5);
       setRatingComment("");
+      setRatingImages([]);
       await loadData();
     } catch (err) {
       toast.error(formatApiError(err));
     } finally {
       setSubmittingRating(false);
     }
+  };
+
+  const uploadRatingPhoto = async (file) => {
+    if (!ratingEng || !file) return;
+    if (ratingImages.length >= 3) {
+      toast.error("You can add up to 3 review photos.");
+      return;
+    }
+    const fd = new FormData();
+    fd.append("file", file);
+    setRatingUploading(true);
+    try {
+      const res = await api.post(`/engagements/${ratingEng.id}/rating-photo`, fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      if (res.data?.photo_url) setRatingImages(prev => [...prev, res.data.photo_url].slice(0, 3));
+    } catch (err) {
+      toast.error(formatApiError(err));
+    } finally {
+      setRatingUploading(false);
+    }
+  };
+
+  const closeRatingModal = () => {
+    setRatingEng(null);
+    setRatingValue(5);
+    setRatingComment("");
+    setRatingImages([]);
   };
 
   if (!user || user.role !== "worker") {
@@ -1372,9 +1412,44 @@ export default function WorkerDashboard() {
                   />
                 </div>
 
+                <div className="mb-6">
+                  <label className="text-xs font-bold text-gray-400 uppercase block mb-2">Photos (Optional)</label>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {ratingImages.map((url) => (
+                      <div key={url} className="relative w-16 h-16 rounded-xl overflow-hidden border border-gray-200">
+                        <img src={url} alt="Review" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setRatingImages(prev => prev.filter(x => x !== url))}
+                          className="absolute top-1 right-1 w-5 h-5 rounded-full bg-black/60 text-white text-xs leading-none"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                    {ratingImages.length < 3 && (
+                      <label className="w-16 h-16 rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center gap-1 text-gray-400 cursor-pointer hover:border-[#ff6b35] hover:text-[#ff6b35] transition">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          disabled={ratingUploading}
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            e.target.value = "";
+                            uploadRatingPhoto(file);
+                          }}
+                        />
+                        <Camera size={16} />
+                        <span className="text-[10px] font-bold">{ratingUploading ? "..." : "Add"}</span>
+                      </label>
+                    )}
+                  </div>
+                </div>
+
                 <div className="flex gap-3">
                   <button
-                    onClick={() => setRatingEng(null)}
+                    onClick={closeRatingModal}
                     className="flex-1 btn-outline"
                   >
                     Cancel

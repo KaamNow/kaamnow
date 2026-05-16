@@ -147,6 +147,8 @@ def booking_status_from_engagement(status: str) -> str:
 def engagement_to_booking(engagement: dict) -> dict:
     status = engagement.get("status", "")
     accepted = status in ("accepted", "completed")
+    worker_rating = engagement.get("worker_rating") or {}
+    customer_rating = engagement.get("customer_rating") or {}
     return {
         "id": engagement["id"],
         "job_id": engagement["job_id"],
@@ -158,10 +160,12 @@ def engagement_to_booking(engagement: dict) -> dict:
         "job_date": engagement.get("job_date"),
         "daily_rate": engagement.get("daily_rate"),
         "status": booking_status_from_engagement(status),
-        "rating": (engagement.get("worker_rating") or {}).get("stars"),
-        "comment": (engagement.get("worker_rating") or {}).get("comment"),
-        "customer_rating": (engagement.get("customer_rating") or {}).get("stars"),
-        "customer_comment": (engagement.get("customer_rating") or {}).get("comment"),
+        "rating": worker_rating.get("stars"),
+        "comment": worker_rating.get("comment"),
+        "rating_image_urls": worker_rating.get("image_urls", []),
+        "customer_rating": customer_rating.get("stars"),
+        "customer_comment": customer_rating.get("comment"),
+        "customer_rating_image_urls": customer_rating.get("image_urls", []),
         "source": engagement.get("source"),
         "engagement_status": status,
         "created_at": engagement.get("created_at"),
@@ -629,7 +633,25 @@ async def complete_engagement(engagement_id: str, user: dict) -> dict:
     return {"ok": True}
 
 
-async def rate_engagement(engagement_id: str, rating: int, comment: str, user: dict) -> dict:
+def _safe_review_images(image_urls: Optional[list] = None) -> list[str]:
+    if not isinstance(image_urls, list):
+        return []
+    urls = []
+    for url in image_urls:
+        if isinstance(url, str) and url.startswith("http"):
+            urls.append(url)
+        if len(urls) >= 3:
+            break
+    return urls
+
+
+async def rate_engagement(
+    engagement_id: str,
+    rating: int,
+    comment: str,
+    user: dict,
+    image_urls: Optional[list] = None,
+) -> dict:
     engagement = await db.engagements.find_one({"id": engagement_id})
     if not engagement:
         raise HTTPException(status_code=404, detail="Engagement not found")
@@ -637,7 +659,21 @@ async def rate_engagement(engagement_id: str, rating: int, comment: str, user: d
     if engagement["status"] != "completed":
         raise HTTPException(status_code=400, detail="Only completed engagements can be rated")
 
+    try:
+        rating = int(rating)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=422, detail="Rating must be a number")
+    if rating < 1 or rating > 5:
+        raise HTTPException(status_code=422, detail="Rating must be between 1 and 5")
+
     now = utc_now_iso()
+    rating_doc = {
+        "stars": rating,
+        "comment": comment,
+        "image_urls": _safe_review_images(image_urls),
+        "reviewer_user_id": user["id"],
+        "created_at": now,
+    }
     if user["role"] == "customer":
         if engagement["customer_id"] != user["id"]:
             raise HTTPException(status_code=403, detail="You can only rate your own hires")
@@ -646,7 +682,7 @@ async def rate_engagement(engagement_id: str, rating: int, comment: str, user: d
             {"id": engagement_id},
             {
                 "$set": {
-                    "worker_rating": {"stars": rating, "comment": comment, "created_at": now},
+                    "worker_rating": rating_doc,
                     "updated_at": now
                 }
             }
@@ -752,7 +788,7 @@ async def rate_engagement(engagement_id: str, rating: int, comment: str, user: d
             {"id": engagement_id},
             {
                 "$set": {
-                    "customer_rating": {"stars": rating, "comment": comment, "created_at": now},
+                    "customer_rating": rating_doc,
                     "updated_at": now
                 }
             }
