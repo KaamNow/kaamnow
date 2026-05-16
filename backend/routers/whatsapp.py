@@ -101,10 +101,49 @@ _BUTTONS_CUSTOMER_MENU = [
     {"id": "STATUS", "title": "My Requests"},
     {"id": "HELP", "title": "Help"},
 ]
+_BUTTONS_BOOKING_DONE = [
+    {"id": "STATUS", "title": "My Requests"},
+    {"id": "MORE", "title": "More Workers"},
+    {"id": "MENU", "title": "Menu"},
+]
+_BUTTONS_NO_OPEN_JOB = [
+    {"id": "POST_JOB_START", "title": "Post Job"},
+    {"id": "MORE", "title": "More Workers"},
+    {"id": "HELP", "title": "Help"},
+]
+_BUTTONS_POST_JOB_CONFIRM = [
+    {"id": "CREATE_JOB_CONFIRM", "title": "Create Job"},
+    {"id": "MENU", "title": "Cancel"},
+]
 _BUTTONS_WORKER_MENU = [
     {"id": "JOBS", "title": "Find Jobs"},
     {"id": "STATUS", "title": "My Applications"},
     {"id": "HELP", "title": "Help"},
+]
+_BUTTONS_WORKER_JOB_DETAIL = [
+    {"id": "APPLY_JOB", "title": "Apply"},
+    {"id": "MORE", "title": "More Jobs"},
+    {"id": "STATUS", "title": "My Applications"},
+]
+_BUTTONS_WORKER_APPLY_DONE = [
+    {"id": "STATUS", "title": "My Applications"},
+    {"id": "MORE", "title": "More Jobs"},
+    {"id": "MENU", "title": "Menu"},
+]
+_BUTTONS_WORKER_JOB_UNAVAILABLE = [
+    {"id": "MORE", "title": "More Jobs"},
+    {"id": "STATUS", "title": "My Applications"},
+    {"id": "CHANGE_PINCODE", "title": "Change Pincode"},
+]
+_BUTTONS_WORKER_STATUS_EMPTY = [
+    {"id": "JOBS", "title": "Find Jobs"},
+    {"id": "CHANGE_PINCODE", "title": "Change Pincode"},
+    {"id": "HELP", "title": "Help"},
+]
+_BUTTONS_WORKER_WITHDRAW_CONFIRM = [
+    {"id": "WITHDRAW_CONFIRM", "title": "Yes Withdraw"},
+    {"id": "STATUS", "title": "My Applications"},
+    {"id": "MENU", "title": "Menu"},
 ]
 
 
@@ -139,6 +178,16 @@ _TYPED_BUTTON_ALIASES = {
     "my requests": "STATUS",
     "mujhe worker chahiye": "CUSTOMER",
     "mujhe kaam chahiye": "WORKER",
+    "send request": "REQUEST_WORKER",
+    "request worker": "REQUEST_WORKER",
+    "book worker": "REQUEST_WORKER",
+    "post job": "POST_JOB_START",
+    "open app": "OPEN_APP",
+    "apply": "APPLY_JOB",
+    "apply job": "APPLY_JOB",
+    "withdraw application": "WITHDRAW",
+    "cancel application": "WITHDRAW",
+    "yes withdraw": "WITHDRAW_CONFIRM",
 }
 
 
@@ -391,9 +440,10 @@ def _format_job_detail(job: dict, worker_lat: Optional[float], worker_lng: Optio
         f"📅 Date: {job.get('job_date', 'TBD')}\n"
         f"👥 Workers needed: {job.get('workers_needed', 1)}\n"
         f"📍 Location: {location}{dist_str}\n"
+        f"👤 Customer: {job.get('customer_name', 'Customer')}\n"
+        f"Status: {job.get('status', 'open')}\n"
         f"📝 {job.get('description', '')}\n\n"
-        f"Interested? Reply *APPLY*\n"
-        f"Wapas jaane ke liye: *JOBS*"
+        f"Interested? Reply *APPLY*"
     )
 
 
@@ -520,6 +570,28 @@ def _worker_list_sections(workers: list[dict]) -> list[dict]:
             "description": _safe_wa_description(f"{_worker_primary_skill(worker)} · ₹{worker.get('daily_rate', '?')}/day · {_location_label(worker)}"),
         })
     return [{"title": "Nearby Workers", "rows": rows}]
+
+
+def _booking_job_sections(jobs: list[dict], worker_id: str) -> list[dict]:
+    rows = []
+    for job in jobs[:10]:
+        addr = job.get("address") or {}
+        location = addr.get("pincode") or _location_label(job)
+        rows.append({
+            "id": f"BOOK_JOB:{job.get('id')}:{worker_id}",
+            "title": _safe_wa_title(job.get("title") or job.get("category") or "Job"),
+            "description": _safe_wa_description(f"{location} · ₹{job.get('daily_rate', '?')}/day · {job.get('job_date', 'TBD')}"),
+        })
+    return [{"title": "Open Jobs", "rows": rows}]
+
+
+def _format_open_jobs_for_booking(jobs: list[dict]) -> str:
+    lines = ["Kaunsa job ke liye request bhejni hai?\n"]
+    for idx, job in enumerate(jobs, 1):
+        addr = job.get("address") or {}
+        location = addr.get("pincode") or _location_label(job)
+        lines.append(f"{idx}. {job.get('title', 'Job')} — ₹{job.get('daily_rate', '?')}/day — {location}")
+    return "\n".join(lines)
 
 
 def _job_reply_list(name: str, pincode: str, jobs: list[dict]) -> Optional[dict]:
@@ -670,6 +742,10 @@ def _format_worker_brief(worker: dict) -> str:
 
 async def _show_job_detail_by_id(source_phone: str, job_id: str, state: dict) -> tuple[str, dict]:
     user, worker, state = await _identify_user(source_phone, state)
+    if not user:
+        return ("Pehle KaamNow par worker ke roop mein register karein, phir apply kar sakte hain.", state)
+    if user.get("role") != "worker" or not worker:
+        return ("Sirf registered worker job par apply kar sakte hain.", state)
     job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
     if not job:
         return ("Job nahi mila. MORE ya JOBS try karein.", state)
@@ -678,9 +754,10 @@ async def _show_job_detail_by_id(source_phone: str, job_id: str, state: dict) ->
     buttons = [
         {"id": f"APPLY:{job_id}", "title": "Apply"},
         {"id": "MORE", "title": "More Jobs"},
-        {"id": "CHANGE_PINCODE", "title": "Change Pincode"},
+        {"id": "STATUS", "title": "My Applications"},
     ]
-    return (_format_job_detail(job, lat, lng), _with_reply_buttons({**state, "step": "job_detail", "viewed_job": job}, buttons))
+    logger.info("WhatsApp flow=worker_select_job worker_id=%s job_id=%s", worker.get("id"), job_id)
+    return (_format_job_detail(job, lat, lng), _with_reply_buttons({**state, "step": "viewing_job_detail", "selected_job_id": job_id, "viewed_job": job}, buttons))
 
 
 async def _show_worker_detail_by_id(source_phone: str, worker_id: str, state: dict) -> tuple[str, dict]:
@@ -696,7 +773,7 @@ async def _show_worker_detail_by_id(source_phone: str, worker_id: str, state: di
         f"Skills: {skills}\n"
         f"Rate: ₹{worker.get('daily_rate', '?')}/day\n"
         f"Location: {_location_label(worker)}{rating_line}\n\n"
-        "Booking request ke liye app mein job post/select karein: kaamnow.com/marketplace"
+        "Request bhejne ke liye button tap karein."
     )
     buttons = [
         {"id": f"REQUEST:{worker_id}", "title": "Send Request"},
@@ -704,6 +781,185 @@ async def _show_worker_detail_by_id(source_phone: str, worker_id: str, state: di
         {"id": "CHANGE_PINCODE", "title": "Change Pincode"},
     ]
     return (msg, _with_reply_buttons({**state, "step": "customer_worker_detail", "selected_worker_id": worker_id}, buttons))
+
+
+async def _fetch_customer_open_jobs(customer_id: str) -> list[dict]:
+    jobs = await db.jobs.find(
+        {
+            "customer_id": customer_id,
+            "status": {"$nin": ["completed", "cancelled", "closed", "booked", "expired"]},
+        },
+        {"_id": 0},
+    ).sort("created_at", -1).limit(20).to_list(20)
+    return [job for job in jobs if int(job.get("filled_count") or 0) < int(job.get("workers_needed") or 1)]
+
+
+async def _create_customer_booking_request(user: dict, worker_id: str, job_id: str) -> tuple[str, dict, bool]:
+    duplicate = await db.engagements.find_one({
+        "job_id": job_id,
+        "worker_id": worker_id,
+        "customer_id": user["id"],
+        "status": {"$in": ["requested", "accepted"]},
+    }, {"_id": 0})
+    if duplicate:
+        logger.info("WhatsApp flow=customer_request_worker customer_id=%s worker_id=%s selected_job_id=%s duplicate=true booking_created=false", user.get("id"), worker_id, job_id)
+        return (
+            "Is worker ko is job ke liye request already bheji ja chuki hai.",
+            duplicate,
+            True,
+        )
+    engagement = await create_engagement_request(
+        job_id=job_id,
+        worker_id=worker_id,
+        source="customer_booking",
+        user=user,
+    )
+    logger.info("WhatsApp flow=customer_request_worker customer_id=%s worker_id=%s selected_job_id=%s duplicate=false booking_created=true", user.get("id"), worker_id, job_id)
+    return ("Request bhej diya gaya ✅", engagement, False)
+
+
+async def _confirm_customer_booking(source_phone: str, state: dict, user: dict, worker_id: str, job_id: str) -> tuple[str, dict]:
+    if not user or user.get("role") != "customer":
+        return ("Sirf registered customer worker request bhej sakte hain.", state)
+    worker = await db.workers.find_one({"id": worker_id}, {"_id": 0})
+    if not worker:
+        return ("Worker nahi mila. MORE ya WORKERS try karein.", state)
+    try:
+        prefix, engagement, duplicate = await _create_customer_booking_request(user, worker_id, job_id)
+    except HTTPException as exc:
+        detail = getattr(exc, "detail", "Request nahi bhej paaye.")
+        return (f"Request nahi bhej paaye: {detail}", _with_reply_buttons(state, _BUTTONS_BOOKING_DONE))
+    job_title = engagement.get("job_title") or "Job"
+    worker_name = worker.get("name") or engagement.get("worker_name") or "Worker"
+    if duplicate:
+        msg = f"{prefix}\n\nWorker: {worker_name}\nJob: {job_title}"
+    else:
+        msg = f"{prefix}\n\nWorker: {worker_name}\nJob: {job_title}"
+    return (msg, _with_reply_buttons({**state, "step": "customer_worker_list", "selected_worker_id": None, "last_customer_open_jobs": []}, _BUTTONS_BOOKING_DONE))
+
+
+async def _request_selected_worker(source_phone: str, state: dict, user: Optional[dict], worker_id: Optional[str] = None) -> tuple[str, dict]:
+    if not user:
+        return ("Pehle KaamNow par register karein, phir worker request bhej sakte hain.", state)
+    if user.get("role") != "customer":
+        return ("Sirf customers worker request bhej sakte hain.", state)
+    worker_id = worker_id or state.get("selected_worker_id")
+    if not worker_id:
+        return ("Pehle worker select karein.", _with_reply_buttons(state, _BUTTONS_CUSTOMER_RESULTS))
+    worker = await db.workers.find_one({"id": worker_id}, {"_id": 0})
+    if not worker:
+        return ("Worker nahi mila. MORE ya WORKERS try karein.", state)
+    jobs = await _fetch_customer_open_jobs(user["id"])
+    logger.info("WhatsApp flow=customer_request_worker customer_id=%s worker_id=%s job_count=%s", user.get("id"), worker_id, len(jobs))
+    if len(jobs) == 1:
+        return await _confirm_customer_booking(source_phone, state, user, worker_id, jobs[0]["id"])
+    if len(jobs) > 1:
+        reply_list = None
+        if len(jobs) > 3:
+            reply_list = {
+                "body_text": "Kaunsa job ke liye request bhejni hai?",
+                "button_text": "Jobs dekhein",
+                "sections": _booking_job_sections(jobs, worker_id),
+            }
+        next_state = {
+            **state,
+            "step": "choose_booking_job",
+            "selected_worker_id": worker_id,
+            "last_customer_open_jobs": jobs,
+        }
+        return (
+            _format_open_jobs_for_booking(jobs),
+            _maybe_with_reply_list(next_state, reply_list),
+        )
+    return (
+        "Aapke paas abhi koi open job nahi hai. Request bhejne ke liye pehle job post karna hoga.",
+        _with_reply_buttons({**state, "step": "customer_worker_detail", "selected_worker_id": worker_id}, _BUTTONS_NO_OPEN_JOB),
+    )
+
+
+async def _start_customer_post_job(state: dict) -> tuple[str, dict]:
+    return ("Kaunsa kaam chahiye? Example: Mason, Driver, Cook", {**state, "step": "customer_post_job_skill", "post_job": {}})
+
+
+def _post_job_summary(post_job: dict) -> str:
+    return (
+        "Job summary:\n"
+        f"Skill: {post_job.get('skill')}\n"
+        f"Pincode: {post_job.get('pincode')}\n"
+        f"Rate: ₹{post_job.get('daily_rate')}/day\n"
+        f"Workers: {post_job.get('workers_needed')}"
+    )
+
+
+async def _handle_customer_post_job(source_phone: str, raw: str, state: dict, user: dict) -> tuple[str, dict]:
+    step = state.get("step")
+    post_job = dict(state.get("post_job") or {})
+    if step == "customer_post_job_skill":
+        if len(raw.strip()) < 2:
+            return ("Kaam ka naam bhejein. Example: Mason", state)
+        post_job["skill"] = raw.strip()
+        return ("Job ka pincode kya hai? 6-digit pincode bhejein.", {**state, "step": "customer_post_job_pincode", "post_job": post_job})
+    if step == "customer_post_job_pincode":
+        if not raw.isdigit() or len(raw) != 6:
+            return ("Sahi 6-digit pincode bhejein. Example: 841219", state)
+        post_job["pincode"] = raw
+        return ("Daily rate kitna dena hai? Example: 600", {**state, "step": "customer_post_job_rate", "post_job": post_job})
+    if step == "customer_post_job_rate":
+        if not raw.isdigit() or int(raw) < 100:
+            return ("Valid daily rate bhejein. Example: 600", state)
+        post_job["daily_rate"] = int(raw)
+        return ("Kitne workers chahiye? Example: 1", {**state, "step": "customer_post_job_workers_needed", "post_job": post_job})
+    if step == "customer_post_job_workers_needed":
+        if not raw.isdigit() or not (1 <= int(raw) <= 20):
+            return ("1 se 20 ke beech workers count bhejein.", state)
+        post_job["workers_needed"] = int(raw)
+        return (_post_job_summary(post_job), _with_reply_buttons({**state, "step": "customer_post_job_confirm", "post_job": post_job}, _BUTTONS_POST_JOB_CONFIRM))
+    return ("MENU type karein naya request shuru karne ke liye.", {**state, "step": "customer_worker_list"})
+
+
+async def _create_job_from_whatsapp(state: dict, user: dict) -> tuple[str, dict]:
+    post_job = state.get("post_job") or {}
+    required = ("skill", "pincode", "daily_rate", "workers_needed")
+    if not all(post_job.get(key) for key in required):
+        return ("Job details missing hain. Post Job dobara start karein.", _with_reply_buttons(state, _BUTTONS_NO_OPEN_JOB))
+    address = dict((user or {}).get("address") or {})
+    address["pincode"] = post_job["pincode"]
+    skill = str(post_job["skill"]).strip()
+    job_id = str(uuid.uuid4())
+    job_doc = {
+        "id": job_id,
+        "customer_id": user["id"],
+        "customer_name": user.get("name", "Customer"),
+        "title": f"{skill} work",
+        "category": skill.lower(),
+        "description": f"WhatsApp se job post: {skill}",
+        "workers_needed": int(post_job["workers_needed"]),
+        "daily_rate": int(post_job["daily_rate"]),
+        "job_date": date.today().isoformat(),
+        "village": address.get("village") or user.get("village") or "",
+        "lat": 0.0,
+        "lng": 0.0,
+        "required_skills": [{"category": skill, "skill": skill}],
+        "address": address,
+        "status": "open",
+        "filled_count": 0,
+        "accepted_worker_ids": [],
+        "urgency": "normal",
+        "created_at": utc_now_iso(),
+        "source": "whatsapp",
+    }
+    await db.jobs.insert_one(job_doc)
+    worker_id = state.get("selected_worker_id")
+    logger.info("WhatsApp flow=customer_post_job customer_id=%s selected_job_id=%s worker_id=%s", user.get("id"), job_id, worker_id)
+    buttons = [
+        {"id": f"REQUEST:{worker_id}", "title": "Send Request"},
+        {"id": "MORE", "title": "More Workers"},
+        {"id": "MENU", "title": "Menu"},
+    ] if worker_id else _BUTTONS_BOOKING_DONE
+    return (
+        f"Job create ho gaya ✅\n\n{job_doc['title']} — ₹{job_doc['daily_rate']}/day\n\nAb selected worker ko request bhejein?",
+        _with_reply_buttons({**state, "step": "customer_worker_detail", "post_job": {}, "last_customer_open_jobs": [job_doc]}, buttons),
+    )
 
 
 # ─── Identity & authentication ────────────────────────────────────────────────
@@ -807,28 +1063,49 @@ async def _cmd_job_detail(source_phone: str, number: int, state: dict) -> tuple[
     lng = float(worker.get("lng") or 0) if worker else None
 
     msg = _format_job_detail(job, lat, lng)
-    new_state = {**state, "step": "job_detail", "viewed_job": job}
+    logger.info("WhatsApp flow=worker_select_job worker_id=%s job_id=%s", (worker or {}).get("id"), job.get("id"))
+    new_state = _with_reply_buttons(
+        {**state, "step": "viewing_job_detail", "selected_job_id": job.get("id"), "viewed_job": job},
+        [
+            {"id": f"APPLY:{job.get('id')}", "title": "Apply"},
+            {"id": "MORE", "title": "More Jobs"},
+            {"id": "STATUS", "title": "My Applications"},
+        ],
+    )
     return (msg, new_state)
 
 
 async def _cmd_apply(source_phone: str, state: dict) -> tuple[str, dict]:
     viewed_job = state.get("viewed_job")
+    selected_job_id = state.get("selected_job_id")
+    if not viewed_job and selected_job_id:
+        viewed_job = await db.jobs.find_one({"id": selected_job_id}, {"_id": 0})
     if not viewed_job:
-        return ("Pehle koi job number type karein details dekhne ke liye.", state)
+        return ("Pehle koi job select karein details dekhne ke liye.", _with_reply_buttons(state, _BUTTONS_WORKER_MENU))
 
     user, worker, state = await _identify_user(source_phone, state)
-    if not worker:
-        return ("Worker profile nahi mila.", state)
+    if not user:
+        return ("Pehle KaamNow par worker ke roop mein register karein, phir apply kar sakte hain.", state)
+    if user.get("role") != "worker" or not worker:
+        return ("Sirf registered worker job par apply kar sakte hain.", state)
+
+    job_available = viewed_job.get("status", "open") == "open"
+    if not job_available:
+        logger.info("WhatsApp flow=worker_apply_job worker_id=%s job_id=%s job_available=false", worker.get("id"), viewed_job.get("id"))
+        return ("Yeh job ab available nahi hai.", _with_reply_buttons(state, _BUTTONS_WORKER_JOB_UNAVAILABLE))
 
     # Check if already applied
     existing = await db.engagements.find_one({
         "job_id": viewed_job["id"],
         "worker_id": worker["id"],
-        "status": {"$in": ["requested", "accepted"]},
+        "status": {"$in": ["requested", "accepted", "completed"]},
     })
     if existing:
-        status_label = "pending approval" if existing["status"] == "requested" else "already booked ✅"
-        return (f"Aapne is job mein already interest dikha chuke hain ({status_label}).", state)
+        logger.info("WhatsApp flow=worker_apply_job worker_id=%s job_id=%s engagement_id=%s duplicate=true job_available=true", worker.get("id"), viewed_job.get("id"), existing.get("id"))
+        return (
+            "Aap is job par already apply kar chuke hain.",
+            _with_reply_buttons({**state, "active_engagement_id": existing.get("id")}, _BUTTONS_WORKER_APPLY_DONE),
+        )
 
     # Create engagement via the proper function
     try:
@@ -840,15 +1117,21 @@ async def _cmd_apply(source_phone: str, state: dict) -> tuple[str, dict]:
         )
     except Exception as exc:
         detail = getattr(exc, "detail", str(exc))
-        return (f"Apply nahi ho saka: {detail}\n\nKoi aur job try karein (JOBS).", state)
+        return (f"Apply nahi ho saka: {detail}\n\nKoi aur job try karein.", _with_reply_buttons(state, _BUTTONS_WORKER_JOB_UNAVAILABLE))
 
-    new_state = {**state, "step": "applied", "active_engagement_id": engagement["id"], "viewed_job": None}
+    logger.info("WhatsApp flow=worker_apply_job worker_id=%s job_id=%s engagement_id=%s duplicate=false job_available=true", worker.get("id"), viewed_job.get("id"), engagement.get("id"))
+    new_state = _with_reply_buttons(
+        {**state, "step": "applied", "active_engagement_id": engagement["id"], "selected_job_id": viewed_job.get("id"), "viewed_job": None},
+        _BUTTONS_WORKER_APPLY_DONE,
+    )
+    addr = viewed_job.get("address") or {}
+    location = addr.get("pincode") or _location_label(viewed_job)
     return (
-        f"✅ *Interest bhej diya!*\n\n"
+        f"Apply ho gaya ✅\n\n"
+        f"Customer aapka request review karega.\n\n"
         f"Job: {viewed_job['title']}\n"
-        f"Customer ko notification gaya. Woh approve karenge to aapko WhatsApp ayega.\n\n"
-        f"Wapas lene ke liye: *WITHDRAW*\n"
-        f"Aur jobs ke liye: *JOBS*",
+        f"Location: {location}\n"
+        f"Rate: ₹{viewed_job.get('daily_rate', '?')}/day",
         new_state,
     )
 
@@ -858,20 +1141,39 @@ async def _cmd_withdraw(source_phone: str, state: dict) -> tuple[str, dict]:
     if not worker:
         return ("Worker profile nahi mila.", state)
 
-    # Find latest requested engagement
-    eng = await db.engagements.find_one(
+    engagements = await db.engagements.find(
         {"worker_id": worker["id"], "status": "requested"},
-        sort=[("created_at", -1)],
-    )
-    if not eng:
-        eng_id = state.get("active_engagement_id")
-        if eng_id:
-            eng = await db.engagements.find_one({"id": eng_id, "status": "requested"})
+        {"_id": 0},
+    ).sort("created_at", -1).limit(10).to_list(10)
 
-    if not eng:
+    if not engagements:
         return ("Koi pending interest nahi mila jise withdraw karein.", state)
 
-    # Cancel it
+    if len(engagements) == 1:
+        eng = engagements[0]
+        logger.info("WhatsApp flow=worker_withdraw worker_id=%s engagement_id=%s pending_count=1", worker.get("id"), eng.get("id"))
+        return (
+            f"Is application ko withdraw karna hai?\n\n{eng.get('job_title', 'Job')}",
+            _with_reply_buttons({**state, "step": "confirm_withdraw", "pending_withdraw_results": engagements, "withdraw_engagement_id": eng["id"]}, _BUTTONS_WORKER_WITHDRAW_CONFIRM),
+        )
+
+    lines = ["Kaunsi application withdraw karni hai?\n"]
+    for idx, eng in enumerate(engagements, 1):
+        lines.append(f"{idx}. {eng.get('job_title', 'Job')} — ₹{eng.get('daily_rate', '?')}/day")
+    logger.info("WhatsApp flow=worker_withdraw worker_id=%s pending_count=%s", worker.get("id"), len(engagements))
+    return ("\n".join(lines), {**state, "step": "choose_withdraw_application", "pending_withdraw_results": engagements})
+
+
+async def _cmd_withdraw_confirm(source_phone: str, state: dict, engagement_id: Optional[str] = None) -> tuple[str, dict]:
+    user, worker, state = await _identify_user(source_phone, state)
+    if not worker:
+        return ("Worker profile nahi mila.", state)
+    eng_id = engagement_id or state.get("withdraw_engagement_id")
+    if not eng_id:
+        return ("Pehle application select karein.", state)
+    eng = await db.engagements.find_one({"id": eng_id, "worker_id": worker["id"], "status": "requested"}, {"_id": 0})
+    if not eng:
+        return ("Pending application nahi mili.", _with_reply_buttons(state, _BUTTONS_WORKER_APPLY_DONE))
     await db.engagements.update_one(
         {"id": eng["id"]},
         {"$set": {"status": "cancelled", "cancelled_at": utc_now_iso(), "updated_at": utc_now_iso()}},
@@ -895,12 +1197,10 @@ async def _cmd_withdraw(source_phone: str, state: dict) -> tuple[str, dict]:
     except Exception:
         pass
 
-    new_state = {**state, "step": "start", "active_engagement_id": None, "viewed_job": None}
+    logger.info("WhatsApp flow=worker_withdraw worker_id=%s engagement_id=%s cancelled=true", worker.get("id"), eng.get("id"))
+    new_state = _with_reply_buttons({**state, "step": "worker_menu", "active_engagement_id": None, "viewed_job": None, "withdraw_engagement_id": None}, _BUTTONS_WORKER_APPLY_DONE)
     return (
-        f"↩️ *Interest wapas le liya.*\n\n"
-        f"Job: {eng.get('job_title', 'Job')}\n"
-        f"Customer ko inform kar diya gaya.\n\n"
-        f"JOBS se aur kaam dhundhen.",
+        f"Application withdraw ho gaya.\n\nJob: {eng.get('job_title', 'Job')}",
         new_state,
     )
 
@@ -911,27 +1211,45 @@ async def _cmd_status(source_phone: str, state: dict) -> tuple[str, dict]:
         return ("Worker profile nahi mila.", state)
 
     engagements = await db.engagements.find(
-        {"worker_id": worker["id"], "status": {"$in": ["requested", "accepted"]}},
+        {"worker_id": worker["id"]},
         {"_id": 0},
-    ).sort("created_at", -1).limit(5).to_list(5)
+    ).sort("created_at", -1).limit(30).to_list(30)
 
     if not engagements:
-        return ("Abhi koi active request nahi hai.\n\nJOBS type karein naya kaam dhundhne ke liye.", state)
+        logger.info("WhatsApp flow=worker_status worker_id=%s applications=0", worker.get("id"))
+        return ("Abhi koi active request nahi hai.", _with_reply_buttons(state, _BUTTONS_WORKER_STATUS_EMPTY))
 
-    lines = ["📊 *Meri Active Requests:*\n"]
-    for e in engagements:
-        icon = "⏳" if e["status"] == "requested" else "✅"
-        label = "Pending approval" if e["status"] == "requested" else "Confirmed ✅"
-        lines.append(f"{icon} *{e.get('job_title', 'Job')}*")
-        lines.append(f"   Status: {label}")
-        if e["status"] == "accepted" and e.get("customer_phone"):
-            lines.append(f"   📞 Customer: {e['customer_phone']}")
+    groups = [
+        ("Pending", [e for e in engagements if e.get("status") == "requested"][:3]),
+        ("Accepted / Active", [e for e in engagements if e.get("status") == "accepted"][:3]),
+        ("Completed / Cancelled", [e for e in engagements if e.get("status") in ("completed", "cancelled", "rejected")][:3]),
+    ]
+    lines = ["📊 *My Applications:*\n"]
+    for title, items in groups:
+        if not items:
+            continue
+        lines.append(f"*{title}*")
+        for e in items:
+            rate = f"₹{e.get('daily_rate', '?')}/day"
+            lines.append(f"- {e.get('job_title', 'Job')} — {rate} — {e.get('status')}")
         lines.append("")
 
-    if any(e["status"] == "requested" for e in engagements):
-        lines.append("WITHDRAW – Latest interest wapas lein")
+    logger.info("WhatsApp flow=worker_status worker_id=%s applications=%s", worker.get("id"), len(engagements))
+    return ("\n".join(lines).strip(), _with_reply_buttons(state, _BUTTONS_WORKER_APPLY_DONE))
 
-    return ("\n".join(lines), state)
+
+async def _cmd_customer_status(user: dict, state: dict) -> tuple[str, dict]:
+    engagements = await db.engagements.find(
+        {"customer_id": user["id"], "status": {"$in": ["requested", "accepted"]}},
+        {"_id": 0},
+    ).sort("created_at", -1).limit(5).to_list(5)
+    if not engagements:
+        return ("Abhi koi active request nahi hai.", _with_reply_buttons(state, _BUTTONS_CUSTOMER_RESULTS))
+    lines = ["📊 *Meri Requests:*\n"]
+    for engagement in engagements:
+        label = "Pending" if engagement.get("status") == "requested" else "Confirmed"
+        lines.append(f"{label}: {engagement.get('worker_name', 'Worker')} — {engagement.get('job_title', 'Job')}")
+    return ("\n".join(lines), _with_reply_buttons(state, _BUTTONS_BOOKING_DONE))
 
 
 async def _cmd_set_pincode(source_phone: str, pincode: str, state: dict) -> tuple[str, dict]:
@@ -1307,17 +1625,35 @@ async def _handle_message(source_phone: str, message_text: str, state: dict) -> 
         job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
         if not job:
             return ("Job nahi mila. MORE ya JOBS try karein.", state)
-        return await _cmd_apply(source_phone, {**state, "viewed_job": job, "step": "job_detail"})
-
-    if msg_up.startswith("REQUEST:"):
-        worker_id = raw.split(":", 1)[1].strip()
-        return (
-            "Booking request ke liye app mein job post/select karein: kaamnow.com/marketplace",
-            _with_reply_buttons({**state, "step": "customer_worker_detail", "selected_worker_id": worker_id}, _BUTTONS_CUSTOMER_RESULTS),
-        )
+        return await _cmd_apply(source_phone, {**state, "viewed_job": job, "selected_job_id": job_id, "step": "viewing_job_detail"})
 
     # ── Identify user on first contact (or if identity not in state) ──
     user, worker, state = await _identify_user(source_phone, state)
+
+    if msg_up.startswith("BOOK_JOB:"):
+        if not user or user.get("role") != "customer":
+            return ("Sirf registered customer worker request bhej sakte hain.", state)
+        parts = raw.split(":")
+        if len(parts) < 3:
+            return ("Job selection samajh nahi aaya. Dobara try karein.", state)
+        return await _confirm_customer_booking(source_phone, state, user, parts[2], parts[1])
+
+    if msg_up.startswith("REQUEST:") or msg_up == "REQUEST_WORKER":
+        worker_id = raw.split(":", 1)[1].strip() if ":" in raw else state.get("selected_worker_id")
+        return await _request_selected_worker(source_phone, state, user, worker_id)
+
+    if msg_up == "POST_JOB_START":
+        if not user or user.get("role") != "customer":
+            return ("Sirf registered customer job post kar sakte hain.", state)
+        return await _start_customer_post_job(state)
+
+    if msg_up == "OPEN_APP":
+        return ("App/web par job post karein: https://kaamnow.com", _with_reply_buttons(state, _BUTTONS_CUSTOMER_RESULTS))
+
+    if msg_up == "CREATE_JOB_CONFIRM":
+        if not user or user.get("role") != "customer":
+            return ("Sirf registered customer job post kar sakte hain.", state)
+        return await _create_job_from_whatsapp(state, user)
 
     if state.get("step") == "awaiting_pincode" and raw.isdigit() and len(raw) == 6:
         if state.get("role") == "worker":
@@ -1329,6 +1665,8 @@ async def _handle_message(source_phone: str, message_text: str, state: dict) -> 
         return await _customer_workers_for_pincode(source_phone, state, raw)
 
     if not user:
+        if msg_up.startswith("REQUEST") or msg_up.startswith("BOOK_JOB") or msg_up == "POST_JOB_START":
+            return ("Pehle KaamNow par register karein, phir worker request bhej sakte hain.", state)
         # If mid-onboarding, continue the flow
         if state.get("step", "").startswith("wa_ob_"):
             return await _cmd_onboard(source_phone, raw, state)
@@ -1345,7 +1683,15 @@ async def _handle_message(source_phone: str, message_text: str, state: dict) -> 
 
     # ── Worker commands ──
     if state.get("role") == "worker":
-        if is_greeting or state.get("step") in ("start", None, "unregistered"):
+        if msg_up.startswith("REQUEST") or msg_up.startswith("BOOK_JOB"):
+            return ("Sirf customers worker request bhej sakte hain.", state)
+
+        worker_command_like = (
+            msg_up in ("JOBS", "KAAM", "FIND JOBS", "FIND WORK", "MORE", "APPLY", "APPLY_JOB", "STATUS", "MY STATUS", "MERI STATUS", "WITHDRAW", "WAPAS", "CANCEL", "WITHDRAW_CONFIRM")
+            or msg_up.startswith(("JOBS ", "KAAM ", "JOB ", "PINCODE", "WITHDRAW_CONFIRM:"))
+            or raw.isdigit()
+        )
+        if is_greeting or (state.get("step") in ("start", None, "unregistered") and not worker_command_like):
             return await _registered_worker_hi(source_phone, state, user, worker)
 
         # JOBS / KAAM [category]
@@ -1358,6 +1704,10 @@ async def _handle_message(source_phone: str, message_text: str, state: dict) -> 
                 return await _cmd_jobs(source_phone, state, pincode_filter=arg)
             # "JOBS farm" → category filter
             return await _cmd_jobs(source_phone, state, category=arg.lower() if arg else None)
+
+        if msg_up.startswith("JOB "):
+            job_id = raw.split(None, 1)[1].strip()
+            return await _show_job_detail_by_id(source_phone, job_id, state)
 
         # MORE (next page of jobs) — carries forward category AND temp pincode filter
         if msg_up == "MORE":
@@ -1375,12 +1725,30 @@ async def _handle_message(source_phone: str, message_text: str, state: dict) -> 
             return await _cmd_job_detail(source_phone, int(raw), state)
 
         # APPLY
-        if msg_up in ("APPLY", "INTERESTED", "RUCHI HAI", "INTEREST"):
+        if msg_up in ("APPLY", "APPLY_JOB", "INTERESTED", "RUCHI HAI", "INTEREST"):
             return await _cmd_apply(source_phone, state)
 
         # WITHDRAW
         if msg_up in ("WITHDRAW", "WAPAS", "CANCEL"):
             return await _cmd_withdraw(source_phone, state)
+
+        if msg_up.startswith("WITHDRAW_CONFIRM:"):
+            engagement_id = raw.split(":", 1)[1].strip()
+            return await _cmd_withdraw_confirm(source_phone, state, engagement_id)
+
+        if msg_up == "WITHDRAW_CONFIRM":
+            return await _cmd_withdraw_confirm(source_phone, state)
+
+        if raw.isdigit() and state.get("step") == "choose_withdraw_application":
+            pending = state.get("pending_withdraw_results") or []
+            idx = int(raw) - 1
+            if 0 <= idx < len(pending):
+                engagement_id = pending[idx]["id"]
+                return (
+                    f"Is application ko withdraw karna hai?\n\n{pending[idx].get('job_title', 'Job')}",
+                    _with_reply_buttons({**state, "step": "confirm_withdraw", "withdraw_engagement_id": engagement_id}, _BUTTONS_WORKER_WITHDRAW_CONFIRM),
+                )
+            return (f"Number 1–{len(pending)} bhejein.", state)
 
         # STATUS
         if msg_up in ("STATUS", "MY STATUS", "MERI STATUS"):
@@ -1479,8 +1847,22 @@ async def _handle_message(source_phone: str, message_text: str, state: dict) -> 
     if state.get("role") == "customer":
         step = state.get("step", "start")
 
+        if step in (
+            "customer_post_job_skill",
+            "customer_post_job_pincode",
+            "customer_post_job_rate",
+            "customer_post_job_workers_needed",
+        ):
+            return await _handle_customer_post_job(source_phone, raw, state, user)
+
+        if step == "customer_post_job_confirm" and msg_up not in ("CREATE_JOB_CONFIRM", "MENU", "RESET", "START"):
+            return (_post_job_summary(state.get("post_job") or {}), _with_reply_buttons(state, _BUTTONS_POST_JOB_CONFIRM))
+
         if is_greeting or step in ("start", None):
             return await _registered_customer_hi(source_phone, state, user, worker)
+
+        if msg_up == "STATUS":
+            return await _cmd_customer_status(user, state)
 
         if msg_up in ("WORKERS", "FIND WORKERS"):
             return await _registered_customer_hi(source_phone, state, user, worker)
@@ -1504,9 +1886,21 @@ async def _handle_message(source_phone: str, message_text: str, state: dict) -> 
                 await db.users.update_one({"id": user["id"]}, {"$set": {"pincode": raw, "address": address}})
             return await _customer_workers_for_pincode(source_phone, state, raw)
 
+        if raw.isdigit() and step == "choose_booking_job":
+            jobs = state.get("last_customer_open_jobs") or []
+            idx = int(raw) - 1
+            if 0 <= idx < len(jobs):
+                worker_id = state.get("selected_worker_id")
+                return await _confirm_customer_booking(source_phone, state, user, worker_id, jobs[idx]["id"])
+            return (f"Number 1–{len(jobs)} bhejein.", state)
+
         if raw.isdigit() and state.get("worker_list") and 1 <= int(raw) <= len(state.get("worker_list", [])):
             selected_worker = state["worker_list"][int(raw) - 1]
-            return (_format_worker_brief(selected_worker), {**state, "step": "customer_worker_detail", "selected_worker_id": selected_worker.get("id")})
+            return await _show_worker_detail_by_id(source_phone, selected_worker.get("id"), state)
+
+        if msg_up.startswith("WORKER "):
+            worker_id = raw.split(None, 1)[1].strip()
+            return await _show_worker_detail_by_id(source_phone, worker_id, state)
 
         # Village step (with DB lookup)
         if step == "village":

@@ -65,6 +65,64 @@ class DummyJobs:
     async def find_one(self, *args, **kwargs):
         return self.job
 
+    async def update_one(self, *args, **kwargs):
+        return None
+
+
+class DummyCursor:
+    def __init__(self, items):
+        self.items = items
+
+    def sort(self, *args, **kwargs):
+        return self
+
+    def limit(self, *args, **kwargs):
+        return self
+
+    async def to_list(self, *args, **kwargs):
+        return self.items
+
+
+class DummyEngagements:
+    def __init__(self, items=None):
+        self.items = items or []
+        self.updated = []
+
+    async def find_one(self, query, *args, **kwargs):
+        for item in self.items:
+            if all(
+                item.get(key) == value
+                for key, value in query.items()
+                if not isinstance(value, dict)
+            ):
+                if "status" in query and isinstance(query["status"], dict):
+                    if item.get("status") not in query["status"].get("$in", []):
+                        continue
+                return item
+        return None
+
+    def find(self, query, *args, **kwargs):
+        results = []
+        for item in self.items:
+            ok = True
+            for key, value in query.items():
+                if isinstance(value, dict) and "$in" in value:
+                    ok = item.get(key) in value["$in"]
+                elif item.get(key) != value:
+                    ok = False
+                if not ok:
+                    break
+            if ok:
+                results.append(item)
+        return DummyCursor(results)
+
+    async def update_one(self, query, update, *args, **kwargs):
+        self.updated.append((query, update))
+        for item in self.items:
+            if item.get("id") == query.get("id"):
+                item.update(update.get("$set", {}))
+        return None
+
 
 class DummyResponse:
     def __init__(self, payload, status_code=200, text=None, fail=False):
@@ -553,7 +611,7 @@ def test_inbound_job_id_shows_job_detail(monkeypatch):
 
     assert "Driver needed" in reply
     assert state["viewed_job"]["id"] == "j1"
-    assert [button["id"] for button in state["_reply_buttons"]] == ["APPLY:j1", "MORE", "CHANGE_PINCODE"]
+    assert [button["id"] for button in state["_reply_buttons"]] == ["APPLY:j1", "MORE", "STATUS"]
 
 
 def test_inbound_worker_id_shows_worker_detail(monkeypatch):
@@ -607,3 +665,385 @@ def test_numbered_job_selection_still_works(monkeypatch):
 
     assert "Driver needed" in reply
     assert new_state["viewed_job"]["id"] == "j1"
+
+
+def test_customer_selects_worker_by_number_shows_detail(monkeypatch):
+    async def fake_identify(source_phone, state):
+        user = {"id": "u1", "role": "customer", "name": "Amir"}
+        return user, None, {**state, "role": "customer", "user_id": "u1"}
+
+    worker = {"id": "w1", "name": "Ramesh", "skills": ["mason"], "daily_rate": 500, "village": "Patna"}
+    monkeypatch.setattr(whatsapp, "_identify_user", fake_identify)
+    monkeypatch.setattr(whatsapp.db, "workers", DummyWorkers(worker))
+    state = {"step": "customer_worker_list", "role": "customer", "worker_list": [worker]}
+
+    reply, new_state = asyncio.run(whatsapp._handle_message("919876543210", "1", state))
+
+    assert "Ramesh" in reply
+    assert new_state["selected_worker_id"] == "w1"
+    assert [button["id"] for button in new_state["_reply_buttons"]] == ["REQUEST:w1", "MORE", "CHANGE_PINCODE"]
+
+
+def test_customer_selects_worker_by_id_shows_detail(monkeypatch):
+    worker = {"id": "w1", "name": "Ramesh", "skills": ["mason"], "daily_rate": 500, "village": "Patna"}
+    monkeypatch.setattr(whatsapp.db, "workers", DummyWorkers(worker))
+
+    reply, new_state = asyncio.run(whatsapp._handle_message("919876543210", "WORKER:w1", {"role": "customer"}))
+
+    assert "Ramesh" in reply
+    assert new_state["selected_worker_id"] == "w1"
+
+
+def test_send_request_with_one_open_job_creates_booking(monkeypatch):
+    user = {"id": "u1", "role": "customer", "name": "Amir"}
+    worker = {"id": "w1", "name": "Ramesh"}
+    job = {"id": "j1", "title": "Mason work", "daily_rate": 600, "workers_needed": 1, "filled_count": 0}
+    created = {}
+    monkeypatch.setattr(whatsapp.db, "workers", DummyWorkers(worker))
+
+    async def fake_open_jobs(customer_id):
+        return [job]
+
+    async def fake_create(user_arg, worker_id, job_id):
+        created["worker_id"] = worker_id
+        created["job_id"] = job_id
+        return "Request bhej diya gaya ✅", {"job_title": "Mason work", "worker_name": "Ramesh"}, False
+
+    monkeypatch.setattr(whatsapp, "_fetch_customer_open_jobs", fake_open_jobs)
+    monkeypatch.setattr(whatsapp, "_create_customer_booking_request", fake_create)
+
+    reply, state = asyncio.run(whatsapp._request_selected_worker("919876543210", {"selected_worker_id": "w1"}, user))
+
+    assert "Request bhej diya gaya" in reply
+    assert created == {"worker_id": "w1", "job_id": "j1"}
+    assert [button["id"] for button in state["_reply_buttons"]] == ["STATUS", "MORE", "MENU"]
+
+
+def test_send_request_with_multiple_open_jobs_prompts_choice(monkeypatch):
+    user = {"id": "u1", "role": "customer", "name": "Amir"}
+    worker = {"id": "w1", "name": "Ramesh"}
+    jobs = [
+        {"id": "j1", "title": "Mason work", "daily_rate": 600, "address": {"pincode": "841219"}},
+        {"id": "j2", "title": "Driver needed", "daily_rate": 800, "address": {"pincode": "801505"}},
+    ]
+    monkeypatch.setattr(whatsapp.db, "workers", DummyWorkers(worker))
+
+    async def fake_open_jobs(customer_id):
+        return jobs
+
+    monkeypatch.setattr(whatsapp, "_fetch_customer_open_jobs", fake_open_jobs)
+
+    reply, state = asyncio.run(whatsapp._request_selected_worker("919876543210", {"selected_worker_id": "w1"}, user))
+
+    assert "Kaunsa job" in reply
+    assert state["step"] == "choose_booking_job"
+    assert state["last_customer_open_jobs"] == jobs
+
+
+def test_choose_booking_job_by_number_creates_booking(monkeypatch):
+    async def fake_identify(source_phone, state):
+        user = {"id": "u1", "role": "customer", "name": "Amir"}
+        return user, None, {**state, "role": "customer", "user_id": "u1"}
+
+    async def fake_confirm(source_phone, state, user, worker_id, job_id):
+        return f"BOOKED {worker_id} {job_id}", state
+
+    monkeypatch.setattr(whatsapp, "_identify_user", fake_identify)
+    monkeypatch.setattr(whatsapp, "_confirm_customer_booking", fake_confirm)
+    state = {
+        "step": "choose_booking_job",
+        "role": "customer",
+        "selected_worker_id": "w1",
+        "last_customer_open_jobs": [{"id": "j1", "title": "Mason work"}],
+    }
+
+    reply, _ = asyncio.run(whatsapp._handle_message("919876543210", "1", state))
+
+    assert reply == "BOOKED w1 j1"
+
+
+def test_no_open_jobs_shows_post_job_path(monkeypatch):
+    user = {"id": "u1", "role": "customer", "name": "Amir"}
+    worker = {"id": "w1", "name": "Ramesh"}
+    monkeypatch.setattr(whatsapp.db, "workers", DummyWorkers(worker))
+
+    async def fake_open_jobs(customer_id):
+        return []
+
+    monkeypatch.setattr(whatsapp, "_fetch_customer_open_jobs", fake_open_jobs)
+
+    reply, state = asyncio.run(whatsapp._request_selected_worker("919876543210", {"selected_worker_id": "w1"}, user))
+
+    assert "koi open job nahi" in reply
+    assert [button["id"] for button in state["_reply_buttons"]] == ["POST_JOB_START", "MORE", "HELP"]
+
+
+def test_duplicate_booking_prevented(monkeypatch):
+    user = {"id": "u1", "role": "customer", "name": "Amir"}
+    worker = {"id": "w1", "name": "Ramesh"}
+    monkeypatch.setattr(whatsapp.db, "workers", DummyWorkers(worker))
+
+    async def fake_create(user_arg, worker_id, job_id):
+        return "Is worker ko is job ke liye request already bheji ja chuki hai.", {"job_title": "Mason work"}, True
+
+    monkeypatch.setattr(whatsapp, "_create_customer_booking_request", fake_create)
+
+    reply, _ = asyncio.run(whatsapp._confirm_customer_booking("919876543210", {}, user, "w1", "j1"))
+
+    assert "already bheji" in reply
+
+
+def test_typed_send_request_maps_to_request_flow(monkeypatch):
+    async def fake_identify(source_phone, state):
+        user = {"id": "u1", "role": "customer", "name": "Amir"}
+        return user, None, {**state, "role": "customer", "user_id": "u1"}
+
+    async def fake_request(source_phone, state, user, worker_id=None):
+        return "REQUEST_OK", state
+
+    monkeypatch.setattr(whatsapp, "_identify_user", fake_identify)
+    monkeypatch.setattr(whatsapp, "_request_selected_worker", fake_request)
+
+    reply, _ = asyncio.run(whatsapp._handle_message("919876543210", "send request", {"selected_worker_id": "w1"}))
+
+    assert reply == "REQUEST_OK"
+
+
+def test_worker_role_cannot_request_worker(monkeypatch):
+    async def fake_identify(source_phone, state):
+        user = {"id": "u1", "role": "worker", "name": "Faiza"}
+        worker = {"id": "w1", "user_id": "u1"}
+        return user, worker, {**state, "role": "worker", "user_id": "u1", "worker_id": "w1"}
+
+    monkeypatch.setattr(whatsapp, "_identify_user", fake_identify)
+
+    reply, _ = asyncio.run(whatsapp._handle_message("919876543210", "REQUEST_WORKER", {"role": "worker"}))
+
+    assert "Sirf customers" in reply
+
+
+def test_unregistered_cannot_request_worker(monkeypatch):
+    async def fake_identify(source_phone, state):
+        return None, None, state
+
+    monkeypatch.setattr(whatsapp, "_identify_user", fake_identify)
+
+    reply, _ = asyncio.run(whatsapp._handle_message("919876543210", "REQUEST_WORKER", {}))
+
+    assert "register" in reply
+
+
+def test_worker_selects_job_by_number_shows_apply_button(monkeypatch):
+    async def fake_identify(source_phone, state):
+        user = {"id": "u1", "role": "worker", "name": "Faiza"}
+        worker = {"id": "w1", "user_id": "u1", "name": "Faiza", "address": {"pincode": "841215"}}
+        return user, worker, {**state, "role": "worker", "user_id": "u1", "worker_id": "w1"}
+
+    monkeypatch.setattr(whatsapp, "_identify_user", fake_identify)
+    state = {"step": "job_list", "role": "worker", "job_list": [DummyJobs().job]}
+
+    reply, new_state = asyncio.run(whatsapp._handle_message("919876543210", "1", state))
+
+    assert "Driver needed" in reply
+    assert new_state["selected_job_id"] == "j1"
+    assert new_state["_reply_buttons"][0]["id"] == "APPLY:j1"
+
+
+def test_worker_selects_job_id_shows_apply_button(monkeypatch):
+    async def fake_identify(source_phone, state):
+        user = {"id": "u1", "role": "worker", "name": "Faiza"}
+        worker = {"id": "w1", "user_id": "u1", "name": "Faiza", "address": {"pincode": "841215"}}
+        return user, worker, {**state, "role": "worker", "user_id": "u1", "worker_id": "w1"}
+
+    monkeypatch.setattr(whatsapp, "_identify_user", fake_identify)
+    monkeypatch.setattr(whatsapp.db, "jobs", DummyJobs())
+
+    reply, new_state = asyncio.run(whatsapp._handle_message("919876543210", "JOB:j1", {"step": "job_list"}))
+
+    assert "Driver needed" in reply
+    assert new_state["_reply_buttons"][0]["id"] == "APPLY:j1"
+
+
+def test_worker_apply_creates_engagement(monkeypatch):
+    async def fake_identify(source_phone, state):
+        user = {"id": "u1", "role": "worker", "name": "Faiza"}
+        worker = {"id": "w1", "user_id": "u1", "name": "Faiza"}
+        return user, worker, {**state, "role": "worker", "user_id": "u1", "worker_id": "w1"}
+
+    created = {}
+
+    async def fake_create(job_id, worker_id, source, user):
+        created.update({"job_id": job_id, "worker_id": worker_id, "source": source})
+        return {"id": "e1", "job_id": job_id, "worker_id": worker_id}
+
+    monkeypatch.setattr(whatsapp, "_identify_user", fake_identify)
+    monkeypatch.setattr(whatsapp.db, "engagements", DummyEngagements())
+    monkeypatch.setattr(whatsapp, "create_engagement_request", fake_create)
+
+    reply, state = asyncio.run(whatsapp._cmd_apply("919876543210", {"viewed_job": DummyJobs().job}))
+
+    assert "Apply ho gaya" in reply
+    assert created == {"job_id": "j1", "worker_id": "w1", "source": "worker_interest"}
+    assert state["_reply_buttons"][0]["id"] == "STATUS"
+
+
+def test_worker_apply_duplicate_prevented(monkeypatch):
+    async def fake_identify(source_phone, state):
+        user = {"id": "u1", "role": "worker", "name": "Faiza"}
+        worker = {"id": "w1", "user_id": "u1", "name": "Faiza"}
+        return user, worker, {**state, "role": "worker", "user_id": "u1", "worker_id": "w1"}
+
+    monkeypatch.setattr(whatsapp, "_identify_user", fake_identify)
+    monkeypatch.setattr(whatsapp.db, "engagements", DummyEngagements([{"id": "e1", "job_id": "j1", "worker_id": "w1", "status": "requested"}]))
+
+    reply, state = asyncio.run(whatsapp._cmd_apply("919876543210", {"viewed_job": DummyJobs().job}))
+
+    assert "already apply" in reply
+    assert state["_reply_buttons"][0]["id"] == "STATUS"
+
+
+def test_worker_apply_closed_job_unavailable(monkeypatch):
+    async def fake_identify(source_phone, state):
+        user = {"id": "u1", "role": "worker", "name": "Faiza"}
+        worker = {"id": "w1", "user_id": "u1", "name": "Faiza"}
+        return user, worker, {**state, "role": "worker", "user_id": "u1", "worker_id": "w1"}
+
+    job = {**DummyJobs().job, "status": "booked"}
+    monkeypatch.setattr(whatsapp, "_identify_user", fake_identify)
+
+    reply, state = asyncio.run(whatsapp._cmd_apply("919876543210", {"viewed_job": job}))
+
+    assert "available nahi" in reply
+    assert state["_reply_buttons"][0]["id"] == "MORE"
+
+
+def test_worker_status_grouped(monkeypatch):
+    async def fake_identify(source_phone, state):
+        user = {"id": "u1", "role": "worker", "name": "Faiza"}
+        worker = {"id": "w1", "user_id": "u1", "name": "Faiza"}
+        return user, worker, {**state, "role": "worker", "user_id": "u1", "worker_id": "w1"}
+
+    items = [
+        {"id": "e1", "worker_id": "w1", "status": "requested", "job_title": "Pending job", "daily_rate": 600},
+        {"id": "e2", "worker_id": "w1", "status": "accepted", "job_title": "Active job", "daily_rate": 700},
+        {"id": "e3", "worker_id": "w1", "status": "completed", "job_title": "Done job", "daily_rate": 800},
+    ]
+    monkeypatch.setattr(whatsapp, "_identify_user", fake_identify)
+    monkeypatch.setattr(whatsapp.db, "engagements", DummyEngagements(items))
+
+    reply, state = asyncio.run(whatsapp._cmd_status("919876543210", {}))
+
+    assert "Pending" in reply
+    assert "Accepted / Active" in reply
+    assert "Completed / Cancelled" in reply
+    assert state["_reply_buttons"][0]["id"] == "STATUS"
+
+
+def test_worker_status_empty_shows_find_jobs_button(monkeypatch):
+    async def fake_identify(source_phone, state):
+        user = {"id": "u1", "role": "worker", "name": "Faiza"}
+        worker = {"id": "w1", "user_id": "u1", "name": "Faiza"}
+        return user, worker, {**state, "role": "worker", "user_id": "u1", "worker_id": "w1"}
+
+    monkeypatch.setattr(whatsapp, "_identify_user", fake_identify)
+    monkeypatch.setattr(whatsapp.db, "engagements", DummyEngagements())
+
+    reply, state = asyncio.run(whatsapp._cmd_status("919876543210", {}))
+
+    assert "Abhi koi active request nahi hai" in reply
+    assert state["_reply_buttons"][0]["id"] == "JOBS"
+
+
+def test_worker_withdraw_one_pending_asks_confirmation(monkeypatch):
+    async def fake_identify(source_phone, state):
+        user = {"id": "u1", "role": "worker", "name": "Faiza"}
+        worker = {"id": "w1", "user_id": "u1", "name": "Faiza"}
+        return user, worker, {**state, "role": "worker", "user_id": "u1", "worker_id": "w1"}
+
+    monkeypatch.setattr(whatsapp, "_identify_user", fake_identify)
+    monkeypatch.setattr(whatsapp.db, "engagements", DummyEngagements([{"id": "e1", "worker_id": "w1", "status": "requested", "job_title": "Pending job"}]))
+
+    reply, state = asyncio.run(whatsapp._cmd_withdraw("919876543210", {}))
+
+    assert "withdraw karna hai" in reply
+    assert state["withdraw_engagement_id"] == "e1"
+    assert state["_reply_buttons"][0]["id"] == "WITHDRAW_CONFIRM"
+
+
+def test_worker_withdraw_confirm_cancels_application(monkeypatch):
+    async def fake_identify(source_phone, state):
+        user = {"id": "u1", "role": "worker", "name": "Faiza"}
+        worker = {"id": "w1", "user_id": "u1", "name": "Faiza"}
+        return user, worker, {**state, "role": "worker", "user_id": "u1", "worker_id": "w1"}
+
+    engagements = DummyEngagements([{"id": "e1", "worker_id": "w1", "status": "requested", "job_id": "j1", "job_title": "Pending job", "customer_id": "c1"}])
+    monkeypatch.setattr(whatsapp, "_identify_user", fake_identify)
+    monkeypatch.setattr(whatsapp.db, "engagements", engagements)
+    monkeypatch.setattr(whatsapp.db, "jobs", DummyJobs())
+    async def fake_notify(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(whatsapp, "_notify", fake_notify)
+
+    reply, state = asyncio.run(whatsapp._cmd_withdraw_confirm("919876543210", {"withdraw_engagement_id": "e1"}))
+
+    assert "withdraw ho gaya" in reply
+    assert engagements.items[0]["status"] == "cancelled"
+    assert state["_reply_buttons"][0]["id"] == "STATUS"
+
+
+def test_typed_apply_job_maps_to_apply(monkeypatch):
+    async def fake_identify(source_phone, state):
+        user = {"id": "u1", "role": "worker", "name": "Faiza"}
+        worker = {"id": "w1", "user_id": "u1", "name": "Faiza"}
+        return user, worker, {**state, "role": "worker", "user_id": "u1", "worker_id": "w1"}
+
+    async def fake_apply(source_phone, state):
+        return "APPLY_OK", state
+
+    monkeypatch.setattr(whatsapp, "_identify_user", fake_identify)
+    monkeypatch.setattr(whatsapp, "_cmd_apply", fake_apply)
+
+    reply, _ = asyncio.run(whatsapp._handle_message("919876543210", "apply job", {"viewed_job": DummyJobs().job}))
+
+    assert reply == "APPLY_OK"
+
+
+def test_typed_my_applications_still_maps_to_status_after_wa5(monkeypatch):
+    async def fake_identify(source_phone, state):
+        user = {"id": "u1", "role": "worker", "name": "Faiza"}
+        worker = {"id": "w1", "user_id": "u1", "name": "Faiza"}
+        return user, worker, {**state, "role": "worker", "user_id": "u1", "worker_id": "w1"}
+
+    async def fake_status(source_phone, state):
+        return "STATUS_OK", state
+
+    monkeypatch.setattr(whatsapp, "_identify_user", fake_identify)
+    monkeypatch.setattr(whatsapp, "_cmd_status", fake_status)
+
+    reply, _ = asyncio.run(whatsapp._handle_message("919876543210", "my applications", {}))
+
+    assert reply == "STATUS_OK"
+
+
+def test_customer_cannot_apply_as_worker(monkeypatch):
+    async def fake_identify(source_phone, state):
+        user = {"id": "u1", "role": "customer", "name": "Amir"}
+        return user, None, {**state, "role": "customer", "user_id": "u1"}
+
+    monkeypatch.setattr(whatsapp, "_identify_user", fake_identify)
+
+    reply, _ = asyncio.run(whatsapp._cmd_apply("919876543210", {"viewed_job": DummyJobs().job}))
+
+    assert "Sirf registered worker" in reply
+
+
+def test_unregistered_cannot_apply(monkeypatch):
+    async def fake_identify(source_phone, state):
+        return None, None, state
+
+    monkeypatch.setattr(whatsapp, "_identify_user", fake_identify)
+
+    reply, _ = asyncio.run(whatsapp._cmd_apply("919876543210", {"viewed_job": DummyJobs().job}))
+
+    assert "register" in reply

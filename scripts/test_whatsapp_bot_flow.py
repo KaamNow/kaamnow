@@ -20,6 +20,18 @@ SCENARIO_MESSAGES = {
     "unregistered_button_customer": "CUSTOMER",
     "customer_button_change_pincode": "CHANGE_PINCODE",
     "worker_button_more": "MORE",
+    "customer_select_worker": "1",
+    "customer_request_one_job": "REQUEST_WORKER",
+    "customer_request_multiple_jobs": "REQUEST_WORKER",
+    "customer_request_no_jobs": "REQUEST_WORKER",
+    "customer_request_duplicate": "REQUEST_WORKER",
+    "worker_select_job": "1",
+    "worker_apply_job": "APPLY_JOB",
+    "worker_apply_duplicate": "APPLY_JOB",
+    "worker_status_pending": "STATUS",
+    "worker_status_empty": "STATUS",
+    "worker_withdraw_one": "WITHDRAW",
+    "worker_withdraw_confirm": "WITHDRAW_CONFIRM",
 }
 
 INBOUND_BUTTON_PAYLOAD = {
