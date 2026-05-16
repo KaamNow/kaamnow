@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, Pressable,
   Alert, RefreshControl, Modal, TextInput, Linking, Image,
@@ -49,6 +49,8 @@ export default function DashboardScreen({ navigation, route }) {
   const [ratingVal, setRatingVal]       = useState(5);
   const [ratingComment, setRatingComment] = useState("");
   const [detailItem, setDetailItem]     = useState(null);
+  const scrollRef    = useRef(null);
+  const sectionY     = useRef({ active: 0, pending: 0, history: 0 });
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -131,8 +133,10 @@ export default function DashboardScreen({ navigation, route }) {
   const completedEngs = engagements.filter(e => (e.engagement_status || e.status) === "completed");
   const cancelledEngs = engagements.filter(e => ["cancelled","rejected"].includes(e.engagement_status || e.status));
   const pastEngs      = engagements.filter(e => ["completed","cancelled","rejected"].includes(e.engagement_status || e.status));
+  const workerAppliedEngs = pendingEngs.filter(e => e.source !== "customer_booking");
+  const directHirePendingEngs = pendingEngs.filter(e => e.source === "customer_booking");
   const openJobs     = jobs.filter(j => j.status === "open" || j.status === "booked");
-  const responsesFor = (jobId) => pendingEngs.filter(e => e.job_id === jobId).length;
+  const responsesFor = (jobId) => workerAppliedEngs.filter(e => e.job_id === jobId).length;
 
   // Profile completion for customers
   const completion = isCustomer ? (() => {
@@ -180,18 +184,18 @@ export default function DashboardScreen({ navigation, route }) {
 
           <View style={styles.customerSummaryRow}>
             <CustomerSummaryStat label="Open Jobs" value={openJobs.length} color={colors.primary} />
-            <CustomerSummaryStat label="Responses" value={pendingEngs.length} color={colors.warning} />
+            <CustomerSummaryStat label="Responses" value={workerAppliedEngs.length} color={colors.warning} />
             <CustomerSummaryStat label="Active" value={activeEngs.length} color={colors.success} />
             <CustomerSummaryStat label="Completed" value={completedEngs.length} color="#1E40AF" />
           </View>
 
-          {pendingEngs.length > 0 && (
-            <Pressable style={({ pressed }) => [styles.customerAlert, pressed && styles.pressed]} onPress={() => setDetailItem(pendingEngs[0])}>
+          {workerAppliedEngs.length > 0 && (
+            <Pressable style={({ pressed }) => [styles.customerAlert, pressed && styles.pressed]} onPress={() => setDetailItem(workerAppliedEngs[0])}>
               <View style={styles.customerAlertIcon}>
                 <Ionicons name="people-outline" size={20} color={colors.warning} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.customerAlertTitle}>{pendingEngs.length} workers interested</Text>
+                <Text style={styles.customerAlertTitle}>{workerAppliedEngs.length} workers interested</Text>
                 <Text style={styles.customerAlertSub}>Review karke worker choose karein</Text>
               </View>
               <Text style={styles.customerAlertCta}>Review Now</Text>
@@ -210,10 +214,24 @@ export default function DashboardScreen({ navigation, route }) {
             </View>
           ) : (
             <>
-              {pendingEngs.length > 0 && (
+              {directHirePendingEngs.length > 0 && (
                 <View style={styles.customerSection}>
-                  <CustomerSectionHeader title="Responses" actionLabel="View all" onAction={() => setDetailItem(pendingEngs[0])} />
-                  {pendingEngs.map(e => (
+                  <CustomerSectionHeader title="Requests Sent" />
+                  {directHirePendingEngs.map(e => (
+                    <CustomerPendingRequestCard
+                      key={e.id}
+                      e={e}
+                      onPress={() => setDetailItem(e)}
+                      onWithdraw={() => cancelEng(e.id)}
+                    />
+                  ))}
+                </View>
+              )}
+
+              {workerAppliedEngs.length > 0 && (
+                <View style={styles.customerSection}>
+                  <CustomerSectionHeader title="Responses" actionLabel="View all" onAction={() => setDetailItem(workerAppliedEngs[0])} />
+                  {workerAppliedEngs.map(e => (
                     <CustomerResponseCard
                       key={e.id}
                       e={e}
@@ -234,7 +252,6 @@ export default function DashboardScreen({ navigation, route }) {
                       key={e.id}
                       e={e}
                       onPress={() => setDetailItem(e)}
-                      onComplete={() => completeEng(e.id, e.worker_name)}
                       onRate={() => setRatingModal({ id: e.id, workerName: e.worker_name })}
                     />
                   ))}
@@ -255,7 +272,7 @@ export default function DashboardScreen({ navigation, route }) {
                     responses={responsesFor(j.id)}
                     onPress={() => setDetailItem(j)}
                     onReview={() => {
-                      const response = pendingEngs.find(e => e.job_id === j.id);
+                      const response = workerAppliedEngs.find(e => e.job_id === j.id);
                       response ? setDetailItem(response) : setDetailItem(j);
                     }}
                     onFindWorkers={() => navigation.navigate("Tabs", { screen: "Workers" })}
@@ -292,6 +309,7 @@ export default function DashboardScreen({ navigation, route }) {
                 const status = detailItem.engagement_status || detailItem.status;
                 const st = STATUS_STYLE[status] || { bg:"#f3f4f6", fg:"#374151", label: status };
                 const isJob = !!detailItem.title;
+                const isCustomerBooking = detailItem.source === "customer_booking";
                 const title = detailItem.title || detailItem.job_title || "Job";
                 const catIcon = CAT_ICONS[detailItem.category] || "💼";
                 return (
@@ -338,7 +356,7 @@ export default function DashboardScreen({ navigation, route }) {
                     )}
 
                     <View style={{ gap: 10, marginTop: 16 }}>
-                      {status === "requested" && (
+                      {status === "requested" && !isCustomerBooking && (
                         <View style={{ flexDirection: "row", gap: 10 }}>
                           <Pressable style={[styles.btnGreen, { flex: 1 }]} onPress={() => { setDetailItem(null); acceptEng(detailItem.id); }}>
                             <Ionicons name="checkmark" size={16} color="#fff" />
@@ -348,6 +366,11 @@ export default function DashboardScreen({ navigation, route }) {
                             <Text style={styles.btnOutlineText}>Reject</Text>
                           </Pressable>
                         </View>
+                      )}
+                      {status === "requested" && isCustomerBooking && (
+                        <Pressable style={styles.btnOutline} onPress={() => { setDetailItem(null); cancelEng(detailItem.id); }}>
+                          <Text style={styles.btnOutlineText}>Withdraw Request</Text>
+                        </Pressable>
                       )}
                       {status === "completed" && !detailItem.rating && (
                         <Pressable style={styles.btnSaffron} onPress={() => { setDetailItem(null); setRatingModal({ id: detailItem.id, workerName: detailItem.worker_name }); }}>
@@ -413,6 +436,7 @@ export default function DashboardScreen({ navigation, route }) {
   return (
     <AppScreen edges={["top"]} style={styles.safe}>
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={styles.workerScroll}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         showsVerticalScrollIndicator={false}
@@ -434,10 +458,14 @@ export default function DashboardScreen({ navigation, route }) {
 
         {/* ── Summary stats ── */}
         <View style={styles.workerSummaryRow}>
-          <WorkerSummaryStat label="Active" value={activeEngs.length} color={colors.success} />
-          <WorkerSummaryStat label="Pending" value={pendingEngs.length} color={colors.warning} />
-          <WorkerSummaryStat label="Completed" value={completedEngs.length} color="#1E40AF" />
-          <WorkerSummaryStat label="Cancelled" value={cancelledEngs.length} color={colors.textMuted} />
+          <WorkerSummaryStat label="Active" value={activeEngs.length} color={colors.success}
+            onPress={() => scrollRef.current?.scrollTo({ y: sectionY.current.active, animated: true })} />
+          <WorkerSummaryStat label="Pending" value={pendingEngs.length} color={colors.warning}
+            onPress={() => scrollRef.current?.scrollTo({ y: sectionY.current.pending, animated: true })} />
+          <WorkerSummaryStat label="Completed" value={completedEngs.length} color="#1E40AF"
+            onPress={() => scrollRef.current?.scrollTo({ y: sectionY.current.history, animated: true })} />
+          <WorkerSummaryStat label="Cancelled" value={cancelledEngs.length} color={colors.textMuted}
+            onPress={() => scrollRef.current?.scrollTo({ y: sectionY.current.history, animated: true })} />
         </View>
 
         {/* ── Empty state — no engagements at all ── */}
@@ -455,7 +483,8 @@ export default function DashboardScreen({ navigation, route }) {
           <>
             {/* ── Active / Hired jobs ── */}
             {activeEngs.length > 0 && (
-              <View style={styles.workerSection}>
+              <View style={styles.workerSection}
+                onLayout={e => { sectionY.current.active = e.nativeEvent.layout.y; }}>
                 <WorkerSectionHeader title="Chal raha kaam" count={activeEngs.length} countColor={colors.success} />
                 {activeEngs.map(e => (
                   <WorkerActivePremiumCard
@@ -471,7 +500,8 @@ export default function DashboardScreen({ navigation, route }) {
 
             {/* ── Pending applications ── */}
             {pendingEngs.length > 0 && (
-              <View style={styles.workerSection}>
+              <View style={styles.workerSection}
+                onLayout={e => { sectionY.current.pending = e.nativeEvent.layout.y; }}>
                 <WorkerSectionHeader title="Pending requests" count={pendingEngs.length} countColor={colors.warning} />
                 {pendingEngs.map(e => (
                   <WorkerPendingPremiumCard
@@ -479,6 +509,8 @@ export default function DashboardScreen({ navigation, route }) {
                     e={e}
                     onPress={() => setDetailItem(e)}
                     onWithdraw={() => cancelEng(e.id)}
+                    onAccept={() => acceptEng(e.id)}
+                    onDecline={() => rejectEng(e.id, e.worker_name || e.job_title)}
                   />
                 ))}
               </View>
@@ -509,7 +541,8 @@ export default function DashboardScreen({ navigation, route }) {
 
             {/* ── History — completed + cancelled ── */}
             {pastEngs.length > 0 && (
-              <View style={styles.workerSection}>
+              <View style={styles.workerSection}
+                onLayout={e => { sectionY.current.history = e.nativeEvent.layout.y; }}>
                 <WorkerSectionHeader title="History" />
 
                 {/* Earnings summary row — only if completions exist */}
@@ -571,6 +604,7 @@ export default function DashboardScreen({ navigation, route }) {
               const status = detailItem.engagement_status || detailItem.status;
               const st = STATUS_STYLE[status] || { bg:"#f3f4f6", fg:"#374151", label: status };
               const isJob = !!detailItem.title;
+              const isCustomerBooking = detailItem.source === "customer_booking";
               const title = detailItem.title || detailItem.job_title || "Job";
               const catIcon = CAT_ICONS[detailItem.category] || "💼";
               return (
@@ -624,7 +658,7 @@ export default function DashboardScreen({ navigation, route }) {
 
                   {/* Action buttons */}
                   <View style={{ gap: 10, marginTop: 16 }}>
-                    {isCustomer && status === "requested" && (
+                    {isCustomer && status === "requested" && !isCustomerBooking && (
                       <View style={{ flexDirection: "row", gap: 10 }}>
                         <Pressable style={[styles.btnGreen, { flex: 1 }]} onPress={() => { setDetailItem(null); acceptEng(detailItem.id); }}>
                           <Ionicons name="checkmark" size={16} color="#fff" />
@@ -634,6 +668,11 @@ export default function DashboardScreen({ navigation, route }) {
                           <Text style={styles.btnOutlineText}>Reject</Text>
                         </Pressable>
                       </View>
+                    )}
+                    {isCustomer && status === "requested" && isCustomerBooking && (
+                      <Pressable style={styles.btnOutline} onPress={() => { setDetailItem(null); cancelEng(detailItem.id); }}>
+                        <Text style={styles.btnOutlineText}>Withdraw Request</Text>
+                      </Pressable>
                     )}
                     {isCustomer && status === "completed" && !detailItem.rating && (
                       <Pressable style={styles.btnSaffron} onPress={() => { setDetailItem(null); setRatingModal({ id: detailItem.id, workerName: detailItem.worker_name }); }}>
@@ -762,7 +801,7 @@ function CustomerResponseCard({ e, onPress, onWorkerPress, onAccept, onReject })
   );
 }
 
-function CustomerActivePremiumCard({ e, onPress, onComplete, onRate }) {
+function CustomerActivePremiumCard({ e, onPress, onRate }) {
   const status = e.engagement_status || e.status;
   return (
     <Pressable onPress={onPress} style={({ pressed }) => [styles.customerWorkCard, styles.customerActiveCard, pressed && styles.pressed]}>
@@ -789,11 +828,33 @@ function CustomerActivePremiumCard({ e, onPress, onComplete, onRate }) {
             style={styles.customerActionSecondary}
           />
         ) : null}
-        {status === "accepted" ? (
-          <PrimaryButton title="Mark done" onPress={onComplete} fullWidth={false} style={styles.customerActionPrimary} />
-        ) : status === "completed" && !e.rating ? (
+        {status === "completed" && !e.rating ? (
           <PrimaryButton title="Rate worker" onPress={onRate} fullWidth={false} style={styles.customerActionPrimary} />
         ) : null}
+      </View>
+    </Pressable>
+  );
+}
+
+function CustomerPendingRequestCard({ e, onPress, onWithdraw }) {
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.customerWorkCard, styles.customerPendingCard, pressed && styles.pressed]}>
+      <View style={styles.customerCardTop}>
+        <View style={[styles.customerIconCircle, { backgroundColor: "#FFFBEB" }]}>
+          <Ionicons name="time-outline" size={18} color={colors.warning} />
+        </View>
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text style={styles.customerCardTitle} numberOfLines={1}>{e.job_title || "Booking request"}</Text>
+          <Text style={styles.customerCardMeta} numberOfLines={1}>Sent to {e.worker_name || "worker"} · awaiting reply</Text>
+        </View>
+        <StatusBadge status="requested" size="small" />
+      </View>
+      <View style={styles.customerInfoRow}>
+        <InfoMini icon="calendar-outline" text={e.job_date || "Date not set"} />
+        <InfoMini icon="cash-outline" text={`₹${e.daily_rate || "—"}/day`} money />
+      </View>
+      <View style={styles.customerActionRow}>
+        <SecondaryButton title="Withdraw" onPress={onWithdraw} fullWidth={false} style={styles.customerActionSecondary} />
       </View>
     </Pressable>
   );
@@ -996,12 +1057,12 @@ function Empty({ msg, sub }) {
 
 /* ── Worker branch sub-components ───────────────────────────────────────────── */
 
-function WorkerSummaryStat({ value, label, color }) {
+function WorkerSummaryStat({ value, label, color, onPress }) {
   return (
-    <View style={styles.workerSummaryStat}>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.workerSummaryStat, pressed && { opacity: 0.7 }]}>
       <Text style={[styles.workerSummaryValue, { color }]}>{value}</Text>
       <Text style={styles.workerSummaryLabel}>{label}</Text>
-    </View>
+    </Pressable>
   );
 }
 
@@ -1078,24 +1139,25 @@ function WorkerActivePremiumCard({ e, onPress, onComplete, onCancel }) {
   );
 }
 
-function WorkerPendingPremiumCard({ e, onPress, onWithdraw }) {
+function WorkerPendingPremiumCard({ e, onPress, onWithdraw, onAccept, onDecline }) {
   const catIcon = CAT_ICONS[e.category] || "💼";
+  const isCustomerBooking = e.source === "customer_booking";
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [styles.workerWorkCard, styles.workerPendingAccent, pressed && styles.pressed]}
     >
       <View style={styles.workerCardTop}>
-        <View style={[styles.workerIconCircle, { backgroundColor: "#FFFBEB" }]}>
-          <Text style={styles.workerCardEmoji}>{catIcon}</Text>
+        <View style={[styles.workerIconCircle, { backgroundColor: isCustomerBooking ? "#EFF6FF" : "#FFFBEB" }]}>
+          <Text style={styles.workerCardEmoji}>{isCustomerBooking ? "📋" : catIcon}</Text>
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={styles.workerCardTitle} numberOfLines={1}>{e.job_title || "Applied job"}</Text>
           <Text style={styles.workerCardMeta} numberOfLines={1}>
-            {e.job_date || "Date not set"}{e.village ? ` · ${e.village}` : ""}
+            {isCustomerBooking ? "Customer sent you a booking request" : (e.job_date || "Date not set") + (e.village ? ` · ${e.village}` : "")}
           </Text>
         </View>
-        <StatusBadge status="requested" size="small" />
+        <StatusBadge status={isCustomerBooking ? "booking_request" : "requested"} size="small" />
       </View>
 
       <View style={styles.workerInfoRow}>
@@ -1104,15 +1166,34 @@ function WorkerPendingPremiumCard({ e, onPress, onWithdraw }) {
             <Text style={styles.workerRateText}>₹{e.daily_rate}/day</Text>
           </View>
         ) : null}
-        <View style={[styles.workerInfoPill, { backgroundColor: "#FFFBEB" }]}>
-          <Ionicons name="time-outline" size={12} color={colors.warning} />
-          <Text style={[styles.workerInfoPillText, { color: colors.warning }]}>Awaiting response</Text>
+        <View style={[styles.workerInfoPill, { backgroundColor: isCustomerBooking ? "#EFF6FF" : "#FFFBEB" }]}>
+          <Ionicons name={isCustomerBooking ? "person-outline" : "time-outline"} size={12} color={isCustomerBooking ? "#1D4ED8" : colors.warning} />
+          <Text style={[styles.workerInfoPillText, { color: isCustomerBooking ? "#1D4ED8" : colors.warning }]}>
+            {isCustomerBooking ? "Action required" : "Awaiting response"}
+          </Text>
         </View>
       </View>
 
-      <Pressable style={styles.workerWithdrawBtn} onPress={onWithdraw}>
-        <Text style={styles.workerWithdrawText}>Withdraw</Text>
-      </Pressable>
+      {isCustomerBooking ? (
+        <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
+          <Pressable
+            style={({ pressed }) => [{ flex: 1, backgroundColor: pressed ? "#15803d" : "#16a34a", borderRadius: 10, paddingVertical: 10, alignItems: "center" }]}
+            onPress={onAccept}
+          >
+            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>✓ Accept</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [{ flex: 1, backgroundColor: pressed ? "#fee2e2" : "#fff", borderRadius: 10, paddingVertical: 10, alignItems: "center", borderWidth: 2, borderColor: "#fecaca" }]}
+            onPress={onDecline}
+          >
+            <Text style={{ color: "#dc2626", fontWeight: "700", fontSize: 13 }}>✗ Decline</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <Pressable style={styles.workerWithdrawBtn} onPress={onWithdraw}>
+          <Text style={styles.workerWithdrawText}>Withdraw</Text>
+        </Pressable>
+      )}
     </Pressable>
   );
 }
@@ -1306,6 +1387,10 @@ const styles = StyleSheet.create({
   customerActiveCard: {
     borderLeftWidth: 4,
     borderLeftColor: colors.success,
+  },
+  customerPendingCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: colors.warning,
   },
   customerResponseHighlight: {
     borderLeftWidth: 4,

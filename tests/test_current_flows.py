@@ -174,6 +174,7 @@ class DummyDb:
         self.jobs = DummyCollection()
         self.bookings = DummyCollection()
         self.engagements = DummyCollection()
+        self.notifications = DummyCollection()
 
 
 def run(coro):
@@ -735,6 +736,10 @@ def test_worker_search_ranks_pincode_and_skill_matches(monkeypatch):
 
 def test_booking_lifecycle_current_customer_to_worker_flow(monkeypatch):
     db = DummyDb()
+    db.users.docs.extend([
+        {"id": "customer-1", "name": "Mahesh Patel", "role": "customer", "phone_primary": "+919000000001"},
+        {"id": "worker-user-1", "name": "Ramesh Kumar", "role": "worker", "phone_primary": "+919000000002"},
+    ])
     db.jobs.docs.append(
         {
             "id": "job-1",
@@ -789,6 +794,20 @@ def test_booking_lifecycle_current_customer_to_worker_flow(monkeypatch):
     assert db.bookings.docs == []
     assert db.engagements.docs[0]["source"] == "customer_booking"
     assert db.engagements.docs[0]["status"] == "requested"
+    assert db.notifications.docs[0]["user_id"] == "worker-user-1"
+    assert db.notifications.docs[0]["kind"] == "booking_request"
+
+    try:
+        run(
+            bookings_routes.accept_booking(
+                booking["id"],
+                user={"id": "customer-1", "name": "Mahesh Patel", "role": "customer"},
+            )
+        )
+    except HTTPException as exc:
+        assert exc.status_code == 403
+    else:
+        raise AssertionError("Customer cannot accept their own direct booking request")
 
     accepted = run(
         bookings_routes.accept_booking(
@@ -805,7 +824,7 @@ def test_booking_lifecycle_current_customer_to_worker_flow(monkeypatch):
     completed = run(
         bookings_routes.complete_booking(
             booking["id"],
-            user={"id": "customer-1", "name": "Mahesh Patel", "role": "customer"},
+            user={"id": "worker-user-1", "name": "Ramesh Kumar", "role": "worker"},
         )
     )
 

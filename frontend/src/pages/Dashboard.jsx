@@ -220,7 +220,7 @@ function ProfileSection({ user, onUpdate }) {
 }
 
 /* ─── Overview Tab ─────────────────────────────────────────────────────── */
-function OverviewTab({ user, jobs, bookings, openJobs, activeBookings, directHirePending, completedUnrated, pendingEngagements, complete, reload, setTab, onRate }) {
+function OverviewTab({ user, jobs, bookings, openJobs, activeBookings, directHirePending, completedUnrated, pendingEngagements, reload, setTab, onRate, onCancelDirectHire }) {
 
   // Profile completion (4 steps × 25%)
   const steps = [
@@ -349,7 +349,7 @@ function OverviewTab({ user, jobs, bookings, openJobs, activeBookings, directHir
           )}
         </div>
 
-        {openJobs.length === 0 && activeBookings.length === 0 ? (
+        {openJobs.length === 0 && activeBookings.length === 0 && (directHirePending?.length || 0) === 0 ? (
           /* Empty state */
           <div className="kn-card p-8 text-center">
             <div className="text-4xl mb-3">👷</div>
@@ -371,10 +371,18 @@ function OverviewTab({ user, jobs, bookings, openJobs, activeBookings, directHir
                       Sent to 👷 {e.worker_name} · {e.job_date} · ₹{e.daily_rate}/day
                     </div>
                   </div>
-                  <span className="text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0"
-                    style={{ background: "#fef9c3", color: "#854d0e" }}>
-                    🟡 Awaiting Worker
-                  </span>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap"
+                      style={{ background: "#fef9c3", color: "#854d0e" }}>
+                      🟡 Awaiting Worker
+                    </span>
+                    <button
+                      onClick={() => onCancelDirectHire(e.id)}
+                      className="text-xs text-red-500 hover:text-red-700 font-semibold hover:underline whitespace-nowrap"
+                    >
+                      Withdraw
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -404,10 +412,6 @@ function OverviewTab({ user, jobs, bookings, openJobs, activeBookings, directHir
                       📞 Call Worker
                     </a>
                   )}
-                  <button onClick={() => complete(b.id)}
-                    className="flex-1 py-2.5 rounded-xl text-sm font-bold border-2 border-gray-200 text-gray-500 hover:bg-gray-50 transition">
-                    ✓ Mark Done
-                  </button>
                 </div>
               </div>
             ))}
@@ -600,16 +604,6 @@ export default function Dashboard() {
   if (user && user.role === "worker") return <Navigate to="/worker/dashboard" replace />;
   if (!user) return null;
 
-  const complete = async (id) => {
-    try {
-      await api.post(`/bookings/${id}/complete`);
-      toast.success("Marked completed");
-      reload();
-    } catch (e) {
-      toast.error(formatApiError(e));
-    }
-  };
-
   const approveEngagement = async (engId, workerName) => {
     try {
       await api.post(`/engagements/${engId}/accept`);
@@ -624,6 +618,16 @@ export default function Dashboard() {
     try {
       await api.post(`/engagements/${engId}/reject`);
       toast.success(`${workerName} rejected. Job is back open.`);
+      reload();
+    } catch (e) {
+      toast.error(formatApiError(e));
+    }
+  };
+
+  const cancelEngagement = async (engId) => {
+    try {
+      await api.post(`/engagements/${engId}/cancel`);
+      toast.success("Booking request withdrawn.");
       reload();
     } catch (e) {
       toast.error(formatApiError(e));
@@ -655,7 +659,7 @@ export default function Dashboard() {
     }
   };
 
-  const activeBookings = bookings.filter(b => b.status === "confirmed" || b.status === "pending");
+  const activeBookings = bookings.filter(b => b.status === "confirmed");
   const pastBookings = bookings.filter(b => b.status === "completed" || b.status === "cancelled");
 
   // Workers who applied to customer's jobs (customer must approve/reject)
@@ -784,10 +788,10 @@ export default function Dashboard() {
               directHirePending={directHirePending}
               completedUnrated={pastBookings.filter(b => b.status === "completed" && !b.rating)}
               pendingEngagements={workerApplied}
-              complete={complete}
               reload={reload}
               setTab={setTab}
               onRate={setRatingBooking}
+              onCancelDirectHire={cancelEngagement}
             />
           )}
 

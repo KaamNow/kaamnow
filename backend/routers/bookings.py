@@ -18,10 +18,15 @@ from ..schemas import BookingIn, RatingIn
 from ..whatsapp_notify import (
     notify_customer_booking_accepted,
     notify_worker_job_completed,
-    notify_worker_new_booking,
 )
 
 router = APIRouter(prefix="/api/bookings", tags=["bookings"])
+
+
+def _notification_phone(user: Optional[dict]) -> Optional[str]:
+    if not user:
+        return None
+    return user.get("phone_primary") or user.get("phone") or user.get("mobile") or user.get("phone_number")
 
 
 @router.post("")
@@ -33,16 +38,6 @@ async def create_booking(body: BookingIn, user: dict = Depends(get_current_user)
         user=user,
     )
     booking = engagement_to_booking(engagement)
-
-    # Notify worker via WhatsApp (non-blocking)
-    worker_doc = await db.workers.find_one({"id": body.worker_id}, {"_id": 0})
-    if worker_doc:
-        worker_user = await db.users.find_one({"id": worker_doc.get("user_id")}, {"_id": 0})
-        if worker_user and worker_user.get("phone"):
-            asyncio.create_task(
-                asyncio.to_thread(notify_worker_new_booking, worker_user["phone"], booking)
-            )
-
     return booking
 
 
@@ -98,11 +93,6 @@ async def direct_hire(body: DirectHireIn, user: dict = Depends(get_current_user)
     )
     booking = engagement_to_booking(engagement)
 
-    # Notify worker
-    worker_user = await db.users.find_one({"id": worker.get("user_id")}, {"_id": 0})
-    if worker_user and worker_user.get("phone"):
-        asyncio.create_task(asyncio.to_thread(notify_worker_new_booking, worker_user["phone"], booking))
-
     return booking
 
 
@@ -125,15 +115,7 @@ async def my_bookings(user: dict = Depends(get_current_user)):
 async def accept_booking(booking_id: str, user: dict = Depends(get_current_user)):
     engagement = await db.engagements.find_one({"id": booking_id})
     if engagement:
-        result = await accept_engagement(booking_id, user)
-        # Notify customer via WhatsApp (non-blocking)
-        booking_data = engagement_to_booking(engagement)
-        customer_doc = await db.users.find_one({"id": engagement.get("customer_id")}, {"_id": 0})
-        if customer_doc and customer_doc.get("phone"):
-            asyncio.create_task(
-                asyncio.to_thread(notify_customer_booking_accepted, customer_doc["phone"], booking_data)
-            )
-        return result
+        return await accept_engagement(booking_id, user)
 
     if user["role"] != "worker":
         raise HTTPException(status_code=403, detail="Only workers can accept bookings")
@@ -148,9 +130,10 @@ async def accept_booking(booking_id: str, user: dict = Depends(get_current_user)
     await db.bookings.update_one({"id": booking_id}, {"$set": {"status": "confirmed"}})
     # Notify customer for legacy booking
     customer_doc = await db.users.find_one({"id": booking.get("customer_id")}, {"_id": 0})
-    if customer_doc and customer_doc.get("phone"):
+    customer_phone = _notification_phone(customer_doc)
+    if customer_phone:
         asyncio.create_task(
-            asyncio.to_thread(notify_customer_booking_accepted, customer_doc["phone"], booking)
+            asyncio.to_thread(notify_customer_booking_accepted, customer_phone, booking)
         )
     return {"ok": True}
 
@@ -164,10 +147,11 @@ async def complete_booking(booking_id: str, user: dict = Depends(get_current_use
         worker_doc = await db.workers.find_one({"id": engagement.get("worker_id")}, {"_id": 0})
         if worker_doc:
             worker_user = await db.users.find_one({"id": worker_doc.get("user_id")}, {"_id": 0})
-            if worker_user and worker_user.get("phone"):
+            worker_phone = _notification_phone(worker_user)
+            if worker_phone:
                 booking_data = engagement_to_booking(engagement)
                 asyncio.create_task(
-                    asyncio.to_thread(notify_worker_job_completed, worker_user["phone"], booking_data)
+                    asyncio.to_thread(notify_worker_job_completed, worker_phone, booking_data)
                 )
         return result
 
@@ -185,9 +169,10 @@ async def complete_booking(booking_id: str, user: dict = Depends(get_current_use
     worker_doc = await db.workers.find_one({"id": booking.get("worker_id")}, {"_id": 0})
     if worker_doc:
         worker_user = await db.users.find_one({"id": worker_doc.get("user_id")}, {"_id": 0})
-        if worker_user and worker_user.get("phone"):
+        worker_phone = _notification_phone(worker_user)
+        if worker_phone:
             asyncio.create_task(
-                asyncio.to_thread(notify_worker_job_completed, worker_user["phone"], booking)
+                asyncio.to_thread(notify_worker_job_completed, worker_phone, booking)
             )
     return {"ok": True}
 

@@ -18,6 +18,9 @@ async def _notify(user_id: str, title: str, body: str, kind: str, ref_id: str = 
     Store in-app notification AND fire WhatsApp if the user has a phone.
     WhatsApp is sent for booking_accepted and booking_rejected events.
     """
+    if not user_id:
+        return
+
     try:
         await db.notifications.insert_one({
             "id": str(uuid.uuid4()),
@@ -37,7 +40,10 @@ async def _notify(user_id: str, title: str, body: str, kind: str, ref_id: str = 
                 "booking_request", "booking_completed", "booking_cancelled",
                 "job_rated", "tier_upgraded", "tier_downgraded"):
         try:
-            user = await db.users.find_one({"id": user_id}, {"_id": 0, "phone_primary": 1, "push_token": 1})
+            user = await db.users.find_one(
+                {"id": user_id},
+                {"_id": 0, "phone_primary": 1, "phone": 1, "mobile": 1, "phone_number": 1, "push_token": 1},
+            )
             if user:
                 # Push notification (instant, lock-screen)
                 push_token = user.get("push_token")
@@ -47,12 +53,13 @@ async def _notify(user_id: str, title: str, body: str, kind: str, ref_id: str = 
                     asyncio.create_task(send_push(push_token, title, body, {"kind": kind, "ref_id": ref_id or ""}))
 
                 # WhatsApp (rich message with details)
-                if user.get("phone_primary"):
+                phone = _notification_phone(user)
+                if phone:
                     from .whatsapp_notify import _send as _wa_send
                     import threading
                     threading.Thread(
                         target=_wa_send,
-                        args=(user["phone_primary"], f"{title}\n{body}"),
+                        args=(phone, f"{title}\n{body}"),
                         daemon=True,
                     ).start()
         except Exception:
@@ -68,6 +75,12 @@ TIER_THRESHOLDS = [
 
 TIER_NAMES = {1: "Basic", 2: "Verified", 3: "Pro", 4: "Elite"}
 TIER_EMOJIS = {1: "", 2: "✅", 3: "🔵", 4: "🏆"}
+
+
+def _notification_phone(user: Optional[dict]) -> Optional[str]:
+    if not user:
+        return None
+    return user.get("phone_primary") or user.get("phone") or user.get("mobile") or user.get("phone_number")
 
 
 async def _check_tier(worker_id: str, worker_user_id: str) -> None:
@@ -278,12 +291,20 @@ async def create_engagement_request(
     await db.engagements.insert_one(engagement)
     engagement.pop("_id", None)
 
-    # Notify customer when worker expresses interest
+    # Notify the party who must respond next.
     if source == "worker_interest":
         await _notify(
             job["customer_id"],
             f"New interest: {engagement['job_title']}",
             f"{worker['name']} is interested in your job. Tap to approve or reject.",
+            "booking_request",
+            engagement["id"],
+        )
+    elif source == "customer_booking":
+        await _notify(
+            worker.get("user_id", ""),
+            f"New booking request: {engagement['job_title']}",
+            f"{job.get('customer_name') or user.get('name') or 'Customer'} wants to hire you. Tap to accept or decline.",
             "booking_request",
             engagement["id"],
         )
@@ -380,14 +401,22 @@ async def accept_engagement(engagement_id: str, user: dict) -> dict:
         }},
     )
 
-    # Notify worker that they were accepted
-    await _notify(
-        engagement_worker.get("user_id", ""),
-        f"✅ Booking confirmed: {engagement.get('job_title')}",
-        f"Your interest was approved! Contact the customer at {customer_user.get('phone_primary', 'N/A') if customer_user else 'N/A'}.",
-        "booking_accepted",
-        engagement_id,
-    )
+    if engagement.get("source") == "worker_interest":
+        await _notify(
+            engagement_worker.get("user_id", ""),
+            f"✅ Booking confirmed: {engagement.get('job_title')}",
+            f"Your interest was approved! Contact the customer at {customer_user.get('phone_primary', 'N/A') if customer_user else 'N/A'}.",
+            "booking_accepted",
+            engagement_id,
+        )
+    elif engagement.get("source") == "customer_booking":
+        await _notify(
+            engagement["customer_id"],
+            f"✅ Worker accepted: {engagement.get('job_title')}",
+            f"{engagement.get('worker_name', 'Worker')} accepted your booking request. Contact details are now available.",
+            "booking_accepted",
+            engagement_id,
+        )
 
     return {"ok": True, "worker_phone": worker_user.get("phone_primary") if worker_user else None, "customer_phone": customer_user.get("phone_primary") if customer_user else None}
 
@@ -411,13 +440,20 @@ async def reject_engagement(engagement_id: str, user: dict) -> dict:
         {"$set": {"status": "rejected", "rejected_at": now, "updated_at": now}},
     )
 
-    # Notify worker of rejection
     engagement_worker = await db.workers.find_one({"id": engagement["worker_id"]}, {"_id": 0})
-    if engagement_worker:
+    if engagement.get("source") == "worker_interest" and engagement_worker:
         await _notify(
             engagement_worker.get("user_id", ""),
             f"Interest not approved: {engagement.get('job_title')}",
             "The customer chose a different worker for this job. Browse the feed for other opportunities.",
+            "booking_rejected",
+            engagement_id,
+        )
+    elif engagement.get("source") == "customer_booking":
+        await _notify(
+            engagement["customer_id"],
+            f"Worker declined: {engagement.get('job_title')}",
+            f"{engagement.get('worker_name', 'Worker')} could not accept your booking request. You can request another worker.",
             "booking_rejected",
             engagement_id,
         )
@@ -561,20 +597,28 @@ async def complete_engagement(engagement_id: str, user: dict) -> dict:
     )
 
     # WhatsApp: customer prompt to rate + worker confirmation
-    customer_user = await db.users.find_one({"id": engagement["customer_id"]}, {"_id": 0, "phone": 1})
-    if customer_user and customer_user.get("phone"):
+    customer_user = await db.users.find_one(
+        {"id": engagement["customer_id"]},
+        {"_id": 0, "phone_primary": 1, "phone": 1, "mobile": 1, "phone_number": 1},
+    )
+    customer_phone = _notification_phone(customer_user)
+    if customer_phone:
         threading.Thread(
             target=notify_customer_work_completed,
-            args=(customer_user["phone"], engagement),
+            args=(customer_phone, engagement),
             daemon=True,
         ).start()
 
     if worker_doc and worker_doc.get("user_id"):
-        worker_user = await db.users.find_one({"id": worker_doc["user_id"]}, {"_id": 0, "phone": 1})
-        if worker_user and worker_user.get("phone"):
+        worker_user = await db.users.find_one(
+            {"id": worker_doc["user_id"]},
+            {"_id": 0, "phone_primary": 1, "phone": 1, "mobile": 1, "phone_number": 1},
+        )
+        worker_phone = _notification_phone(worker_user)
+        if worker_phone:
             threading.Thread(
                 target=notify_worker_job_completed,
-                args=(worker_user["phone"], engagement),
+                args=(worker_phone, engagement),
                 daemon=True,
             ).start()
 
@@ -633,11 +677,15 @@ async def rate_engagement(engagement_id: str, rating: int, comment: str, user: d
                 "job_rated",
                 engagement_id,
             )
-            worker_user = await db.users.find_one({"id": worker_doc["user_id"]}, {"_id": 0, "phone": 1})
-            if worker_user and worker_user.get("phone"):
+            worker_user = await db.users.find_one(
+                {"id": worker_doc["user_id"]},
+                {"_id": 0, "phone_primary": 1, "phone": 1, "mobile": 1, "phone_number": 1},
+            )
+            worker_phone = _notification_phone(worker_user)
+            if worker_phone:
                 threading.Thread(
                     target=notify_worker_rating_received,
-                    args=(worker_user["phone"], rating, comment or "", engagement.get("job_title", "Job")),
+                    args=(worker_phone, rating, comment or "", engagement.get("job_title", "Job")),
                     daemon=True,
                 ).start()
 
