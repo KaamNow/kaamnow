@@ -12,7 +12,7 @@
 #   4. Builds backend + frontend Docker images locally
 #   5. Loads images directly into kind (no registry needed)
 #   6. Installs NGINX Ingress Controller + cert-manager (Let's Encrypt)
-#   7. Deploys MongoDB (StatefulSet + 2 GB PVC), backend, frontend
+#   7. Deploys backend + frontend (MongoDB Atlas — no local MongoDB pod)
 #   8. Creates Ingress with automatic HTTPS for kaamnow.com + www.kaamnow.com
 #   9. Copies kubeconfig to the invoking user's home for non-root kubectl
 set -euo pipefail

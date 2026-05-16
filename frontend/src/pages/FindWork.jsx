@@ -133,7 +133,7 @@ function SkeletonCard() {
 }
 
 /* ── Apply action (compact, right-column) ────────────────────────────────── */
-function ApplyAction({ job, eng, user, sending, withdrawing, onApply, onWithdraw, t }) {
+function ApplyAction({ job, eng, user, sending, withdrawing, accepting, declining, onApply, onWithdraw, onAccept, onDecline, t }) {
   const nav = useNavigate();
 
   const applyBtn = (label, onClick, disabled = false) => (
@@ -169,7 +169,33 @@ function ApplyAction({ job, eng, user, sending, withdrawing, onApply, onWithdraw
       ? applyBtn(<><RefreshCw size={11} style={{ animation: "spin 1s linear infinite" }} /> Sending…</>, null, true)
       : applyBtn("Apply Now →", () => onApply(job.id));
 
-  if (eng.status === "requested")
+  if (eng.status === "requested") {
+    if (eng.source === "customer_booking") {
+      // Customer sent this request — worker must Accept or Decline
+      const isActing = accepting === job.id || declining === job.id;
+      return (
+        <div style={{ textAlign: "right" }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 5, justifyContent: "flex-end", fontSize: 11, fontWeight: 700, color: "#1e40af", background: "#eff6ff", borderRadius: 8, padding: "4px 9px", border: "1px solid #bfdbfe", marginBottom: 7 }}>
+            📋 Booking Request
+          </span>
+          <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+            <button
+              disabled={isActing}
+              onClick={() => onAccept(eng.id, job.id)}
+              style={{ padding: "6px 13px", borderRadius: 8, background: isActing ? "#d1fae5" : "#16a34a", color: "white", fontWeight: 700, fontSize: 12, border: "none", cursor: isActing ? "default" : "pointer", opacity: isActing ? 0.7 : 1 }}>
+              {accepting === job.id ? "…" : "✓ Accept"}
+            </button>
+            <button
+              disabled={isActing}
+              onClick={() => onDecline(eng.id, job.id)}
+              style={{ padding: "6px 13px", borderRadius: 8, background: "white", color: "#dc2626", fontWeight: 700, fontSize: 12, border: "2px solid #fecaca", cursor: isActing ? "default" : "pointer", opacity: isActing ? 0.7 : 1 }}>
+              {declining === job.id ? "…" : "✗ Decline"}
+            </button>
+          </div>
+        </div>
+      );
+    }
+    // Worker expressed interest — can withdraw
     return (
       <div style={{ textAlign: "right" }}>
         <span style={{ display: "flex", alignItems: "center", gap: 5, justifyContent: "flex-end", fontSize: 12, fontWeight: 700, color: "#92400E", background: "#FFFBEB", borderRadius: 8, padding: "5px 10px", border: "1px solid #FDE68A" }}>
@@ -183,6 +209,7 @@ function ApplyAction({ job, eng, user, sending, withdrawing, onApply, onWithdraw
         </button>
       </div>
     );
+  }
 
   if (eng.status === "accepted")
     return (
@@ -199,7 +226,12 @@ function ApplyAction({ job, eng, user, sending, withdrawing, onApply, onWithdraw
   if (eng.status === "rejected" || eng.status === "cancelled")
     return (
       <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11.5, color: C.muted, justifyContent: "flex-end" }}>
-        <XCircle size={11} /> {eng.status === "rejected" ? t("fw_rejected") : t("fw_withdrawn")}
+        <XCircle size={11} />{" "}
+        {eng.status === "rejected"
+          ? t("fw_rejected")
+          : eng.source === "customer_booking"
+            ? "Customer withdrew"
+            : t("fw_withdrawn")}
       </span>
     );
 
@@ -214,7 +246,7 @@ function ApplyAction({ job, eng, user, sending, withdrawing, onApply, onWithdraw
 }
 
 /* ── Job Card ────────────────────────────────────────────────────────────── */
-function JobCard({ job, eng, user, sending, withdrawing, onApply, onWithdraw, t, lang }) {
+function JobCard({ job, eng, user, sending, withdrawing, accepting, declining, onApply, onWithdraw, onAccept, onDecline, t, lang }) {
   const [hov, setHov] = useState(false);
   const slots   = job.workers_needed - job.filled_count;
   const isUrgent = job.urgency === "urgent";
@@ -307,7 +339,9 @@ function JobCard({ job, eng, user, sending, withdrawing, onApply, onWithdraw, t,
             <ApplyAction
               job={job} eng={eng} user={user}
               sending={sending} withdrawing={withdrawing}
-              onApply={onApply} onWithdraw={onWithdraw} t={t}
+              accepting={accepting} declining={declining}
+              onApply={onApply} onWithdraw={onWithdraw}
+              onAccept={onAccept} onDecline={onDecline} t={t}
             />
           </div>
         </div>
@@ -464,6 +498,8 @@ export default function FindWork() {
   const [myEngs, setMyEngs]           = useState({});
   const [sending, setSending]         = useState(null);
   const [withdrawing, setWithdrawing] = useState(null);
+  const [accepting, setAccepting]     = useState(null);
+  const [declining, setDeclining]     = useState(null);
 
   const { pincode, setPincode, result: pincodeResult, reset: resetPincode } = usePincodeLookup();
   const [category, setCategory] = useState("");
@@ -519,6 +555,28 @@ export default function FindWork() {
     } catch (err) {
       toast.error(err?.response?.data?.detail ?? "Could not withdraw.");
     } finally { setWithdrawing(null); }
+  };
+
+  const handleAccept = async (engId, jobId) => {
+    setAccepting(jobId);
+    try {
+      await api.post(`/engagements/${engId}/accept`);
+      toast.success("Job accepted! Customer will be notified.");
+      await loadEngs();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail ?? "Could not accept.");
+    } finally { setAccepting(null); }
+  };
+
+  const handleDecline = async (engId, jobId) => {
+    setDeclining(jobId);
+    try {
+      await api.post(`/engagements/${engId}/reject`);
+      toast.success("Booking declined.");
+      await loadEngs();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail ?? "Could not decline.");
+    } finally { setDeclining(null); }
   };
 
   /* Location label for results header */
@@ -577,7 +635,9 @@ export default function FindWork() {
                 key={job.id} job={job}
                 eng={myEngs[job.id] || null}
                 user={user} sending={sending} withdrawing={withdrawing}
+                accepting={accepting} declining={declining}
                 onApply={handleApply} onWithdraw={handleWithdraw}
+                onAccept={handleAccept} onDecline={handleDecline}
                 t={t} lang={lang}
               />
             ))}

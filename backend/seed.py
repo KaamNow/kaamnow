@@ -85,9 +85,9 @@ async def ensure_indexes() -> None:
 async def seed_data() -> None:
     await ensure_indexes()
 
-    admin_phone = settings.admin_phone
-    existing_admin = await db.users.find_one({"phone_primary": admin_phone})
-    if not existing_admin:
+    admin_phone = settings.admin_phone.strip()
+    existing_admin = await db.users.find_one({"phone_primary": admin_phone}) if admin_phone else None
+    if admin_phone and not existing_admin:
         await db.users.insert_one(
             {
                 "id": str(uuid.uuid4()),
