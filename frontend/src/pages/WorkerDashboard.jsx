@@ -467,6 +467,7 @@ function WorkCalendar({ engagements }) {
 
 function PastEngagementCard({ eng, onRate }) {
   const [open, setOpen] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState(null);
   const isCompleted = eng.status === "completed";
   const workerRating = typeof eng.worker_rating === "object" ? eng.worker_rating?.stars : eng.rating;
   const workerComment = typeof eng.worker_rating === "object" ? eng.worker_rating?.comment : eng.comment;
@@ -475,7 +476,7 @@ function PastEngagementCard({ eng, onRate }) {
     ? eng.customer_rating?.stars
     : eng.customer_rating;
   const custComment = typeof eng.customer_rating === "object" ? eng.customer_rating?.comment : null;
-  const custImages = typeof eng.customer_rating === "object" ? (eng.customer_rating?.image_urls || []) : [];
+  const custImages = typeof eng.customer_rating === "object" ? (eng.customer_rating?.image_urls || []) : (eng.customer_rating_image_urls || []);
 
   return (
     <div
@@ -543,6 +544,7 @@ function PastEngagementCard({ eng, onRate }) {
                   comment={workerComment}
                   imageUrls={workerImages}
                   emptyText="Customer has not reviewed yet."
+                  onImageClick={setLightboxUrl}
                 />
                 <WorkerReviewBlock
                   label="Your review for customer"
@@ -550,6 +552,7 @@ function PastEngagementCard({ eng, onRate }) {
                   comment={custComment}
                   imageUrls={custImages}
                   emptyText="You have not reviewed this customer yet."
+                  onImageClick={setLightboxUrl}
                 />
               </div>
             )}
@@ -564,11 +567,19 @@ function PastEngagementCard({ eng, onRate }) {
           </div>
         </div>
       )}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <img src={lightboxUrl} alt="Review" className="max-w-full max-h-full rounded-xl object-contain" />
+        </div>
+      )}
     </div>
   );
 }
 
-function WorkerReviewBlock({ label, rating, comment, imageUrls = [], emptyText }) {
+function WorkerReviewBlock({ label, rating, comment, imageUrls = [], emptyText, onImageClick }) {
   const ratingValue = typeof rating === "object" ? rating?.stars : rating;
   return (
     <div className="rounded-lg border border-gray-100 bg-white p-2">
@@ -583,7 +594,7 @@ function WorkerReviewBlock({ label, rating, comment, imageUrls = [], emptyText }
           {imageUrls.length > 0 && (
             <div className="flex gap-1.5 mt-2 flex-wrap">
               {imageUrls.map(url => (
-                <img key={url} src={url} alt="Review" className="w-12 h-12 rounded-lg object-cover border border-gray-100" />
+                <img key={url} src={url} alt="Review" className="w-12 h-12 rounded-lg object-cover border border-gray-100 cursor-pointer" onClick={() => onImageClick && onImageClick(url)} />
               ))}
             </div>
           )}

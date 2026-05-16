@@ -2352,4 +2352,43 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.primary,
   },
+  reviewImageRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 6,
+  },
+  reviewImageThumbWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 8,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  reviewImageThumb: {
+    width: 52,
+    height: 52,
+  },
+  imagePreviewBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.92)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  imagePreviewFull: {
+    width: "100%",
+    height: "80%",
+  },
+  imagePreviewClose: {
+    position: "absolute",
+    top: 48,
+    right: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
 });

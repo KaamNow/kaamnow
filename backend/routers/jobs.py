@@ -217,11 +217,11 @@ async def _alert_matching_workers(job: dict) -> None:
 
         user_ids = [w["user_id"] for w in matched if w.get("user_id")]
         users = await db.users.find(
-            {"id": {"$in": user_ids}, "phone": {"$exists": True}},
-            {"_id": 0, "id": 1, "phone": 1}
+            {"id": {"$in": user_ids}, "phone_primary": {"$exists": True}},
+            {"_id": 0, "id": 1, "phone_primary": 1}
         ).to_list(50)
 
-        phone_by_uid = {u["id"]: u["phone"] for u in users if u.get("phone")}
+        phone_by_uid = {u["id"]: u["phone_primary"] for u in users if u.get("phone_primary")}
 
         import threading
         now = utc_now_iso()

@@ -543,7 +543,7 @@ function StatCard({ label, value, icon: Icon, color }) {
   );
 }
 
-function ReviewBlock({ label, rating, comment, imageUrls = [], emptyText }) {
+function ReviewBlock({ label, rating, comment, imageUrls = [], emptyText, onImageClick }) {
   const ratingValue = typeof rating === "object" ? rating?.stars : rating;
   return (
     <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
@@ -558,7 +558,7 @@ function ReviewBlock({ label, rating, comment, imageUrls = [], emptyText }) {
           {imageUrls?.length > 0 && (
             <div className="mt-2 flex gap-2 flex-wrap">
               {imageUrls.map(url => (
-                <img key={url} src={url} alt="Review" className="w-12 h-12 rounded-lg object-cover border border-gray-200" />
+                <img key={url} src={url} alt="Review" className="w-12 h-12 rounded-lg object-cover border border-gray-200 cursor-pointer" onClick={() => onImageClick && onImageClick(url)} />
               ))}
             </div>
           )}
@@ -593,6 +593,7 @@ export default function Dashboard() {
   const [ratingComment, setRatingComment] = useState("");
   const [ratingImages, setRatingImages] = useState([]);
   const [submittingRating, setSubmittingRating] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState(null);
 
   const [pendingEngagements, setPendingEngagements] = useState([]);
   const [notifications, setNotifications] = useState([]);
@@ -998,6 +999,7 @@ export default function Dashboard() {
                         comment={b.comment}
                         imageUrls={b.rating_image_urls}
                         emptyText="You have not reviewed this worker yet."
+                        onImageClick={setLightboxUrl}
                       />
                       <ReviewBlock
                         label="Worker review for you"
@@ -1005,6 +1007,7 @@ export default function Dashboard() {
                         comment={b.customer_comment}
                         imageUrls={b.customer_rating_image_urls}
                         emptyText="Worker has not reviewed yet."
+                        onImageClick={setLightboxUrl}
                       />
                     </div>
                   )}
@@ -1136,6 +1139,14 @@ export default function Dashboard() {
               </div>
             </div>
           )}
+        </div>
+      )}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center"
+          onClick={() => setLightboxUrl(null)}
+        >
+          <img src={lightboxUrl} alt="Review" className="max-w-full max-h-full rounded-xl object-contain" />
         </div>
       )}
     </div>
