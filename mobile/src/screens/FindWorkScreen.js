@@ -432,11 +432,11 @@ const s = StyleSheet.create({
 
   // Category chips
   chipScroll: { backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: colors.border },
-  chipList: { paddingHorizontal: spacing.lg, paddingVertical: 10, gap: 8 },
-  chip: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5, borderColor: colors.border, backgroundColor: "#fff" },
+  chipList: { paddingHorizontal: spacing.lg, paddingVertical: 6, gap: 8 },
+  chip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 13, paddingVertical: 9, borderRadius: 20, borderWidth: 1.5, borderColor: colors.border, backgroundColor: "#fff", minHeight: 40 },
   chipActive: { backgroundColor: colors.saffron, borderColor: colors.saffron },
-  chipIcon: { fontSize: 13 },
-  chipTxt: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.textSecondary },
+  chipIcon: { fontSize: 16, lineHeight: 20 },
+  chipTxt: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.textSecondary, lineHeight: 16 },
   chipTxtActive: { color: "#fff" },
 
   // Applied filters

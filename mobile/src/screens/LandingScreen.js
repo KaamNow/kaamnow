@@ -1,21 +1,42 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   View, Text, Image, StyleSheet, Pressable,
-  ScrollView, RefreshControl, Switch, Modal,
+  ScrollView, RefreshControl, Modal,
   TextInput, ActivityIndicator, KeyboardAvoidingView, Platform,
+  Linking, Alert,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import api, { API_URL } from "../api";
+import AppHeader from "../components/AppHeader";
+import AppScreen from "../components/AppScreen";
+import EmptyState from "../components/EmptyState";
+import JobCard from "../components/JobCard";
+import LocationBarComponent from "../components/LocationBar";
+import PrimaryButton from "../components/PrimaryButton";
+import SecondaryButton from "../components/SecondaryButton";
+import ServiceCategoryCard from "../components/ServiceCategoryCard";
+import WorkerCard from "../components/WorkerCard";
 import { useAuth } from "../contexts/AuthContext";
 import { useLanguage } from "../contexts/LanguageContext";
 import { usePincodeLookup } from "../lib/usePincode";
-import { colors, fonts, spacing } from "../theme";
+import { colors, fonts, radius, shadow, spacing } from "../theme";
 
 /* ─────────────────────────────────────────────
    Copy
 ───────────────────────────────────────────── */
+const KAAMNOW_WA_NUMBER = "917834811114"; // Gupshup sandbox source number
+
+function openKaamNowWhatsApp() {
+  const url = "https://wa.me/" + KAAMNOW_WA_NUMBER + "?text=Hi%20KaamNow";
+  Linking.openURL(url).catch(() => {
+    Alert.alert(
+      "WhatsApp nahi khula",
+      "WhatsApp install karein ya +91 78348 11114 par manually message karein."
+    );
+  });
+}
+
 const C = {
   en: {
     tagline: "Bihar's trusted work marketplace",
@@ -26,8 +47,8 @@ const C = {
     pathCustomerSub: "Hire mason, cook, driver & more",
     pathWorker: "Find Work",
     pathWorkerSub: "Farm, construction, home & more",
-    waBtn: "Book via WhatsApp",
-    waSub: "No app needed",
+    waBtn: "WhatsApp se shuru karein",
+    waSub: "Bot par message karein — register bhi, kaam bhi",
     statsW: "Workers",
     statsV: "Villages",
     statsJ: "Jobs done",
@@ -44,8 +65,8 @@ const C = {
     pathCustomerSub: "मिस्त्री, रसोइया, ड्राइवर और भी बहुत",
     pathWorker: "काम ढूंढो",
     pathWorkerSub: "खेती, निर्माण, घर और भी बहुत",
-    waBtn: "WhatsApp पर बुक करो",
-    waSub: "App की ज़रूरत नहीं",
+    waBtn: "WhatsApp से शुरू करें",
+    waSub: "Bot पर message करें — registration और काम दोनों यहीं",
     statsW: "कारीगर",
     statsV: "गाँव",
     statsJ: "काम हुए",
@@ -65,6 +86,15 @@ const CATS = [
   { icon: "✨", label: { en: "Clean", hi: "सफाई"   }, skill: "cleaning" },
   { icon: "🚛", label: { en: "Drive", hi: "ड्राइवर" }, skill: "driver" },
   { icon: "🏠", label: { en: "Home",  hi: "घर"     }, skill: "cooking" },
+];
+
+const GUEST_CATS = [
+  { icon: "construct-outline", label: { en: "Mason", hi: "मिस्त्री" }, skill: "mason" },
+  { icon: "leaf-outline", label: { en: "Farm", hi: "खेती" }, skill: "harvesting" },
+  { icon: "flash-outline", label: { en: "Electrician", hi: "बिजली" }, skill: "electrical" },
+  { icon: "sparkles-outline", label: { en: "Cleaning", hi: "सफाई" }, skill: "cleaning" },
+  { icon: "car-outline", label: { en: "Driver", hi: "ड्राइवर" }, skill: "driver" },
+  { icon: "home-outline", label: { en: "Home", hi: "घर" }, skill: "cooking" },
 ];
 
 /* ─────────────────────────────────────────────
@@ -215,95 +245,134 @@ export default function LandingScreen({ navigation }) {
 
   /* ══ GUEST ══════════════════════════════════════════════════════ */
   if (!user) return (
-    <SafeAreaView edges={["top"]} style={s.safe}>
+    <AppScreen edges={["top"]} style={s.safe}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 40 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={colors.saffron} />}
+        contentContainerStyle={s.guestScroll}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={colors.primary} />}
       >
-        <Header />
-        <LocationBar />
+        <AppHeader
+          lang={lang}
+          onLangToggle={() => setLang(lang === "hi" ? "en" : "hi")}
+          showNotifBell={false}
+          style={s.guestHeader}
+        />
+
+        <View style={s.guestLocationRow}>
+          <LocationBarComponent
+            pincode={filterPincode}
+            district={filterLocation?.district}
+            state={filterLocation?.state}
+            label="Workers near you"
+            onPress={() => setShowLocPicker(true)}
+            style={s.guestLocationBar}
+          />
+          {filterPincode ? (
+            <Pressable onPress={clearLocation} style={s.guestLocationClear} hitSlop={8}>
+              <Ionicons name="close" size={18} color={colors.textMuted} />
+            </Pressable>
+          ) : null}
+        </View>
 
         {/* ── Hero ───────────────────────────────────────────────── */}
-        <LinearGradient colors={["#0F766E", "#0A5C56"]} start={{ x:0, y:0 }} end={{ x:1, y:1 }} style={s.guestHero}>
-          <View style={s.heroBlob1} />
-          <View style={s.heroBlob2} />
-          <Text style={s.heroLine1}>{t.heroLine1}</Text>
-          <Text style={s.heroLine2}>{t.heroLine2}</Text>
-          <Text style={s.heroSub}>{t.heroSub}</Text>
-          {nearWorkers !== null && (
-            <View style={s.nearPill}>
-              <View style={s.greenDot} />
-              <Text style={s.nearTxt}>{nearWorkers} {t.workerNear}</Text>
-            </View>
-          )}
+        <LinearGradient colors={[colors.primary, colors.primaryDark]} start={{ x:0, y:0 }} end={{ x:1, y:1 }} style={s.guestHeroNew}>
+          <View style={s.heroIcon}>
+            <Ionicons name="briefcase-outline" size={24} color="#fff" />
+          </View>
+          <Text style={s.heroTitleNew}>Kaam chahiye ya worker?</Text>
+          <Text style={s.heroSubNew}>KaamNow par trusted workers aur nearby jobs dono milte hain.</Text>
+          <View style={s.nearPillNew}>
+            <View style={s.greenDot} />
+            <Text style={s.nearTxtNew}>
+              {nearWorkers !== null ? `${nearWorkers} workers near you` : "Trusted workers near you"}
+            </Text>
+          </View>
         </LinearGradient>
 
         {/* ── Two main paths ─────────────────────────────────────── */}
-        <View style={s.pathRow}>
-          {/* Customer path */}
-          <Pressable style={[s.pathCard, { flex: 1 }]} onPress={() => navigation.navigate("Tabs", { screen: "Workers" })}>
-            <View style={[s.pathIconWrap, { backgroundColor: "#F0FDFA" }]}>
-              <Text style={s.pathEmoji}>🔍</Text>
+        <View style={s.guestPathStack}>
+          <Pressable style={({ pressed }) => [s.primaryPathCard, pressed && s.pressed]} onPress={() => navigation.navigate("Tabs", { screen: "Workers" })}>
+            <View style={s.pathCopy}>
+              <View style={s.pathIconPrimary}>
+                <Ionicons name="search-outline" size={22} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.primaryPathTitle}>Find Workers</Text>
+                <Text style={s.primaryPathSub}>Mason, driver, cook aur more</Text>
+              </View>
             </View>
-            <Text style={s.pathTitle}>{t.pathCustomer}</Text>
-            <Text style={s.pathSub}>{t.pathCustomerSub}</Text>
-            <View style={s.pathArrow}>
-              <Ionicons name="arrow-forward" size={14} color={colors.saffron} />
+            <View style={s.pathArrowPrimary}>
+              <Ionicons name="arrow-forward" size={18} color="#fff" />
             </View>
           </Pressable>
 
-          {/* Worker path */}
-          <Pressable style={[s.pathCard, { flex: 1, borderColor: colors.border }]} onPress={() => navigation.navigate("Tabs", { screen: "Jobs" })}>
-            <View style={[s.pathIconWrap, { backgroundColor: "#F0FDFA" }]}>
-              <Text style={s.pathEmoji}>💼</Text>
+          <Pressable style={({ pressed }) => [s.secondaryPathCard, pressed && s.pressed]} onPress={() => navigation.navigate("Tabs", { screen: "Jobs" })}>
+            <View style={s.pathCopy}>
+              <View style={s.pathIconSecondary}>
+                <Ionicons name="briefcase-outline" size={22} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.secondaryPathTitle}>Find Work</Text>
+                <Text style={s.secondaryPathSub}>Nearby kaam dekhein</Text>
+              </View>
             </View>
-            <Text style={s.pathTitle}>{t.pathWorker}</Text>
-            <Text style={s.pathSub}>{t.pathWorkerSub}</Text>
-            <View style={s.pathArrow}>
-              <Ionicons name="arrow-forward" size={14} color={colors.textMuted} />
-            </View>
+            <Ionicons name="arrow-forward" size={18} color={colors.primary} />
           </Pressable>
         </View>
 
         {/* ── Category quick-browse ──────────────────────────────── */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.catRow}>
-          {CATS.map(cat => (
-            <Pressable key={cat.skill} style={s.catChip}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.guestCatRow}>
+          {GUEST_CATS.map(cat => (
+            <ServiceCategoryCard
+              key={cat.skill}
+              size="chip"
+              label={cat.label[lang] || cat.label.en}
+              icon={cat.icon}
               onPress={() => navigation.navigate("Tabs", { screen: "Workers" })}>
-              <Text style={s.catEmoji}>{cat.icon}</Text>
-              <Text style={s.catLabel}>{cat.label[lang] || cat.label.en}</Text>
-            </Pressable>
+            </ServiceCategoryCard>
           ))}
         </ScrollView>
 
         {/* ── Stats strip ────────────────────────────────────────── */}
-        <View style={s.statsStrip}>
+        <View style={s.guestStatsStrip}>
           {[
             { v: `${stats.workers || "1K"}+`,      l: t.statsW },
             { v: `${stats.villages || "200"}+`,    l: t.statsV },
             { v: `${stats.completed_bookings || "5K"}+`, l: t.statsJ },
           ].map(st => (
-            <View key={st.l} style={s.statItem}>
-              <Text style={s.statV}>{st.v}</Text>
-              <Text style={s.statL}>{st.l}</Text>
+            <View key={st.l} style={s.guestStatItem}>
+              <Text style={s.guestStatV}>{st.v}</Text>
+              <Text style={s.guestStatL}>{st.l}</Text>
             </View>
           ))}
         </View>
 
         {/* ── Available workers preview ──────────────────────────── */}
         {workers.length > 0 && (
-          <View style={s.section}>
-            <Text style={s.sectionHead}>{t.workerNear}</Text>
-            {workers.slice(0, 3).map(w => <WorkerPreviewCard key={w.id} w={w} lang={lang} onPress={() => navigation.navigate("WorkerProfile", { id: w.id })} />)}
-            <Pressable style={s.seeAllBtn} onPress={() => navigation.navigate("Tabs", { screen: "Workers" })}>
-              <Text style={s.seeAllTxt}>{lang === "hi" ? "सभी कारीगर देखो →" : "See all workers →"}</Text>
+          <View style={s.guestSection}>
+            <View style={s.guestSectionHeadRow}>
+              <Text style={s.guestSectionHead}>Available near you</Text>
+              <Pressable onPress={() => navigation.navigate("Tabs", { screen: "Workers" })}>
+                <Text style={s.guestSeeAllTxt}>See all workers →</Text>
+              </Pressable>
+            </View>
+            {workers.slice(0, 3).map(w => (
+              <WorkerCard
+                key={w.id}
+                worker={w}
+                size="compact"
+                showTrustBadge
+                onPress={() => navigation.navigate("WorkerProfile", { id: w.id })}
+              />
+            ))}
+            <Pressable style={s.guestSeeAllBtn} onPress={() => navigation.navigate("Tabs", { screen: "Workers" })}>
+              <Text style={s.guestSeeAllTxt}>{lang === "hi" ? "सभी कारीगर देखो →" : "See all workers →"}</Text>
             </Pressable>
           </View>
         )}
 
         {/* ── WhatsApp CTA ────────────────────────────────────────── */}
-        <Pressable style={s.waCard} onPress={() => navigation.navigate("Tabs", { screen: "Chat" })}>
+        <Pressable style={s.waCard} onPress={openKaamNowWhatsApp}>
           <View style={s.waIcon}><Ionicons name="logo-whatsapp" size={28} color="#fff" /></View>
           <View style={{ flex: 1 }}>
             <Text style={s.waTitle}>{t.waBtn}</Text>
@@ -313,17 +382,13 @@ export default function LandingScreen({ navigation }) {
         </Pressable>
 
         {/* ── Auth CTA ────────────────────────────────────────────── */}
-        <View style={s.authRow}>
-          <Pressable style={s.signUpBtn} onPress={() => navigation.navigate("PhoneSignup")}>
-            <Text style={s.signUpTxt}>{t.signUp}</Text>
-          </Pressable>
-          <Pressable style={s.loginBtn} onPress={() => navigation.navigate("Login")}>
-            <Text style={s.loginTxt}>{t.login}</Text>
-          </Pressable>
-        </View>
-
-        <View style={s.footer}>
-          <Text style={s.footerTxt}>KaamNow · Bihar se shuru 🙏</Text>
+        <View style={s.guestAuthCard}>
+          <PrimaryButton title="Join free" onPress={() => navigation.navigate("PhoneSignup")} />
+          <SecondaryButton
+            title="Already registered? Log in"
+            onPress={() => navigation.navigate("Login")}
+            style={s.guestLoginButton}
+          />
         </View>
       </ScrollView>
       <LocationPickerModal
@@ -333,89 +398,185 @@ export default function LandingScreen({ navigation }) {
         initialPincode={filterPincode}
         lang={lang}
       />
-    </SafeAreaView>
+    </AppScreen>
   );
 
   /* ══ WORKER ═════════════════════════════════════════════════════ */
-  const CAT_EMOJI = { construction:"🏗️", farm:"🌾", electrical:"⚡", cleaning:"✨", transport:"🚛", home:"🏠" };
+  if (isWorker) {
+    const workerName = workerProfile?.name || user?.name || firstName || "Worker";
+    const workerSkills = Array.isArray(workerProfile?.skills) ? workerProfile.skills : [];
+    const workerSkillSummary = workerSkills.length > 0 ? workerSkills.slice(0, 2).join(" · ") : (lang === "hi" ? "Skills add karein" : "Add your skills");
+    const workerPhoto = workerProfile?.photo_url
+      ? (workerProfile.photo_url.startsWith("http") ? workerProfile.photo_url : `${API_URL}${workerProfile.photo_url}`)
+      : null;
+    const workerInitials = workerName
+      .split(" ")
+      .filter(Boolean)
+      .map(part => part[0])
+      .slice(0, 2)
+      .join("")
+      .toUpperCase() || "K";
+    const completionItems = [
+      Boolean(workerProfile?.photo_url),
+      Boolean(workerProfile?.bio),
+      workerSkills.length > 0,
+      Boolean(workerProfile?.village || workerProfile?.address?.village || workerProfile?.pincode || user?.address?.pincode),
+    ];
+    const completedItems = completionItems.filter(Boolean).length;
+    const completionPct = Math.round((completedItems / completionItems.length) * 100);
+    const needsProfileNudge = workerProfile && completedItems < completionItems.length;
 
-  if (isWorker) return (
-    <SafeAreaView edges={["top"]} style={s.safe}>
+    return (
+    <AppScreen edges={["top"]} style={s.safe}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 80 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={colors.saffron} />}
+        contentContainerStyle={s.workerPremiumScroll}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={colors.primary} />}
       >
-        <Header />
-        <LocationBar />
+        <AppHeader
+          lang={lang}
+          onLangToggle={() => setLang(lang === "hi" ? "en" : "hi")}
+          showNotifBell={engagements.length > 0}
+          notifCount={engagements.length}
+          onNotifPress={() => navigation.navigate("Tabs", { screen: "Account" })}
+          style={s.workerPremiumHeader}
+        />
 
-        {/* ── Status card: greeting + availability toggle ──────────── */}
-        <View style={s.statusCard}>
-          <View style={{ flex: 1 }}>
-            <Text style={s.workerGreetTxt}>{greet}, {firstName}</Text>
-            <Text style={s.workerSubTxt}>{lang === "hi" ? "आज का काम तैयार है क्या?" : "Ready for today's work?"}</Text>
-          </View>
-          <View style={s.availToggle}>
-            <Switch
-              value={available}
-              onValueChange={toggleAvailability}
-              disabled={togglingAvail}
-              trackColor={{ false: colors.border, true: "#4ADE80" }}
-              thumbColor="#fff"
-              style={{ transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
-            />
-            <Text style={[s.availTxt, { color: available ? colors.success : colors.textMuted }]}>
-              {available ? (lang === "hi" ? "उपलब्ध" : "Available") : (lang === "hi" ? "व्यस्त" : "Busy")}
-            </Text>
-          </View>
+        <View style={s.workerLocationRow}>
+          <LocationBarComponent
+            pincode={filterPincode}
+            district={filterLocation?.district}
+            state={filterLocation?.state}
+            label="Jobs near you"
+            onPress={() => setShowLocPicker(true)}
+            style={s.workerLocationBar}
+          />
+          {filterPincode ? (
+            <Pressable onPress={clearLocation} style={s.workerLocationClear} hitSlop={8}>
+              <Ionicons name="close" size={18} color={colors.textMuted} />
+            </Pressable>
+          ) : null}
         </View>
 
-        {/* ── Stats strip ──────────────────────────────────────────── */}
+        <View style={s.workerIdentityCard}>
+          <View style={s.workerAvatarWrap}>
+            {workerPhoto ? (
+              <Image source={{ uri: workerPhoto }} style={s.workerAvatar} />
+            ) : (
+              <View style={[s.workerAvatar, s.workerAvatarFallback]}>
+                <Text style={s.workerAvatarInitials}>{workerInitials}</Text>
+              </View>
+            )}
+            {available ? <View style={s.workerAvatarDot} /> : null}
+          </View>
+          <View style={s.workerIdentityCopy}>
+            <Text style={s.workerHello} numberOfLines={1}>{greet}, {workerName.split(" ")[0]}</Text>
+            <Text style={s.workerSkillSummary} numberOfLines={1}>{workerSkillSummary}</Text>
+          </View>
+          <Pressable
+            onPress={() => toggleAvailability(!available)}
+            disabled={togglingAvail}
+            style={({ pressed }) => [
+              s.workerAvailabilityPill,
+              available ? s.workerAvailabilityOn : s.workerAvailabilityOff,
+              togglingAvail && { opacity: 0.6 },
+              pressed && !togglingAvail && s.pressed,
+            ]}
+          >
+            <View style={[s.workerAvailabilityDot, { backgroundColor: available ? colors.success : colors.textMuted }]} />
+            <Text style={[s.workerAvailabilityText, { color: available ? colors.success : colors.textMuted }]}>
+              {available ? (lang === "hi" ? "Available" : "Available") : (lang === "hi" ? "Busy" : "Busy")}
+            </Text>
+          </Pressable>
+        </View>
+
         {workerProfile && (
-          <View style={s.wStatsStrip}>
-            <WStatBox icon="star" val={(workerProfile.avg_rating || 0).toFixed(1)} label={lang === "hi" ? "Rating" : "Rating"} />
-            <View style={s.wStatSep} />
-            <WStatBox icon="briefcase-outline" val={workerProfile.total_jobs || 0} label={lang === "hi" ? "काम" : "Jobs done"} />
-            <View style={s.wStatSep} />
-            <WStatBox icon="cash-outline" val={`₹${workerProfile.daily_rate || 0}`} label={lang === "hi" ? "प्रति दिन" : "Per day"} money />
+          <View style={s.workerPremiumStatsRow}>
+            <Pressable style={({ pressed }) => [s.workerPremiumStatCard, pressed && s.pressed]} onPress={() => navigation.navigate("Tabs", { screen: "Account" })}>
+              <Text style={s.workerPremiumStatValue}>{(workerProfile.avg_rating || 0).toFixed(1)}</Text>
+              <Text style={s.workerPremiumStatLabel}>Rating</Text>
+            </Pressable>
+            <Pressable style={({ pressed }) => [s.workerPremiumStatCard, pressed && s.pressed]} onPress={() => navigation.navigate("Tabs", { screen: "Account" })}>
+              <Text style={s.workerPremiumStatValue}>{workerProfile.total_jobs || 0}</Text>
+              <Text style={s.workerPremiumStatLabel}>{lang === "hi" ? "Jobs Done" : "Jobs Done"}</Text>
+            </Pressable>
+            <Pressable style={({ pressed }) => [s.workerPremiumStatCard, pressed && s.pressed]} onPress={() => navigation.navigate("Tabs", { screen: "Account" })}>
+              <Text style={[s.workerPremiumStatValue, { color: colors.money }]}>₹{workerProfile.daily_rate || 0}</Text>
+              <Text style={s.workerPremiumStatLabel}>{lang === "hi" ? "Per Day" : "Per Day"}</Text>
+            </Pressable>
           </View>
         )}
 
-        {/* ── Big Find Jobs CTA ─────────────────────────────────────── */}
-        <Pressable style={s.workerMainCTA} onPress={() => navigation.navigate("Tabs", { screen: "Jobs" })}>
-          <LinearGradient colors={["#0F766E", "#0A5C56"]} start={{ x:0, y:0 }} end={{ x:1, y:1 }} style={s.workerMainGrad}>
-            <View style={s.workerMainLeft}>
-              <Text style={s.workerMainTitle}>{lang === "hi" ? "पास के काम देखो" : "Find Jobs Near You"}</Text>
-              <Text style={s.workerMainSub}>
-                {nearJobs !== null ? `${nearJobs} ${lang === "hi" ? "काम मिले" : "jobs available"}` : (lang === "hi" ? "अभी देखो" : "Browse now")}
+        {needsProfileNudge && (
+          <Pressable
+            style={({ pressed }) => [s.workerProfileNudgeCard, pressed && s.pressed]}
+            onPress={() => navigation.navigate("Tabs", { screen: "Account" })}
+          >
+            <View style={s.workerProfileNudgeIcon}>
+              <Ionicons name="shield-checkmark-outline" size={19} color={colors.warning} />
+            </View>
+            <View style={s.workerProfileNudgeCopy}>
+              <Text style={s.workerProfileNudgeTitle}>
+                {lang === "hi" ? "Profile aur strong banao — zyada calls milenge" : "Profile aur strong banao — zyada calls milenge"}
+              </Text>
+              <View style={s.workerProgressTrack}>
+                <View style={[s.workerProgressFill, { width: `${completionPct}%` }]} />
+              </View>
+              <Text style={s.workerProfileNudgeMeta}>{completionPct}% complete</Text>
+            </View>
+            <Text style={s.workerProfileNudgeCta}>Complete Profile</Text>
+          </Pressable>
+        )}
+
+        <Pressable
+          style={({ pressed }) => [s.workerFindJobsCard, pressed && s.pressed]}
+          onPress={() => navigation.navigate("Tabs", { screen: "Jobs" })}
+        >
+          <LinearGradient colors={[colors.primary, colors.primaryDark]} start={{ x:0, y:0 }} end={{ x:1, y:1 }} style={s.workerFindJobsGradient}>
+            <View style={s.workerFindJobsCopy}>
+              <Text style={s.workerFindJobsTitle}>{lang === "hi" ? "Find Jobs Near You" : "Find Jobs Near You"}</Text>
+              <Text style={s.workerFindJobsSub}>
+                {nearJobs !== null ? `${nearJobs} ${lang === "hi" ? "jobs available" : "jobs available"}` : "Aapke area ke kaam dekhein"}
               </Text>
             </View>
-            <View style={s.workerMainIcon}>
+            <View style={s.workerFindJobsIcon}>
               <Ionicons name="briefcase-outline" size={28} color="#fff" />
             </View>
           </LinearGradient>
         </Pressable>
 
-        {/* ── Category chips ────────────────────────────────────────── */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.catRow}>
-          {CATS.map(cat => (
-            <Pressable key={cat.skill} style={s.catChip} onPress={() => navigation.navigate("Tabs", { screen: "Jobs" })}>
-              <Text style={s.catEmoji}>{cat.icon}</Text>
-              <Text style={s.catLabel}>{cat.label[lang] || cat.label.en}</Text>
-            </Pressable>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.workerCategoryRow}>
+          {GUEST_CATS.map(cat => (
+            <ServiceCategoryCard
+              key={cat.skill}
+              size="chip"
+              label={cat.label[lang] || cat.label.en}
+              icon={cat.icon}
+              onPress={() => navigation.navigate("Tabs", { screen: "Jobs" })}
+            />
           ))}
         </ScrollView>
 
-        {/* ── Active jobs ───────────────────────────────────────────── */}
         {engagements.length > 0 && (
-          <View style={s.section}>
-            <Text style={s.sectionHead}>{lang === "hi" ? "चल रहे काम" : "Active jobs"}</Text>
+          <View style={s.workerPremiumSection}>
+            <View style={s.workerSectionHeadRow}>
+              <Text style={s.workerSectionHead}>{lang === "hi" ? "Chal rahe kaam" : "Active jobs"}</Text>
+              <Pressable onPress={() => navigation.navigate("Tabs", { screen: "Account" })} style={({ pressed }) => [s.workerSeeAllBtn, pressed && s.pressed]}>
+                <Text style={s.workerSeeAllText}>Dashboard →</Text>
+              </Pressable>
+            </View>
             {engagements.slice(0, 2).map(e => (
-              <Pressable key={e.id} style={s.engCard} onPress={() => navigation.navigate("Tabs", { screen: "Account" })}>
-                <View style={[s.engDot, { backgroundColor: (e.engagement_status||e.status) === "accepted" ? colors.success : "#F59E0B" }]} />
-                <View style={{ flex: 1 }}>
-                  <Text style={s.engTitle}>{e.job_title}</Text>
-                  <Text style={s.engMeta}>{e.job_date} · <Text style={{ color: colors.money, fontFamily: fonts.bodyBold }}>₹{e.daily_rate}/day</Text></Text>
+              <Pressable
+                key={e.id}
+                style={({ pressed }) => [s.workerActiveJobCard, pressed && s.pressed]}
+                onPress={() => navigation.navigate("Tabs", { screen: "Account" })}
+              >
+                <View style={[s.workerActiveStatusDot, { backgroundColor: (e.engagement_status||e.status) === "accepted" ? colors.success : colors.warning }]} />
+                <View style={s.workerActiveJobCopy}>
+                  <Text style={s.workerActiveJobTitle} numberOfLines={1}>{e.job_title || "Active job"}</Text>
+                  <Text style={s.workerActiveJobMeta} numberOfLines={1}>
+                    {e.job_date || "Date not set"} · <Text style={s.workerMoney}>₹{e.daily_rate || "—"}/day</Text>
+                  </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
               </Pressable>
@@ -423,51 +584,39 @@ export default function LandingScreen({ navigation }) {
           </View>
         )}
 
-        {/* ── Job previews when no active work ─────────────────────── */}
-        {engagements.length === 0 && previewJobs.length > 0 && (
-          <View style={s.section}>
-            <View style={s.sectionHeadRow}>
-              <Text style={s.sectionHead}>{lang === "hi" ? "आपके लिए काम" : "Jobs matching you"}</Text>
-              <Pressable onPress={() => navigation.navigate("Tabs", { screen: "Jobs" })}>
-                <Text style={s.seeAllTxt}>{lang === "hi" ? "सभी देखो →" : "See all →"}</Text>
+        {previewJobs.length > 0 && (
+          <View style={s.workerPremiumSection}>
+            <View style={s.workerSectionHeadRow}>
+              <View>
+                <Text style={s.workerSectionHead}>{lang === "hi" ? "Aapke liye kaam" : "Aapke liye kaam"}</Text>
+                <Text style={s.workerSectionSub}>
+                  {previewJobs.length} {lang === "hi" ? "matching jobs" : "matching jobs"}
+                </Text>
+              </View>
+              <Pressable onPress={() => navigation.navigate("Tabs", { screen: "Jobs" })} style={({ pressed }) => [s.workerSeeAllBtn, pressed && s.pressed]}>
+                <Text style={s.workerSeeAllText}>See all →</Text>
               </Pressable>
             </View>
             {previewJobs.map(j => (
-              <Pressable key={j.id} style={s.jobPreviewCard} onPress={() => navigation.navigate("Tabs", { screen: "Jobs" })}>
-                <View style={s.jobPreviewBadge}>
-                  <Text style={{ fontSize: 22 }}>{CAT_EMOJI[j.category] || "💼"}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.jobPreviewTitle} numberOfLines={1}>{j.title}</Text>
-                  <Text style={s.jobPreviewMeta} numberOfLines={1}>
-                    {j.village || j.address?.village || "—"}{j.job_date ? ` · ${j.job_date}` : ""}
-                  </Text>
-                </View>
-                <Text style={s.jobPreviewRate}>
-                  ₹{j.daily_rate}<Text style={{ fontSize: 10, color: colors.textMuted }}>/day</Text>
-                </Text>
-              </Pressable>
+              <JobCard
+                key={j.id}
+                job={j}
+                compact
+                lang={lang}
+                onPress={() => navigation.navigate("Tabs", { screen: "Jobs" })}
+              />
             ))}
           </View>
         )}
 
-        {/* ── Profile nudge ─────────────────────────────────────────── */}
-        {workerProfile && (!workerProfile.photo_url || !workerProfile.bio) && (
-          <Pressable style={s.profileNudge} onPress={() => navigation.navigate("Tabs", { screen: "Account" })}>
-            <Ionicons name="alert-circle-outline" size={16} color={colors.money} />
-            <Text style={s.profileNudgeTxt} numberOfLines={1}>
-              {lang === "hi" ? "Profile पूरा करो — 2× ज़्यादा calls मिलेंगी" : "Complete profile — get 2× more job calls"}
-            </Text>
-            <Ionicons name="chevron-forward" size={14} color={colors.money} />
-          </Pressable>
-        )}
-
-        {/* ── Empty state ───────────────────────────────────────────── */}
         {engagements.length === 0 && previewJobs.length === 0 && (
-          <View style={s.emptyNudge}>
-            <Ionicons name="briefcase-outline" size={32} color={colors.textMuted} />
-            <Text style={s.emptyNudgeTxt}>{lang === "hi" ? "अभी कोई काम नहीं। ऊपर से ढूंढो।" : "No active jobs yet. Browse above."}</Text>
-          </View>
+          <EmptyState
+            icon="briefcase-outline"
+            title={lang === "hi" ? "Abhi nearby kaam nahin" : "Abhi nearby kaam nahin"}
+            subtitle={lang === "hi" ? "Pincode update karo ya baad mein check karo" : "Pincode update karo ya baad mein check karo"}
+            actionLabel="Refresh"
+            onAction={load}
+          />
         )}
       </ScrollView>
       <LocationPickerModal
@@ -477,124 +626,206 @@ export default function LandingScreen({ navigation }) {
         initialPincode={filterPincode}
         lang={lang}
       />
-    </SafeAreaView>
-  );
+    </AppScreen>
+    );
+  }
 
   /* ══ CUSTOMER ════════════════════════════════════════════════════ */
   return (
-    <SafeAreaView edges={["top"]} style={s.safe}>
+    <AppScreen edges={["top"]} style={s.safe}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 60 }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={colors.saffron} />}
+        contentContainerStyle={s.customerScroll}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} tintColor={colors.primary} />}
       >
-        <Header />
-        <LocationBar />
+        <AppHeader
+          lang={lang}
+          onLangToggle={() => setLang(lang === "hi" ? "en" : "hi")}
+          showNotifBell
+          notifCount={engagements.length}
+          onNotifPress={() => navigation.navigate("Tabs", { screen: "Account", params: { initialTab: "pending" } })}
+          style={s.customerHeader}
+        />
 
-        {/* ── Customer greeting ────────────────────────────────────── */}
-        <View style={s.custGreet}>
-          <View style={s.custGreetAccent} />
-          <View style={{ flex: 1 }}>
-            <Text style={s.custGreetName}>{greet}, {firstName}</Text>
-            <Text style={s.custGreetSub}>{lang === "hi" ? "आज कौनसा काम करवाना है?" : "What do you need done today?"}</Text>
+        <View style={s.customerLocationRow}>
+          <LocationBarComponent
+            pincode={filterPincode}
+            district={filterLocation?.district}
+            state={filterLocation?.state}
+            label="Workers near you"
+            onPress={() => setShowLocPicker(true)}
+            style={s.customerLocationBar}
+          />
+          {filterPincode ? (
+            <Pressable onPress={clearLocation} style={s.customerLocationClear} hitSlop={8}>
+              <Ionicons name="close" size={18} color={colors.textMuted} />
+            </Pressable>
+          ) : null}
+        </View>
+
+        <View style={s.customerGreeting}>
+          <View style={s.customerGreetingCopy}>
+            <Text style={s.customerGreetingTitle} numberOfLines={1}>{greet}, {firstName}</Text>
+            <Text style={s.customerGreetingSub}>
+              {lang === "hi" ? "आज कौनसा काम करवाना है?" : "Aaj kaunsa kaam karwana hai?"}
+            </Text>
           </View>
-          <Pressable onPress={() => navigation.navigate("CustomerProfile")} style={s.custProfileBtn}>
-            <Ionicons name="person-circle-outline" size={28} color={colors.saffron} />
+          <Pressable
+            onPress={() => navigation.navigate("CustomerProfile")}
+            style={({ pressed }) => [s.customerProfileButton, pressed && s.pressed]}
+          >
+            <Ionicons name="person-circle-outline" size={26} color={colors.primary} />
           </Pressable>
         </View>
 
-        {/* Quick stats strip — each card is tappable */}
-        <View style={s.custStatsStrip}>
+        {engagements.length > 0 && (
           <Pressable
-            style={s.custStat}
-            onPress={() => navigation.navigate("Tabs", { screen: "Account", params: { initialTab: "jobs" } })}
-          >
-            <Text style={s.custStatVal}>{myJobs.length}</Text>
-            <Text style={s.custStatLabel}>{lang === "hi" ? "Open Jobs" : "Open jobs"}</Text>
-          </Pressable>
-          <View style={s.custStatSep} />
-          <Pressable
-            style={s.custStat}
+            style={({ pressed }) => [s.customerAlertCard, pressed && s.pressed]}
             onPress={() => navigation.navigate("Tabs", { screen: "Account", params: { initialTab: "pending" } })}
           >
-            <Text style={[s.custStatVal, engagements.length > 0 && { color: colors.money }]}>{engagements.length}</Text>
-            <Text style={s.custStatLabel}>{lang === "hi" ? "Responses" : "Responses"}</Text>
-          </Pressable>
-          <View style={s.custStatSep} />
-          <Pressable
-            style={s.custStat}
-            onPress={() => navigation.navigate("Tabs", { screen: "Workers", params: { filterPincode } })}
-          >
-            <Text style={s.custStatVal}>{nearWorkers ?? "—"}</Text>
-            <Text style={s.custStatLabel}>{lang === "hi" ? "कारीगर पास" : "Workers near"}</Text>
-          </Pressable>
-        </View>
-
-        {/* Pending responses alert */}
-        {engagements.length > 0 && (
-          <Pressable style={s.alertBanner} onPress={() => navigation.navigate("Tabs", { screen: "Account" })}>
-            <View style={s.alertDot} />
-            <Text style={s.alertTxt}>
-              {engagements.length} {lang === "hi" ? "कारीगर ने interest दिखाया — अभी देखो" : `worker${engagements.length > 1 ? "s" : ""} interested — review now`}
-            </Text>
-            <Ionicons name="chevron-forward" size={16} color={colors.saffron} />
+            <View style={s.customerAlertIcon}>
+              <Ionicons name="people-outline" size={19} color={colors.warning} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={s.customerAlertTitle}>
+                {engagements.length} {lang === "hi" ? "workers interested — abhi dekhein" : `worker${engagements.length > 1 ? "s" : ""} interested — Review now`}
+              </Text>
+              <Text style={s.customerAlertSub}>
+                {lang === "hi" ? "Aapke posted kaam par response aaya hai" : "A worker has responded to your posted job"}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.warning} />
           </Pressable>
         )}
 
-        {/* Primary CTA — Post Job */}
-        <Pressable style={s.customerMainCTA} onPress={() => navigation.navigate("PostJob")}>
-          <LinearGradient colors={["#0F766E", "#0A5C56"]} start={{ x:0, y:0 }} end={{ x:1, y:1 }} style={s.workerMainGrad}>
-            <View style={s.workerMainLeft}>
-              <Text style={s.workerMainTitle}>{lang === "hi" ? "काम दो" : "Post a Job"}</Text>
-              <Text style={s.workerMainSub}>{lang === "hi" ? "60 सेकंड में पोस्ट करो" : "Post in 60 seconds"}</Text>
+        <View style={s.customerStatsRow}>
+          <Pressable
+            style={({ pressed }) => [s.customerStatCard, pressed && s.pressed]}
+            onPress={() => navigation.navigate("Tabs", { screen: "Account", params: { initialTab: "jobs" } })}
+          >
+            <Text style={s.customerStatValue}>{myJobs.length}</Text>
+            <Text style={s.customerStatLabel}>{lang === "hi" ? "Open Jobs" : "Open Jobs"}</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [s.customerStatCard, pressed && s.pressed]}
+            onPress={() => navigation.navigate("Tabs", { screen: "Account", params: { initialTab: "pending" } })}
+          >
+            <Text style={[s.customerStatValue, engagements.length > 0 && { color: colors.money }]}>{engagements.length}</Text>
+            <Text style={s.customerStatLabel}>Responses</Text>
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [s.customerStatCard, pressed && s.pressed]}
+            onPress={() => navigation.navigate("Tabs", { screen: "Workers", params: { filterPincode } })}
+          >
+            <Text style={s.customerStatValue}>{nearWorkers ?? "—"}</Text>
+            <Text style={s.customerStatLabel}>{lang === "hi" ? "Workers Near" : "Workers Near"}</Text>
+          </Pressable>
+        </View>
+
+        <Pressable
+          style={({ pressed }) => [s.customerPostCard, pressed && s.pressed]}
+          onPress={() => navigation.navigate("PostJob")}
+        >
+          <LinearGradient colors={[colors.primary, colors.primaryDark]} start={{ x:0, y:0 }} end={{ x:1, y:1 }} style={s.customerPostGradient}>
+            <View style={s.customerPostCopy}>
+              <Text style={s.customerPostTitle}>{lang === "hi" ? "Post a Job" : "Post a Job"}</Text>
+              <Text style={s.customerPostSub}>
+                {lang === "hi" ? "60 second mein kaam post karein" : "60 second mein kaam post karein"}
+              </Text>
             </View>
-            <View style={s.workerMainIcon}>
+            <View style={s.customerPostIcon}>
               <Ionicons name="add-circle-outline" size={28} color="#fff" />
             </View>
           </LinearGradient>
         </Pressable>
 
-        {/* Category quick browse */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.catRow}>
-          {CATS.map(cat => (
-            <Pressable key={cat.skill} style={s.catChip} onPress={() => navigation.navigate("Tabs", { screen: "Workers" })}>
-              <Text style={s.catEmoji}>{cat.icon}</Text>
-              <Text style={s.catLabel}>{cat.label[lang] || cat.label.en}</Text>
-            </Pressable>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.customerCategoryRow}>
+          {GUEST_CATS.map(cat => (
+            <ServiceCategoryCard
+              key={cat.skill}
+              size="chip"
+              label={cat.label[lang] || cat.label.en}
+              icon={cat.icon}
+              onPress={() => navigation.navigate("Tabs", { screen: "Workers" })}
+            />
           ))}
         </ScrollView>
 
-        {/* Available workers preview */}
         {workers.length > 0 && (
-          <View style={s.section}>
-            <Text style={s.sectionHead}>
-              {lang === "hi" ? "पास में उपलब्ध कारीगर" : "Available workers near you"}
-            </Text>
+          <View style={s.customerSection}>
+            <View style={s.customerSectionHeadRow}>
+              <Text style={s.customerSectionHead}>{lang === "hi" ? "Available near you" : "Available near you"}</Text>
+              <Pressable
+                onPress={() => navigation.navigate("Tabs", { screen: "Workers", params: { filterPincode } })}
+                style={({ pressed }) => [s.customerSeeAllBtn, pressed && s.pressed]}
+              >
+                <Text style={s.customerSeeAllText}>{lang === "hi" ? "See all →" : "See all →"}</Text>
+              </Pressable>
+            </View>
             {workers.slice(0, 3).map(w => (
-              <WorkerPreviewCard key={w.id} w={w} lang={lang} onPress={() => navigation.navigate("WorkerProfile", { id: w.id })} />
+              <WorkerCard
+                key={w.id}
+                worker={w}
+                size="compact"
+                showTrustBadge
+                onPress={() => navigation.navigate("WorkerProfile", { id: w.id })}
+              />
             ))}
-            <Pressable style={s.seeAllBtn} onPress={() => navigation.navigate("Tabs", { screen: "Workers" })}>
-              <Text style={s.seeAllTxt}>{lang === "hi" ? "सभी कारीगर देखो →" : "See all workers →"}</Text>
-            </Pressable>
           </View>
         )}
 
-        {/* My open jobs */}
-        {myJobs.length > 0 && (
-          <View style={s.section}>
-            <Text style={s.sectionHead}>{lang === "hi" ? "आपके खुले काम" : "Your open jobs"}</Text>
-            {myJobs.slice(0, 2).map(j => (
-              <Pressable key={j.id} style={s.engCard} onPress={() => navigation.navigate("Tabs", { screen: "Account" })}>
-                <Text style={s.catEmojiSm}>{j.category === "construction" ? "🏗️" : j.category === "farm" ? "🌾" : "💼"}</Text>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.engTitle}>{j.title}</Text>
-                  <Text style={s.engMeta}>{j.job_date} · <Text style={{ color: colors.money, fontFamily: fonts.bodyBold }}>₹{j.daily_rate}/day</Text></Text>
+        <View style={s.customerSection}>
+          <View style={s.customerSectionHeadRow}>
+            <Text style={s.customerSectionHead}>{lang === "hi" ? "Your open jobs" : "Your open jobs"}</Text>
+            {myJobs.length > 0 ? (
+              <Pressable
+                onPress={() => navigation.navigate("Tabs", { screen: "Account", params: { initialTab: "jobs" } })}
+                style={({ pressed }) => [s.customerSeeAllBtn, pressed && s.pressed]}
+              >
+                <Text style={s.customerSeeAllText}>Dashboard →</Text>
+              </Pressable>
+            ) : null}
+          </View>
+
+          {myJobs.length > 0 ? (
+            myJobs.slice(0, 2).map(j => (
+              <Pressable
+                key={j.id}
+                style={({ pressed }) => [s.customerJobCard, pressed && s.pressed]}
+                onPress={() => navigation.navigate("Tabs", { screen: "Account", params: { initialTab: "jobs" } })}
+              >
+                <View style={s.customerJobIcon}>
+                  <Ionicons name={j.category === "farm" ? "leaf-outline" : j.category === "construction" ? "construct-outline" : "briefcase-outline"} size={20} color={colors.primary} />
+                </View>
+                <View style={s.customerJobCopy}>
+                  <Text style={s.customerJobTitle} numberOfLines={1}>{j.title || j.skill || "Open job"}</Text>
+                  <Text style={s.customerJobMeta} numberOfLines={1}>
+                    {j.job_date || j.work_date || "Date not set"} · <Text style={s.customerMoney}>₹{j.daily_rate || j.rate || "—"}/day</Text>
+                  </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
               </Pressable>
-            ))}
-          </View>
-        )}
+            ))
+          ) : (
+            <Pressable
+              style={({ pressed }) => [s.customerEmptyJobCard, pressed && s.pressed]}
+              onPress={() => navigation.navigate("PostJob")}
+            >
+              <View style={s.customerEmptyIcon}>
+                <Ionicons name="add-outline" size={21} color={colors.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.customerEmptyTitle}>
+                  {lang === "hi" ? "Aaj apna pehla kaam post karo" : "Aaj apna pehla kaam post karo"}
+                </Text>
+                <Text style={s.customerEmptySub}>
+                  {lang === "hi" ? "Nearby workers ko turant notification milega" : "Nearby workers ko turant notification milega"}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={colors.primary} />
+            </Pressable>
+          )}
+        </View>
       </ScrollView>
       <LocationPickerModal
         visible={showLocPicker}
@@ -603,7 +834,7 @@ export default function LandingScreen({ navigation }) {
         initialPincode={filterPincode}
         lang={lang}
       />
-    </SafeAreaView>
+    </AppScreen>
   );
 }
 
@@ -751,6 +982,161 @@ const s = StyleSheet.create({
   langPill: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 11, paddingVertical: 6, borderRadius: 20, backgroundColor: colors.saffronTint, borderWidth: 1, borderColor: colors.border },
   langTxt: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.saffron },
 
+  // Guest premium home
+  guestScroll: { paddingBottom: 36 },
+  guestHeader: { backgroundColor: colors.bg },
+  guestLocationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  guestLocationBar: { flex: 1 },
+  guestLocationClear: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  guestHeroNew: {
+    marginHorizontal: spacing.lg,
+    borderRadius: radius.xl,
+    padding: spacing.xl,
+    marginBottom: spacing.md,
+    overflow: "hidden",
+    ...shadow.sm,
+  },
+  heroIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
+  },
+  heroTitleNew: {
+    fontFamily: fonts.display,
+    fontSize: 31,
+    lineHeight: 37,
+    color: "#fff",
+    marginBottom: 8,
+  },
+  heroSubNew: {
+    fontFamily: fonts.body,
+    fontSize: 14,
+    lineHeight: 21,
+    color: "rgba(255,255,255,0.84)",
+    marginBottom: 16,
+  },
+  nearPillNew: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    borderRadius: radius.pill,
+    backgroundColor: "rgba(255,255,255,0.14)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  nearTxtNew: { fontFamily: fonts.bodyBold, fontSize: 12, color: "#fff" },
+  guestPathStack: { gap: 10, paddingHorizontal: spacing.lg, marginBottom: spacing.md },
+  primaryPathCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.primary,
+    padding: spacing.lg,
+    ...shadow.xs,
+  },
+  secondaryPathCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.lg,
+    ...shadow.xs,
+  },
+  pressed: { opacity: 0.94 },
+  pathCopy: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: 12 },
+  pathIconPrimary: {
+    width: 46,
+    height: 46,
+    borderRadius: 15,
+    backgroundColor: colors.primaryLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pathIconSecondary: {
+    width: 46,
+    height: 46,
+    borderRadius: 15,
+    backgroundColor: colors.surface2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  primaryPathTitle: { fontFamily: fonts.bodyBold, fontSize: 17, color: colors.text },
+  primaryPathSub: { marginTop: 3, fontFamily: fonts.body, fontSize: 13, color: colors.textMuted },
+  secondaryPathTitle: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.text },
+  secondaryPathSub: { marginTop: 3, fontFamily: fonts.body, fontSize: 13, color: colors.textMuted },
+  pathArrowPrimary: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  guestCatRow: { paddingHorizontal: spacing.lg, gap: 8, paddingBottom: 6, marginBottom: spacing.md },
+  guestStatsStrip: {
+    flexDirection: "row",
+    gap: 10,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  guestStatItem: {
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingVertical: 14,
+    alignItems: "center",
+    ...shadow.xs,
+  },
+  guestStatV: { fontFamily: fonts.display, fontSize: 22, color: colors.primary },
+  guestStatL: { marginTop: 3, fontFamily: fonts.bodyBold, fontSize: 11, color: colors.textMuted, textAlign: "center" },
+  guestSection: { marginHorizontal: spacing.lg, marginBottom: spacing.lg },
+  guestSectionHeadRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.sm,
+  },
+  guestSectionHead: { fontFamily: fonts.bodyBold, fontSize: 17, color: colors.text },
+  guestSeeAllBtn: { minHeight: 44, alignItems: "center", justifyContent: "center" },
+  guestSeeAllTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.primary },
+  guestAuthCard: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    marginBottom: spacing.xl,
+    gap: 10,
+  },
+  guestLoginButton: { borderColor: colors.border },
+
   // Guest hero
   guestHero: { marginHorizontal: spacing.lg, borderRadius: 20, padding: 22, marginBottom: 12, overflow: "hidden" },
   heroBlob1: { position: "absolute", width: 180, height: 180, borderRadius: 90, backgroundColor: "rgba(255,255,255,0.07)", top: -50, right: -50 },
@@ -831,6 +1217,542 @@ const s = StyleSheet.create({
   workerMainTitle: { fontFamily: fonts.display, fontSize: 22, color: "#fff" },
   workerMainSub: { fontFamily: fonts.body, fontSize: 13, color: "rgba(255,255,255,0.8)", marginTop: 4 },
   workerMainIcon: { width: 54, height: 54, borderRadius: 27, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" },
+
+  // Worker premium home
+  workerPremiumScroll: { paddingBottom: 48 },
+  workerPremiumHeader: { backgroundColor: colors.bg },
+  workerLocationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  workerLocationBar: { flex: 1 },
+  workerLocationClear: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  workerIdentityCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.lg,
+    ...shadow.xs,
+  },
+  workerAvatarWrap: { position: "relative" },
+  workerAvatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 16,
+    backgroundColor: colors.surface2,
+  },
+  workerAvatarFallback: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.primaryLight,
+  },
+  workerAvatarInitials: {
+    fontFamily: fonts.display,
+    fontSize: 24,
+    color: colors.primary,
+  },
+  workerAvatarDot: {
+    position: "absolute",
+    right: 2,
+    bottom: 2,
+    width: 13,
+    height: 13,
+    borderRadius: 7,
+    backgroundColor: colors.success,
+    borderWidth: 2,
+    borderColor: colors.surface,
+  },
+  workerIdentityCopy: { flex: 1, minWidth: 0 },
+  workerHello: {
+    fontFamily: fonts.display,
+    fontSize: 20,
+    color: colors.text,
+  },
+  workerSkillSummary: {
+    marginTop: 3,
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.textMuted,
+  },
+  workerAvailabilityPill: {
+    minHeight: 48,
+    minWidth: 112,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    borderRadius: radius.pill,
+    borderWidth: 1.5,
+    paddingHorizontal: 14,
+  },
+  workerAvailabilityOn: {
+    backgroundColor: colors.successLight,
+    borderColor: "#BBF7D0",
+  },
+  workerAvailabilityOff: {
+    backgroundColor: colors.surface2,
+    borderColor: colors.border,
+  },
+  workerAvailabilityDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  workerAvailabilityText: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 13,
+  },
+  workerPremiumStatsRow: {
+    flexDirection: "row",
+    gap: 10,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  workerPremiumStatCard: {
+    flex: 1,
+    minHeight: 82,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 8,
+    ...shadow.xs,
+  },
+  workerPremiumStatValue: {
+    fontFamily: fonts.display,
+    fontSize: 22,
+    color: colors.primary,
+  },
+  workerPremiumStatLabel: {
+    marginTop: 3,
+    fontFamily: fonts.bodyBold,
+    fontSize: 11,
+    color: colors.textMuted,
+    textAlign: "center",
+  },
+  workerProfileNudgeCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    backgroundColor: colors.warningLight,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+    padding: spacing.md,
+  },
+  workerProfileNudgeIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 13,
+    backgroundColor: "#FEF3C7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  workerProfileNudgeCopy: { flex: 1, minWidth: 0 },
+  workerProfileNudgeTitle: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 13,
+    color: "#92400E",
+  },
+  workerProgressTrack: {
+    height: 5,
+    borderRadius: radius.pill,
+    backgroundColor: "#FDE68A",
+    overflow: "hidden",
+    marginTop: 8,
+  },
+  workerProgressFill: {
+    height: 5,
+    borderRadius: radius.pill,
+    backgroundColor: colors.warning,
+  },
+  workerProfileNudgeMeta: {
+    marginTop: 4,
+    fontFamily: fonts.body,
+    fontSize: 11,
+    color: "#A16207",
+  },
+  workerProfileNudgeCta: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 12,
+    color: colors.warning,
+  },
+  workerFindJobsCard: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    borderRadius: radius.xl,
+    overflow: "hidden",
+    ...shadow.sm,
+  },
+  workerFindJobsGradient: {
+    minHeight: 128,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: spacing.xl,
+  },
+  workerFindJobsCopy: { flex: 1, minWidth: 0 },
+  workerFindJobsTitle: {
+    fontFamily: fonts.display,
+    fontSize: 25,
+    color: "#fff",
+  },
+  workerFindJobsSub: {
+    marginTop: 6,
+    fontFamily: fonts.body,
+    fontSize: 14,
+    color: "rgba(255,255,255,0.84)",
+  },
+  workerFindJobsIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  workerCategoryRow: {
+    paddingHorizontal: spacing.lg,
+    gap: 8,
+    paddingBottom: 6,
+    marginBottom: spacing.md,
+  },
+  workerPremiumSection: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  workerSectionHeadRow: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.sm,
+  },
+  workerSectionHead: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 17,
+    color: colors.text,
+  },
+  workerSectionSub: {
+    marginTop: 2,
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  workerSeeAllBtn: {
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingLeft: spacing.md,
+  },
+  workerSeeAllText: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 13,
+    color: colors.primary,
+  },
+  workerActiveJobCard: {
+    minHeight: 72,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    marginBottom: 10,
+    ...shadow.xs,
+  },
+  workerActiveStatusDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  workerActiveJobCopy: { flex: 1, minWidth: 0 },
+  workerActiveJobTitle: {
+    fontFamily: fonts.bodySemi,
+    fontSize: 14,
+    color: colors.text,
+  },
+  workerActiveJobMeta: {
+    marginTop: 3,
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  workerMoney: {
+    fontFamily: fonts.bodyBold,
+    color: colors.money,
+  },
+
+  // Customer premium home
+  customerScroll: { paddingBottom: 48 },
+  customerHeader: { backgroundColor: colors.bg },
+  customerLocationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  customerLocationBar: { flex: 1 },
+  customerLocationClear: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  customerGreeting: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  customerGreetingCopy: { flex: 1, minWidth: 0 },
+  customerGreetingTitle: {
+    fontFamily: fonts.display,
+    fontSize: 22,
+    color: colors.text,
+  },
+  customerGreetingSub: {
+    marginTop: 3,
+    fontFamily: fonts.body,
+    fontSize: 13,
+    color: colors.textMuted,
+  },
+  customerProfileButton: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+    ...shadow.xs,
+  },
+  customerAlertCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    backgroundColor: colors.warningLight,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+    padding: spacing.md,
+  },
+  customerAlertIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 13,
+    backgroundColor: "#FEF3C7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  customerAlertTitle: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 14,
+    color: "#92400E",
+  },
+  customerAlertSub: {
+    marginTop: 2,
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: "#A16207",
+  },
+  customerStatsRow: {
+    flexDirection: "row",
+    gap: 10,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  customerStatCard: {
+    flex: 1,
+    minHeight: 82,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 8,
+    ...shadow.xs,
+  },
+  customerStatValue: {
+    fontFamily: fonts.display,
+    fontSize: 23,
+    color: colors.primary,
+  },
+  customerStatLabel: {
+    marginTop: 3,
+    fontFamily: fonts.bodyBold,
+    fontSize: 11,
+    color: colors.textMuted,
+    textAlign: "center",
+  },
+  customerPostCard: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.md,
+    borderRadius: radius.xl,
+    overflow: "hidden",
+    ...shadow.sm,
+  },
+  customerPostGradient: {
+    minHeight: 128,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: spacing.xl,
+  },
+  customerPostCopy: { flex: 1, minWidth: 0 },
+  customerPostTitle: {
+    fontFamily: fonts.display,
+    fontSize: 26,
+    color: "#fff",
+  },
+  customerPostSub: {
+    marginTop: 6,
+    fontFamily: fonts.body,
+    fontSize: 14,
+    color: "rgba(255,255,255,0.84)",
+  },
+  customerPostIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  customerCategoryRow: {
+    paddingHorizontal: spacing.lg,
+    gap: 8,
+    paddingBottom: 6,
+    marginBottom: spacing.md,
+  },
+  customerSection: {
+    marginHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  customerSectionHeadRow: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: spacing.sm,
+  },
+  customerSectionHead: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 17,
+    color: colors.text,
+  },
+  customerSeeAllBtn: {
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingLeft: spacing.md,
+  },
+  customerSeeAllText: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 13,
+    color: colors.primary,
+  },
+  customerJobCard: {
+    minHeight: 72,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.md,
+    marginBottom: 10,
+    ...shadow.xs,
+  },
+  customerJobIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: colors.primaryLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  customerJobCopy: { flex: 1, minWidth: 0 },
+  customerJobTitle: {
+    fontFamily: fonts.bodySemi,
+    fontSize: 14,
+    color: colors.text,
+  },
+  customerJobMeta: {
+    marginTop: 3,
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  customerMoney: {
+    fontFamily: fonts.bodyBold,
+    color: colors.money,
+  },
+  customerEmptyJobCard: {
+    minHeight: 78,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: colors.primaryLight,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: "#CCFBF1",
+    padding: spacing.md,
+  },
+  customerEmptyIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: colors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  customerEmptyTitle: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 14,
+    color: colors.text,
+  },
+  customerEmptySub: {
+    marginTop: 2,
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.textMuted,
+  },
 
   // Customer greeting
   custGreet: { flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.lg, paddingBottom: 12, gap: 12 },

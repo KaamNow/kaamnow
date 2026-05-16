@@ -8,8 +8,10 @@ export default function Button({
   loading = false,
   disabled = false,
   style,
+  textStyle,
   testID,
   icon,
+  fullWidth = false,
 }) {
   const variantStyle = styles[variant] || styles.saffron;
   const textColor =
@@ -22,18 +24,19 @@ export default function Button({
       disabled={disabled || loading}
       style={({ pressed }) => [
         styles.base,
+        fullWidth && styles.fullWidth,
         variantStyle,
-        (disabled || loading) && { opacity: 0.6 },
-        pressed && { opacity: 0.85 },
+        (disabled || loading) && styles.disabled,
+        pressed && !disabled && !loading && styles.pressed,
         style,
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={textColor} />
+        <ActivityIndicator color={textColor} size="small" />
       ) : (
         <>
           {icon}
-          <Text style={[styles.text, { color: textColor }]}>{title}</Text>
+          <Text style={[styles.text, { color: textColor }, textStyle]}>{title}</Text>
         </>
       )}
     </Pressable>
@@ -42,20 +45,30 @@ export default function Button({
 
 const styles = StyleSheet.create({
   base: {
-    paddingVertical: 14,
-    paddingHorizontal: 22,
+    minHeight: 48,
+    paddingVertical: 15,
+    paddingHorizontal: 24,
     borderRadius: radius.md,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
     gap: 8,
   },
-  saffron: { backgroundColor: colors.saffron },
-  indigo: { backgroundColor: colors.indigo },
+  fullWidth: {
+    width: "100%",
+  },
+  saffron: { backgroundColor: colors.primary },
+  indigo: { backgroundColor: colors.primary },
   outline: {
-    backgroundColor: "transparent",
+    backgroundColor: colors.surface,
     borderWidth: 1.5,
-    borderColor: colors.borderStrong,
+    borderColor: colors.border,
+  },
+  disabled: {
+    opacity: 0.4,
+  },
+  pressed: {
+    opacity: 0.88,
   },
   text: {
     fontFamily: fonts.bodyBold,

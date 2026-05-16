@@ -1,17 +1,25 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   View, Text, ScrollView, StyleSheet,
   KeyboardAvoidingView, Platform, Alert,
   Pressable, Modal, TextInput, Linking,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import Button from "../components/Button";
+import AppScreen from "../components/AppScreen";
+import PhoneInput from "../components/PhoneInput";
+import PrimaryButton from "../components/PrimaryButton";
 import { useAuth } from "../contexts/AuthContext";
 import { useLanguage } from "../contexts/LanguageContext";
 import api, { formatApiError } from "../api";
-import { colors, fonts, spacing } from "../theme";
+import { colors, fonts, radius, shadow, spacing } from "../theme";
+
+function maskPhoneNumber(phone) {
+  const digits = (phone || "").replace(/\D/g, "").slice(-10);
+  if (digits.length !== 10) return phone || "";
+  return `XXXXX-${digits.slice(5)}`;
+}
 
 export default function LoginScreen() {
   const navigation = useNavigation();
@@ -27,6 +35,8 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [notRegistered, setNotRegistered] = useState(false);
   const [requiresOptin, setRequiresOptin] = useState(false);
+  const [otpFocusedIndex, setOtpFocusedIndex] = useState(0);
+  const otpRefs = useRef([]);
 
   const safePhone = phone || "";
   const fullPhone = safePhone.startsWith("+91") ? safePhone : `+91${safePhone.replace(/\D/g, "")}`;
@@ -82,6 +92,45 @@ export default function LoginScreen() {
     }
   };
 
+  const handleOtpBoxChange = (value, index) => {
+    const digits = value.replace(/\D/g, "");
+    if (!digits) {
+      setOtp((prev) => {
+        const next = prev.padEnd(6, " ").split("");
+        next[index] = " ";
+        return next.join("").replace(/\s/g, "").slice(0, 6);
+      });
+      return;
+    }
+
+    if (digits.length > 1) {
+      const nextOtp = digits.slice(0, 6);
+      setOtp(nextOtp);
+      const nextIndex = Math.min(nextOtp.length, 5);
+      otpRefs.current[nextIndex]?.focus();
+      setOtpFocusedIndex(nextIndex);
+      return;
+    }
+
+    setOtp((prev) => {
+      const next = prev.padEnd(6, " ").split("");
+      next[index] = digits;
+      return next.join("").replace(/\s/g, "").slice(0, 6);
+    });
+
+    if (index < 5) {
+      otpRefs.current[index + 1]?.focus();
+      setOtpFocusedIndex(index + 1);
+    }
+  };
+
+  const handleOtpKeyPress = (event, index) => {
+    if (event.nativeEvent.key === "Backspace" && !otp[index] && index > 0) {
+      otpRefs.current[index - 1]?.focus();
+      setOtpFocusedIndex(index - 1);
+    }
+  };
+
   const handleSignupFallback = async () => {
     if (name.trim().length < 2)
       return Alert.alert(lang === "hi" ? "नाम डालो" : "Enter your name");
@@ -97,43 +146,36 @@ export default function LoginScreen() {
   };
 
   const step = otpFlow.step;
+  const isOtpStep = step === 2;
 
   return (
-    <SafeAreaView style={s.safe}>
+    <AppScreen edges={["top"]} style={s.safe}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
         <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
-          {/* ── Back ──────────────────────────────────────────────── */}
           <Pressable style={s.backBtn} onPress={() => {
             if (step > 1) resetOTPFlow();
             else if (navigation.canGoBack()) navigation.goBack();
             else navigation.navigate("Home");
           }}>
-            <Ionicons name="arrow-back" size={18} color={colors.saffron} />
-            <Text style={s.backTxt}>{lang === "hi" ? "वापस" : "Back"}</Text>
+            <Ionicons name="arrow-back" size={22} color={colors.primary} />
           </Pressable>
 
-          {/* ── Brand + step dots ─────────────────────────────────── */}
-          <View style={s.brand}>
+          <View style={[s.brand, isOtpStep && s.brandCompact]}>
             <View style={s.logoBadge}><Text style={s.logoK}>K</Text></View>
-            <View style={s.stepDots}>
-              {[1, 2].map(n => (
-                <View key={n} style={[s.dot, step >= n && s.dotOn]} />
-              ))}
-            </View>
+            <Text style={s.brandName}>KaamNow</Text>
+            <Text style={s.tagline}>काम की बात KaamNow के साथ</Text>
           </View>
 
-          {/* ── Title ─────────────────────────────────────────────── */}
           <View style={s.titleBlock}>
-            <Text style={s.step}>{lang === "hi" ? `चरण ${step} / 2` : `Step ${step} of 2`}</Text>
             <Text style={s.title}>
-              {step === 1 && (lang === "hi" ? "Login करो" : "Log in")}
-              {step === 2 && (lang === "hi" ? "Code डालो" : "Enter your code")}
+              {step === 1 && "Log in"}
+              {step === 2 && "Code dalein"}
               {step === 3 && (lang === "hi" ? "Account बनाओ" : "Finish signing up")}
             </Text>
             <Text style={s.subtitle}>
-              {step === 1 && (lang === "hi" ? "अपना मोबाइल नंबर डालो।" : "Sign in with your mobile number.")}
-              {step === 2 && (lang === "hi" ? `Code भेजा: ${otpFlow.phone}` : `Code sent to ${otpFlow.phone}`)}
+              {step === 1 && "Apna mobile number dalein"}
+              {step === 2 && `6-digit code bheja: +91 ${maskPhoneNumber(otpFlow.phone)}`}
               {step === 3 && (lang === "hi" ? "नाम और role बताओ।" : "Add your name and role to continue.")}
             </Text>
           </View>
@@ -141,27 +183,12 @@ export default function LoginScreen() {
           {/* ── Step 1 — Phone ────────────────────────────────────── */}
           {step === 1 && (
             <View style={s.form}>
-              <Text style={s.fieldLabel}>{lang === "hi" ? "मोबाइल नंबर" : "Mobile number"}</Text>
-              <View style={s.phoneRow}>
-                <View style={s.prefixBox}>
-                  <Text style={s.prefixTxt}>+91</Text>
-                </View>
-                <TextInput
-                  style={s.phoneInput}
-                  placeholder="9876543210"
-                  placeholderTextColor={colors.textMuted}
-                  keyboardType="number-pad"
-                  maxLength={10}
-                  value={phone}
-                  onChangeText={v => setPhone(v.replace(/\D/g, ""))}
-                  autoFocus
-                />
-              </View>
+              <PhoneInput value={phone} onChangeText={setPhone} autoFocus />
               <Text style={s.hint}>
-                {lang === "hi" ? "+91 अपने आप जुड़ जाएगा।" : "+91 is added automatically."}
+                OTP WhatsApp par aayega
               </Text>
-              <Button
-                title={lang === "hi" ? "OTP भेजो" : "Send code"}
+              <PrimaryButton
+                title="Code bhejo"
                 onPress={handleSendOTP}
                 loading={loading}
                 disabled={phone.length !== 10}
@@ -169,10 +196,7 @@ export default function LoginScreen() {
               />
               <Pressable onPress={() => navigation.replace("PhoneSignup")} style={s.switchLink}>
                 <Text style={s.switchTxt}>
-                  {lang === "hi" ? "नया हो? " : "New here? "}
-                  <Text style={{ color: colors.saffron }}>
-                    {lang === "hi" ? "Register करो →" : "Sign up →"}
-                  </Text>
+                  Naya hai? <Text style={s.switchAccent}>Account banao</Text>
                 </Text>
               </Pressable>
             </View>
@@ -187,7 +211,7 @@ export default function LoginScreen() {
                   style={s.optinBanner}
                   onPress={() => Linking.openURL("https://wa.me/917834811114?text=Hi")}
                 >
-                  <Ionicons name="logo-whatsapp" size={18} color="#16a34a" />
+                  <Ionicons name="logo-whatsapp" size={18} color={colors.info} />
                   <View style={{ flex: 1 }}>
                     <Text style={s.optinTitle}>
                       {lang === "hi" ? "OTP WhatsApp से आएगा" : "OTP arrives on WhatsApp"}
@@ -203,22 +227,32 @@ export default function LoginScreen() {
                   </Text>
                 </Pressable>
               )}
-              <Text style={s.fieldLabel}>{lang === "hi" ? "6-अंक code" : "6-digit code"}</Text>
-              <TextInput
-                style={s.otpInput}
-                placeholder="● ● ● ● ● ●"
-                placeholderTextColor={colors.border}
-                keyboardType="number-pad"
-                maxLength={6}
-                value={otp}
-                onChangeText={v => setOtp(v.replace(/\D/g, ""))}
-                autoFocus
-              />
+              <View style={s.otpRow}>
+                {Array.from({ length: 6 }).map((_, index) => (
+                  <TextInput
+                    key={index}
+                    ref={(ref) => { otpRefs.current[index] = ref; }}
+                    style={[
+                      s.otpBox,
+                      otpFocusedIndex === index && s.otpBoxFocused,
+                      otp[index] && s.otpBoxFilled,
+                    ]}
+                    keyboardType="number-pad"
+                    maxLength={6}
+                    value={otp[index] || ""}
+                    onChangeText={(value) => handleOtpBoxChange(value, index)}
+                    onKeyPress={(event) => handleOtpKeyPress(event, index)}
+                    onFocus={() => setOtpFocusedIndex(index)}
+                    selectTextOnFocus
+                    autoFocus={index === 0}
+                  />
+                ))}
+              </View>
               <Text style={s.hint}>
-                {lang === "hi" ? `${otpFlow.phone} पर भेजा गया।` : `Sent to ${otpFlow.phone}`}
+                WhatsApp par code check karein
               </Text>
-              <Button
-                title={lang === "hi" ? "Verify करो" : "Verify & log in"}
+              <PrimaryButton
+                title="OTP confirm karo"
                 onPress={handleVerifyOTP}
                 loading={loading}
                 disabled={otp.length !== 6}
@@ -226,10 +260,7 @@ export default function LoginScreen() {
               />
               <Pressable onPress={resetOTPFlow} style={s.switchLink}>
                 <Text style={s.switchTxt}>
-                  {lang === "hi" ? "नंबर बदलना है? " : "Wrong number? "}
-                  <Text style={{ color: colors.saffron }}>
-                    {lang === "hi" ? "बदलो →" : "Change →"}
-                  </Text>
+                  Wrong number? <Text style={s.switchAccent}>Change</Text>
                 </Text>
               </Pressable>
             </View>
@@ -280,7 +311,7 @@ export default function LoginScreen() {
       <Modal transparent visible={notRegistered} animationType="fade" onRequestClose={() => setNotRegistered(false)}>
         <View style={s.modalBg}>
           <View style={s.modalCard}>
-            <View style={s.modalIcon}><Ionicons name="phone-portrait-outline" size={28} color={colors.saffron} /></View>
+            <View style={s.modalIcon}><Ionicons name="phone-portrait-outline" size={28} color={colors.primary} /></View>
             <Text style={s.modalTitle}>{lang === "hi" ? "नंबर registered नहीं है" : "Number not registered"}</Text>
             <Text style={s.modalBody}>
               {lang === "hi"
@@ -297,60 +328,57 @@ export default function LoginScreen() {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </AppScreen>
   );
 }
 
 const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  scroll: { paddingHorizontal: spacing.lg, paddingBottom: 60 },
-  backBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 12, marginBottom: 4 },
-  backTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.saffron },
+  scroll: { flexGrow: 1, paddingHorizontal: spacing.lg, paddingBottom: 60 },
+  backBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center", marginTop: 2, marginBottom: 8, marginLeft: -10 },
 
-  brand: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 28 },
-  logoBadge: { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.saffron, alignItems: "center", justifyContent: "center" },
-  logoK: { fontFamily: fonts.display, fontSize: 22, color: "#fff" },
-  stepDots: { flexDirection: "row", gap: 8 },
-  dot: { width: 28, height: 5, borderRadius: 3, backgroundColor: colors.border },
-  dotOn: { backgroundColor: colors.saffron },
+  brand: { alignItems: "center", marginTop: 10, marginBottom: 34 },
+  brandCompact: { marginTop: 0, marginBottom: 24 },
+  logoBadge: { width: 64, height: 64, borderRadius: 18, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center", ...shadow.sm },
+  logoK: { fontFamily: fonts.display, fontSize: 34, color: "#fff" },
+  brandName: { marginTop: 12, fontFamily: fonts.displayBold, fontSize: 24, color: colors.text },
+  tagline: { marginTop: 3, fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.textMuted },
 
-  titleBlock: { marginBottom: 28 },
-  step: { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1.5, textTransform: "uppercase", color: colors.saffron, marginBottom: 6 },
-  title: { fontFamily: fonts.display, fontSize: 30, color: colors.text, lineHeight: 36, marginBottom: 6 },
-  subtitle: { fontFamily: fonts.body, fontSize: 14, color: colors.textSecondary, lineHeight: 20 },
+  titleBlock: { marginBottom: 22 },
+  title: { fontFamily: fonts.display, fontSize: 32, color: colors.text, lineHeight: 38, marginBottom: 6 },
+  subtitle: { fontFamily: fonts.body, fontSize: 15, color: colors.textSecondary, lineHeight: 22 },
 
   form: { gap: 0 },
-  fieldLabel: { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1.4, textTransform: "uppercase", color: colors.textSecondary, marginBottom: 8, marginTop: 4 },
+  fieldLabel: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.textSecondary, marginBottom: 8, marginTop: 4 },
   hint: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginTop: 6, marginBottom: 4 },
 
-  phoneRow: { flexDirection: "row", gap: 0 },
-  prefixBox: { backgroundColor: "#fff", borderWidth: 1.5, borderColor: colors.saffron, borderTopLeftRadius: 12, borderBottomLeftRadius: 12, paddingVertical: 14, paddingHorizontal: 14, justifyContent: "center", borderRightWidth: 0 },
-  prefixTxt: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.saffron },
-  phoneInput: { flex: 1, backgroundColor: "#fff", borderWidth: 1.5, borderColor: colors.saffron, borderTopRightRadius: 12, borderBottomRightRadius: 12, paddingVertical: 14, paddingHorizontal: 14, fontFamily: fonts.body, fontSize: 18, color: colors.text, letterSpacing: 2 },
-
-  otpInput: { backgroundColor: "#fff", borderWidth: 2, borderColor: colors.saffron, borderRadius: 14, paddingVertical: 18, paddingHorizontal: 20, fontFamily: fonts.display, fontSize: 32, color: colors.text, textAlign: "center", letterSpacing: 14, marginBottom: 4 },
+  otpRow: { flexDirection: "row", justifyContent: "space-between", gap: 7 },
+  otpBox: { flex: 1, height: 56, maxWidth: 48, backgroundColor: colors.surface, borderWidth: 1.5, borderColor: colors.border, borderRadius: radius.md, textAlign: "center", fontFamily: fonts.displayBold, fontSize: 22, color: colors.text },
+  otpBoxFocused: { borderColor: colors.primary, backgroundColor: colors.primaryLight },
+  otpBoxFilled: { borderColor: colors.primary },
   textInput: { backgroundColor: "#fff", borderWidth: 1.5, borderColor: colors.border, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 14, fontFamily: fonts.body, fontSize: 15, color: colors.text, marginBottom: 4 },
 
-  cta: { marginTop: 20, borderRadius: 14, paddingVertical: 16 },
+  cta: { marginTop: 20 },
   switchLink: { marginTop: 20, alignItems: "center" },
   switchTxt: { fontFamily: fonts.bodySemi, fontSize: 14, color: colors.textSecondary },
+  switchAccent: { color: colors.primary, fontFamily: fonts.bodyBold },
 
   roleCards: { flexDirection: "row", gap: 12, marginBottom: 20 },
   roleCard: { flex: 1, backgroundColor: "#fff", borderRadius: 16, borderWidth: 1.5, borderColor: colors.border, padding: 16, alignItems: "center", gap: 6, position: "relative" },
-  roleCardOn: { borderColor: colors.saffron, backgroundColor: colors.saffronTint },
+  roleCardOn: { borderColor: colors.primary, backgroundColor: colors.primaryLight },
   roleEmoji: { fontSize: 28 },
   roleTitle: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.text },
-  roleTitleOn: { color: colors.saffron },
+  roleTitleOn: { color: colors.primary },
   roleSub: { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted, textAlign: "center" },
-  roleTick: { position: "absolute", top: 8, right: 8, width: 20, height: 20, borderRadius: 10, backgroundColor: colors.saffron, alignItems: "center", justifyContent: "center" },
+  roleTick: { position: "absolute", top: 8, right: 8, width: 20, height: 20, borderRadius: 10, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
 
-  optinBanner: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#f0fdf4", borderRadius: 12, borderWidth: 1, borderColor: "#86efac", padding: 12, marginBottom: 14 },
-  optinTitle: { fontFamily: fonts.bodyBold, fontSize: 13, color: "#15803d" },
-  optinSub: { fontFamily: fonts.body, fontSize: 11, color: "#166534", marginTop: 2 },
-  optinCta: { fontFamily: fonts.bodyBold, fontSize: 12, color: "#16a34a" },
-  modalBg: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", alignItems: "center", justifyContent: "center", padding: 24 },
+  optinBanner: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.infoLight, borderRadius: radius.md, borderWidth: 1, borderColor: "#BAE6FD", padding: 12, marginBottom: 16 },
+  optinTitle: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.info },
+  optinSub: { fontFamily: fonts.body, fontSize: 11, color: colors.textSecondary, marginTop: 2, lineHeight: 16 },
+  optinCta: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.info },
+  modalBg: { flex: 1, backgroundColor: colors.overlay, alignItems: "center", justifyContent: "center", padding: 24 },
   modalCard: { backgroundColor: "#fff", borderRadius: 20, padding: 28, width: "100%", maxWidth: 360, alignItems: "center", gap: 10 },
-  modalIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.saffronTint, alignItems: "center", justifyContent: "center", marginBottom: 4 },
+  modalIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.primaryLight, alignItems: "center", justifyContent: "center", marginBottom: 4 },
   modalTitle: { fontFamily: fonts.display, fontSize: 20, color: colors.text, textAlign: "center" },
   modalBody: { fontFamily: fonts.body, fontSize: 13, color: colors.textSecondary, textAlign: "center", lineHeight: 19, marginBottom: 6 },
   modalCancel: { marginTop: 8 },

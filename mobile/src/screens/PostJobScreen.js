@@ -1,16 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, Pressable,
-  Alert, TextInput, KeyboardAvoidingView, Platform,
+  Alert, KeyboardAvoidingView, Platform,
   ActivityIndicator,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import api, { formatApiError } from "../api";
+import AppScreen from "../components/AppScreen";
+import InputField from "../components/InputField";
+import PrimaryButton from "../components/PrimaryButton";
+import SecondaryButton from "../components/SecondaryButton";
+import ServiceCategoryCard from "../components/ServiceCategoryCard";
 import { useAuth } from "../contexts/AuthContext";
 import { useLanguage } from "../contexts/LanguageContext";
 import { usePincodeLookup } from "../lib/usePincode";
-import { colors, fonts, radius, spacing } from "../theme";
+import { colors, fonts, radius, shadow, spacing } from "../theme";
 
 /* ── Data ─────────────────────────────────────────────────────────────── */
 const CATEGORIES = [
@@ -52,9 +56,9 @@ function getRateInsight(skill, rate) {
   const range = RATES[skill.toLowerCase()];
   if (!range) return null;
   const [lo, hi] = range;
-  if (rate < lo) return { emoji: "⚠️", color: "#D97706", msg: `Market rate ₹${lo}–₹${hi}/day. Low pay may reduce responses.` };
-  if (rate > hi) return { emoji: "🚀", color: "#16A34A", msg: `Above market (₹${lo}–₹${hi}/day). You'll attract workers fast!` };
-  return { emoji: "✅", color: "#16A34A", msg: `Good rate! Market average ₹${lo}–₹${hi}/day.` };
+  if (rate < lo) return { tone: "warning", color: colors.warning, msg: `Market rate ₹${lo}–₹${hi}/day. Low pay may reduce responses.` };
+  if (rate > hi) return { tone: "success", color: colors.success, msg: `Above market (₹${lo}–₹${hi}/day). You may attract workers faster.` };
+  return { tone: "success", color: colors.success, msg: `Good rate. Market average ₹${lo}–₹${hi}/day.` };
 }
 
 function buildDescription(form) {
@@ -67,6 +71,7 @@ function buildDescription(form) {
 }
 
 const TOMORROW = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+const THIS_WEEK = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
 
 /* ── Component ────────────────────────────────────────────────────────── */
 export default function PostJobScreen({ navigation }) {
@@ -158,56 +163,52 @@ export default function PostJobScreen({ navigation }) {
 
   if (user?.role === "worker") {
     return (
-      <SafeAreaView style={styles.safe}>
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <Text style={{ fontFamily: fonts.body, color: colors.textMuted }}>Only customers can post jobs.</Text>
+      <AppScreen style={styles.safe}>
+        <View style={styles.centerState}>
+          <Ionicons name="lock-closed-outline" size={32} color={colors.textMuted} />
+          <Text style={styles.centerStateText}>Only customers can post jobs.</Text>
         </View>
-      </SafeAreaView>
+      </AppScreen>
     );
   }
 
   return (
-    <SafeAreaView edges={["top"]} style={styles.safe}>
+    <AppScreen edges={["top"]} style={styles.safe}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        {/* ── Progress ────────────────────────────────────────────────── */}
-        <View style={styles.progressRow}>
-          {[1, 2, 3, 4].map(i => (
-            <View key={i} style={[styles.progressBar, step >= i && styles.progressBarDone]} />
-          ))}
+        <View style={styles.topArea}>
+          <View style={styles.progressRow}>
+            {[1, 2, 3, 4].map(i => (
+              <View key={i} style={[styles.progressBar, step >= i && styles.progressBarDone]} />
+            ))}
+          </View>
+          <View style={styles.stepPill}>
+            <Text style={styles.stepPillText}>Step {step} of 4</Text>
+          </View>
         </View>
-        <Text style={styles.stepLabel}>
-          {lang === "hi" ? `चरण ${step} / 4 · ` : `Step ${step} of 4 · `}
-          {lang === "hi"
-            ? ["Category","Skill","Details","Review"][step - 1]
-            : ["Category","Skill","Details","Review"][step - 1]}
-        </Text>
 
         <ScrollView
           ref={scrollRef}
-          contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }}
+          contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
           {/* ══ STEP 1: Category ══════════════════════════════════════════ */}
           {step === 1 && (
             <View>
-              <Text style={styles.h1}>{lang === "hi" ? "कौनसा काम चाहिए?" : "What type of work?"}</Text>
-              <Text style={styles.sub}>{lang === "hi" ? "अपनी ज़रूरत के हिसाब से category चुनो।" : "Pick the category that best matches your need."}</Text>
+              <Text style={styles.h1}>{lang === "hi" ? "Kya kaam chahiye?" : "Kya kaam chahiye?"}</Text>
+              <Text style={styles.sub}>{lang === "hi" ? "Category chunein" : "Category chunein"}</Text>
               <View style={styles.catGrid}>
                 {CATEGORIES.map(cat => (
-                  <Pressable
-                    key={cat.v}
-                    style={[styles.catCard, { backgroundColor: cat.color }, form.category === cat.v && styles.catCardActive]}
-                    onPress={() => { setForm(f => ({ ...f, category: cat.v, categoryLabel: cat.label, skill: null, customSkill: "" })); setTimeout(() => { scrollRef.current?.scrollTo({ y: 0 }); setStep(2); }, 180); }}
-                  >
-                    <Text style={styles.catEmoji}>{cat.icon}</Text>
-                    <Text style={styles.catLabel}>{cat.label}</Text>
-                    {form.category === cat.v && (
-                      <View style={styles.catCheck}>
-                        <Ionicons name="checkmark-circle" size={18} color={colors.saffron} />
-                      </View>
-                    )}
-                  </Pressable>
+                  <View key={cat.v} style={styles.catGridItem}>
+                    <ServiceCategoryCard
+                      size="grid"
+                      label={cat.label}
+                      icon={cat.icon}
+                      color={cat.color}
+                      selected={form.category === cat.v}
+                      onPress={() => { setForm(f => ({ ...f, category: cat.v, categoryLabel: cat.label, skill: null, customSkill: "" })); setTimeout(() => { scrollRef.current?.scrollTo({ y: 0 }); setStep(2); }, 180); }}
+                    />
+                  </View>
                 ))}
               </View>
             </View>
@@ -219,8 +220,8 @@ export default function PostJobScreen({ navigation }) {
               <View style={styles.catPill}>
                 <Text style={styles.catPillText}>{cat?.icon} {form.categoryLabel}</Text>
               </View>
-              <Text style={styles.h1}>{lang === "hi" ? "कौनसी skill चाहिए?" : "Which skill?"}</Text>
-              <Text style={styles.sub}>{lang === "hi" ? "जिस काम के लिए कारीगर चाहिए वो चुनो।" : "Pick the specific role you need."}</Text>
+              <Text style={styles.h1}>{lang === "hi" ? "Kaunsi skill chahiye?" : "Kaunsi skill chahiye?"}</Text>
+              <Text style={styles.sub}>{lang === "hi" ? "Specific kaam chunein" : "Pick the specific role you need."}</Text>
               <View style={styles.chipGrid}>
                 {(SKILLS[form.category] || []).map(sk => (
                   <Pressable
@@ -228,15 +229,19 @@ export default function PostJobScreen({ navigation }) {
                     style={[styles.skillChip, form.skill === sk && styles.skillChipActive]}
                     onPress={() => setForm(f => ({ ...f, skill: sk, customSkill: "" }))}
                   >
+                    {form.skill === sk ? <Ionicons name="checkmark" size={13} color="#fff" /> : null}
                     <Text style={[styles.skillChipText, form.skill === sk && { color: "#fff" }]}>{sk}</Text>
                   </Pressable>
                 ))}
               </View>
-              <Text style={styles.orDivider}>— or describe your own —</Text>
-              <TextInput
-                style={[styles.input, form.customSkill ? styles.inputFocus : null]}
+              <View style={styles.separatorRow}>
+                <View style={styles.separatorLine} />
+                <Text style={styles.separatorText}>Ya apni zaroorat likho</Text>
+                <View style={styles.separatorLine} />
+              </View>
+              <InputField
+                label="Custom skill"
                 placeholder="e.g. RCC shuttering expert"
-                placeholderTextColor={colors.textMuted}
                 value={form.customSkill}
                 onChangeText={v => setForm(f => ({ ...f, customSkill: v, skill: null }))}
               />
@@ -249,93 +254,98 @@ export default function PostJobScreen({ navigation }) {
               <View style={styles.catPill}>
                 <Text style={styles.catPillText}>{cat?.icon} {effectiveSkill}</Text>
               </View>
-              <Text style={styles.h1}>{lang === "hi" ? "काम की जानकारी" : "Job details"}</Text>
-              <Text style={styles.sub}>{lang === "hi" ? "नंबर भरो — कारीगर यही देखेंगे।" : "Set the numbers — workers will see this."}</Text>
+              <Text style={styles.h1}>{lang === "hi" ? "Kaam ki jankari" : "Kaam ki jankari"}</Text>
+              <Text style={styles.sub}>{lang === "hi" ? "Workers yahi details dekhenge" : "Workers will see these details."}</Text>
 
-              {/* Workers needed */}
               <Label text="Workers needed" />
               <View style={styles.counter}>
                 <Pressable style={styles.counterBtn} onPress={() => setForm(f => ({ ...f, workers_needed: Math.max(1, f.workers_needed - 1) }))}>
-                  <Ionicons name="remove" size={20} color={colors.saffron} />
+                  <Ionicons name="remove" size={20} color={colors.primary} />
                 </Pressable>
                 <Text style={styles.counterVal}>{form.workers_needed}</Text>
                 <Pressable style={styles.counterBtn} onPress={() => setForm(f => ({ ...f, workers_needed: Math.min(20, f.workers_needed + 1) }))}>
-                  <Ionicons name="add" size={20} color={colors.saffron} />
+                  <Ionicons name="add" size={20} color={colors.primary} />
                 </Pressable>
               </View>
 
-              {/* Daily rate */}
-              <Label text="Daily rate (₹)" />
               {RATES[effectiveSkill?.toLowerCase()] && (
                 <View style={styles.rateHint}>
-                  <Ionicons name="trending-up-outline" size={13} color={colors.saffron} />
+                  <Ionicons name="trending-up-outline" size={14} color={colors.primary} />
                   <Text style={styles.rateHintText}>
                     Market rate: ₹{RATES[effectiveSkill.toLowerCase()][0]}–₹{RATES[effectiveSkill.toLowerCase()][1]}/day
                   </Text>
                 </View>
               )}
-              <TextInput
-                style={[styles.input, styles.inputFocus]}
+
+              <InputField
+                label="Daily rate (₹)"
                 placeholder="e.g. 500"
-                placeholderTextColor={colors.textMuted}
                 keyboardType="number-pad"
                 value={String(form.daily_rate)}
                 onChangeText={v => setForm(f => ({ ...f, daily_rate: v.replace(/\D/g, "") }))}
+                helperText="Yeh customers aur workers dono dekhenge"
               />
               {rateInsight && (
-                <View style={[styles.insightBox, { borderColor: rateInsight.color + "50" }]}>
-                  <Text style={styles.insightText}>{rateInsight.emoji}  {rateInsight.msg}</Text>
+                <View style={[styles.insightBox, { borderColor: rateInsight.color + "50", backgroundColor: rateInsight.tone === "warning" ? colors.warningLight : colors.successLight }]}>
+                  <Ionicons name={rateInsight.tone === "warning" ? "alert-circle-outline" : "checkmark-circle-outline"} size={16} color={rateInsight.color} />
+                  <Text style={[styles.insightText, { color: rateInsight.color }]}>{rateInsight.msg}</Text>
                 </View>
               )}
 
-              {/* Date */}
-              <Label text="Work date" />
-              <TextInput
-                style={styles.input}
+              <Label text="Kaam kab chahiye?" />
+              <View style={styles.dateChipRow}>
+                {[
+                  { label: "Kal", value: TOMORROW },
+                  { label: "Is hafte", value: THIS_WEEK },
+                  { label: "Manual date", value: null },
+                ].map(option => (
+                  <Pressable
+                    key={option.label}
+                    style={[styles.dateChip, option.value && form.job_date === option.value && styles.dateChipActive]}
+                    onPress={() => option.value ? setForm(f => ({ ...f, job_date: option.value })) : null}
+                  >
+                    <Text style={[styles.dateChipText, option.value && form.job_date === option.value && styles.dateChipTextActive]}>{option.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <InputField
                 placeholder="YYYY-MM-DD"
-                placeholderTextColor={colors.textMuted}
                 value={form.job_date}
                 onChangeText={v => setForm(f => ({ ...f, job_date: v }))}
+                helperText="Format: YYYY-MM-DD"
+                leftIcon={<Ionicons name="calendar-outline" size={17} color={colors.textMuted} />}
               />
 
-              {/* Pincode */}
-              <Label text="Pincode" />
-              <View style={styles.pincodeRow}>
-                <TextInput
-                  style={[styles.input, { flex: 1, marginBottom: 0 }]}
-                  placeholder="6-digit pincode"
-                  placeholderTextColor={colors.textMuted}
-                  keyboardType="number-pad"
-                  maxLength={6}
-                  value={pcVal}
-                  onChangeText={v => setPincode(v.replace(/\D/g, "").slice(0, 6))}
-                />
-                {pinStatus === "loading" && <ActivityIndicator color={colors.saffron} style={{ marginLeft: 10 }} />}
-                {pinStatus === "success" && <Ionicons name="checkmark-circle" size={22} color="#16A34A" style={{ marginLeft: 10 }} />}
-              </View>
-              {pinStatus === "success" && pinResult && (
-                <View style={styles.pinSuccessBox}>
-                  <Ionicons name="location" size={13} color="#15803d" />
-                  <Text style={styles.pinSuccessText}>
-                    {form.village} · {pinResult.district} · {pinResult.state}
-                  </Text>
-                </View>
-              )}
-              {pinStatus === "error" && pinError && (
-                <Text style={styles.errorText}>{pinError}</Text>
-              )}
+              <InputField
+                label="Pincode"
+                placeholder="6-digit pincode"
+                keyboardType="number-pad"
+                maxLength={6}
+                value={pcVal}
+                onChangeText={v => setPincode(v.replace(/\D/g, "").slice(0, 6))}
+                leftIcon={<Ionicons name="location-outline" size={17} color={colors.textMuted} />}
+                rightElement={pinStatus === "loading"
+                  ? <ActivityIndicator color={colors.primary} size="small" />
+                  : pinStatus === "success"
+                    ? <Ionicons name="checkmark-circle" size={20} color={colors.success} />
+                    : null}
+                successText={pinStatus === "success" && pinResult ? `${form.village} · ${pinResult.district} · ${pinResult.state}` : undefined}
+                errorText={pinStatus === "error" ? pinError : undefined}
+              />
             </View>
           )}
 
           {/* ══ STEP 4: Review ═══════════════════════════════════════════ */}
           {step === 4 && (
             <View>
-              <Text style={styles.h1}>{lang === "hi" ? "जाँचो और Post करो" : "Review your job"}</Text>
-              <Text style={styles.sub}>{lang === "hi" ? "सब ठीक है? Post करो — कारीगरों को तुरंत पता चलेगा।" : "Looks good? Hit post and workers will be notified instantly."}</Text>
+              <Text style={styles.h1}>{lang === "hi" ? "Janchein aur Post karein" : "Janchein aur Post karein"}</Text>
+              <Text style={styles.sub}>{lang === "hi" ? "Post karne ke baad workers is job ko dekh paayenge." : "Post karne ke baad workers is job ko dekh paayenge."}</Text>
 
               <View style={styles.reviewCard}>
                 <View style={styles.reviewHeader}>
-                  <Text style={styles.reviewEmoji}>{cat?.icon}</Text>
+                  <View style={styles.reviewIcon}>
+                    <Text style={styles.reviewEmoji}>{cat?.icon}</Text>
+                  </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.reviewTitle}>
                       Need {form.workers_needed} {effectiveSkill}
@@ -353,14 +363,18 @@ export default function PostJobScreen({ navigation }) {
                   { icon: "location-outline",   val: `${form.village}${pinResult?.district ? `, ${pinResult.district}` : ""}` },
                 ].map(r => (
                   <View key={r.icon} style={styles.reviewRow}>
-                    <Ionicons name={r.icon} size={16} color={colors.saffron} />
+                    <Ionicons name={r.icon} size={16} color={colors.primary} />
                     <Text style={styles.reviewRowText}>{r.val}</Text>
                   </View>
                 ))}
 
                 <View style={styles.reviewDivider} />
-                <Text style={styles.reviewDescLabel}>Auto-generated description</Text>
+                <Text style={styles.reviewDescLabel}>Job description</Text>
                 <Text style={styles.reviewDesc}>{form.description}</Text>
+              </View>
+              <View style={styles.reviewHelper}>
+                <Ionicons name="information-circle-outline" size={16} color={colors.primary} />
+                <Text style={styles.reviewHelperText}>Post karne ke baad workers is job ko dekh paayenge.</Text>
               </View>
             </View>
           )}
@@ -369,97 +383,358 @@ export default function PostJobScreen({ navigation }) {
         {/* ── Footer nav ──────────────────────────────────────────────── */}
         <View style={styles.footer}>
           {step > 1 && (
-            <Pressable style={styles.backBtn} onPress={back}>
-              <Ionicons name="arrow-back" size={18} color={colors.textSecondary} />
-              <Text style={styles.backText}>Back</Text>
-            </Pressable>
+            <SecondaryButton
+              title="Back"
+              fullWidth={false}
+              onPress={back}
+              icon={<Ionicons name="arrow-back" size={17} color={colors.text} />}
+              style={styles.backButton}
+            />
           )}
           {step < 4 ? (
-            <Pressable style={[styles.nextBtn, !canNext() && styles.nextBtnDisabled]} onPress={next}>
-              <Text style={styles.nextBtnText}>{lang === "hi" ? "आगे बढ़ो" : "Continue"}</Text>
-              <Ionicons name="arrow-forward" size={18} color="#fff" />
-            </Pressable>
+            <PrimaryButton
+              title="Continue"
+              fullWidth={false}
+              disabled={!canNext()}
+              onPress={next}
+              icon={<Ionicons name="arrow-forward" size={17} color="#fff" />}
+              style={styles.footerPrimary}
+            />
           ) : (
-            <Pressable style={[styles.submitBtn, saving && { opacity: 0.7 }]} onPress={submit} disabled={saving}>
-              {saving ? <ActivityIndicator color="#fff" /> : (
-                <>
-                  <Ionicons name="paper-plane-outline" size={18} color="#fff" />
-                  <Text style={styles.nextBtnText}>{lang === "hi" ? "Job Post करो" : "Post Job"}</Text>
-                </>
-              )}
-            </Pressable>
+            <PrimaryButton
+              title="Post Job"
+              fullWidth={false}
+              loading={saving}
+              onPress={submit}
+              icon={<Ionicons name="paper-plane-outline" size={17} color="#fff" />}
+              style={styles.footerPrimary}
+            />
           )}
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </AppScreen>
   );
 }
 
 function Label({ text }) {
-  return (
-    <Text style={{
-      fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 1.4,
-      textTransform: "uppercase", color: colors.textSecondary,
-      marginBottom: 8, marginTop: 16,
-    }}>{text}</Text>
-  );
+  return <Text style={styles.label}>{text}</Text>;
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
-  progressRow: { flexDirection: "row", gap: 5, paddingHorizontal: spacing.lg, paddingTop: 12 },
-  progressBar: { flex: 1, height: 4, borderRadius: 2, backgroundColor: colors.border },
-  progressBarDone: { backgroundColor: colors.saffron },
-  stepLabel: { fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 1.2, textTransform: "uppercase", color: colors.textMuted, paddingHorizontal: spacing.lg, marginTop: 6, marginBottom: 2 },
-  h1: { fontFamily: fonts.display, fontSize: 26, color: colors.text, marginBottom: 6 },
-  sub: { fontFamily: fonts.body, fontSize: 14, color: colors.textSecondary, marginBottom: spacing.lg },
-  // Step 1
-  catGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  catCard: { width: "47%", borderRadius: 14, padding: 16, alignItems: "center", borderWidth: 2, borderColor: "transparent", position: "relative" },
-  catCardActive: { borderColor: colors.saffron },
-  catEmoji: { fontSize: 32, marginBottom: 8 },
-  catLabel: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.text, textAlign: "center" },
-  catCheck: { position: "absolute", top: 8, right: 8 },
-  // Step 2
-  catPill: { backgroundColor: colors.saffronTint, alignSelf: "flex-start", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, marginBottom: 12 },
-  catPillText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.saffron },
-  chipGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  skillChip: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, borderWidth: 1.5, borderColor: colors.border, backgroundColor: "#fff" },
-  skillChipActive: { backgroundColor: colors.saffron, borderColor: colors.saffron },
-  skillChipText: { fontFamily: fonts.bodySemi, fontSize: 13, color: colors.textSecondary },
-  orDivider: { textAlign: "center", fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginVertical: 16 },
-  // Inputs
-  input: { backgroundColor: "#fff", borderWidth: 1.5, borderColor: colors.border, borderRadius: 12, paddingVertical: 13, paddingHorizontal: 14, fontSize: 15, fontFamily: fonts.body, color: colors.text, marginBottom: 4 },
-  inputFocus: { borderColor: colors.saffron },
-  // Step 3
-  counter: { flexDirection: "row", alignItems: "center", gap: 0, backgroundColor: "#fff", borderWidth: 1.5, borderColor: colors.border, borderRadius: 12, alignSelf: "flex-start", marginBottom: 4 },
-  counterBtn: { padding: 14 },
-  counterVal: { fontFamily: fonts.display, fontSize: 22, color: colors.text, paddingHorizontal: 20, minWidth: 60, textAlign: "center" },
-  rateHint: { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 8 },
-  rateHintText: { fontFamily: fonts.bodySemi, fontSize: 12, color: colors.saffron },
-  insightBox: { borderWidth: 1, borderRadius: 10, padding: 12, marginTop: 6, backgroundColor: "#fafaf7" },
-  insightText: { fontFamily: fonts.bodySemi, fontSize: 13, color: colors.text },
-  pincodeRow: { flexDirection: "row", alignItems: "center" },
-  pinSuccessBox: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#f0fdf4", borderRadius: 8, padding: 10, marginTop: 6 },
-  pinSuccessText: { fontFamily: fonts.bodyBold, fontSize: 13, color: "#15803d" },
-  errorText: { fontFamily: fonts.body, fontSize: 12, color: colors.danger, marginTop: 4 },
-  // Step 4 - Review
-  reviewCard: { backgroundColor: "#fff", borderRadius: 18, borderWidth: 1, borderColor: colors.border, padding: 20, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
-  reviewHeader: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 16 },
-  reviewEmoji: { fontSize: 40 },
-  reviewTitle: { fontFamily: fonts.display, fontSize: 20, color: colors.text },
-  reviewCat: { fontFamily: fonts.bodySemi, fontSize: 13, color: colors.saffron, marginTop: 2 },
-  reviewDivider: { height: 1, backgroundColor: colors.border, marginVertical: 14 },
-  reviewRow: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
-  reviewRowText: { fontFamily: fonts.bodySemi, fontSize: 14, color: colors.text },
-  reviewDescLabel: { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1.2, textTransform: "uppercase", color: colors.textMuted, marginBottom: 8 },
-  reviewDesc: { fontFamily: fonts.body, fontSize: 14, color: colors.textSecondary, lineHeight: 22 },
-  // Footer
-  footer: { flexDirection: "row", alignItems: "center", gap: 12, padding: spacing.lg, backgroundColor: colors.bg, borderTopWidth: 1, borderTopColor: colors.border },
-  backBtn: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1.5, borderColor: colors.border },
-  backText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.textSecondary },
-  nextBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.saffron, paddingVertical: 15, borderRadius: 14 },
-  nextBtnDisabled: { opacity: 0.4 },
-  nextBtnText: { fontFamily: fonts.bodyBold, fontSize: 15, color: "#fff" },
-  submitBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.saffron, paddingVertical: 15, borderRadius: 14 },
+  centerState: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+    paddingHorizontal: spacing.xl,
+  },
+  centerStateText: {
+    fontFamily: fonts.body,
+    fontSize: 14,
+    color: colors.textMuted,
+    textAlign: "center",
+  },
+  topArea: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: 12,
+    paddingBottom: 6,
+  },
+  progressRow: {
+    flexDirection: "row",
+    gap: 6,
+  },
+  progressBar: {
+    flex: 1,
+    height: 5,
+    borderRadius: radius.pill,
+    backgroundColor: colors.border,
+  },
+  progressBarDone: { backgroundColor: colors.primary },
+  stepPill: {
+    alignSelf: "flex-start",
+    marginTop: 10,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primaryLight,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  stepPillText: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 12,
+    color: colors.primary,
+  },
+  scrollContent: {
+    padding: spacing.lg,
+    paddingBottom: 120,
+  },
+  h1: {
+    fontFamily: fonts.display,
+    fontSize: 28,
+    lineHeight: 34,
+    color: colors.text,
+    marginBottom: 6,
+  },
+  sub: {
+    fontFamily: fonts.body,
+    fontSize: 14,
+    color: colors.textMuted,
+    marginBottom: spacing.lg,
+  },
+  label: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: 8,
+    marginTop: 16,
+  },
+  catGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+  },
+  catGridItem: {
+    width: "48%",
+  },
+  catPill: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primaryLight,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: "#CCFBF1",
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    marginBottom: 12,
+  },
+  catPillText: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 13,
+    color: colors.primary,
+  },
+  chipGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 9,
+  },
+  skillChip: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: radius.pill,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  skillChipActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  skillChipText: {
+    fontFamily: fonts.bodySemi,
+    fontSize: 13,
+    color: colors.textSecondary,
+  },
+  separatorRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginVertical: 18,
+  },
+  separatorLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  separatorText: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  counter: {
+    minHeight: 54,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    alignSelf: "flex-start",
+    marginBottom: 8,
+    overflow: "hidden",
+  },
+  counterBtn: {
+    minWidth: 52,
+    minHeight: 52,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.primaryLight,
+  },
+  counterVal: {
+    fontFamily: fonts.display,
+    fontSize: 23,
+    color: colors.text,
+    paddingHorizontal: 22,
+    minWidth: 68,
+    textAlign: "center",
+  },
+  rateHint: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 10,
+    backgroundColor: colors.primaryLight,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: "#CCFBF1",
+    padding: 10,
+  },
+  rateHintText: {
+    flex: 1,
+    fontFamily: fonts.bodySemi,
+    fontSize: 12,
+    color: colors.primary,
+  },
+  insightBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    padding: 12,
+    marginTop: 2,
+    marginBottom: 4,
+  },
+  insightText: {
+    flex: 1,
+    fontFamily: fonts.bodySemi,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  dateChipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 10,
+  },
+  dateChip: {
+    minHeight: 44,
+    justifyContent: "center",
+    borderRadius: radius.pill,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 14,
+  },
+  dateChipActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primaryLight,
+  },
+  dateChipText: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  dateChipTextActive: {
+    color: colors.primary,
+  },
+  reviewCard: {
+    backgroundColor: colors.surface,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: spacing.xl,
+    ...shadow.sm,
+  },
+  reviewHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    marginBottom: 16,
+  },
+  reviewIcon: {
+    width: 58,
+    height: 58,
+    borderRadius: 18,
+    backgroundColor: colors.primaryLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  reviewEmoji: { fontSize: 30 },
+  reviewTitle: {
+    fontFamily: fonts.display,
+    fontSize: 21,
+    color: colors.text,
+  },
+  reviewCat: {
+    fontFamily: fonts.bodySemi,
+    fontSize: 13,
+    color: colors.primary,
+    marginTop: 2,
+  },
+  reviewDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: 14,
+  },
+  reviewRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 11,
+  },
+  reviewRowText: {
+    flex: 1,
+    fontFamily: fonts.bodySemi,
+    fontSize: 14,
+    color: colors.text,
+  },
+  reviewDescLabel: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 12,
+    color: colors.textSecondary,
+    marginBottom: 8,
+  },
+  reviewDesc: {
+    fontFamily: fonts.body,
+    fontSize: 14,
+    color: colors.textSecondary,
+    lineHeight: 22,
+  },
+  reviewHelper: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.primaryLight,
+    borderWidth: 1,
+    borderColor: "#CCFBF1",
+    padding: 12,
+  },
+  reviewHelperText: {
+    flex: 1,
+    fontFamily: fonts.bodySemi,
+    fontSize: 13,
+    color: colors.primary,
+  },
+  footer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: spacing.lg,
+    backgroundColor: colors.bg,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  backButton: {
+    minWidth: 112,
+  },
+  footerPrimary: {
+    flex: 1,
+  },
 });

@@ -33,6 +33,7 @@ import DashboardScreen from "./src/screens/DashboardScreen";
 import WhatsAppDemoScreen from "./src/screens/WhatsAppDemoScreen";
 import PhoneSignupScreen from "./src/screens/PhoneSignupScreen";
 import LoginScreen from "./src/screens/LoginScreen";
+import RoleSelectionScreen from "./src/screens/RoleSelectionScreen";
 import WorkerJobFeedScreen from "./src/screens/WorkerJobFeedScreen";
 import FindWorkScreen from "./src/screens/FindWorkScreen";
 import ContactSupportScreen from "./src/screens/ContactSupportScreen";
@@ -150,9 +151,10 @@ function RootNavigator() {
       {/* Auth screens — custom back handled inside, hide native header */}
       <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
       <Stack.Screen name="PhoneSignup" component={PhoneSignupScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} options={{ headerShown: false }} />
 
       {/* Onboarding — native header gives back arrow + title */}
-      <Stack.Screen name="CustomerOnboarding" component={CustomerOnboardingScreen} options={{ title: "Your Location" }} />
+      <Stack.Screen name="CustomerOnboarding" component={CustomerOnboardingScreen} options={{ title: "Location" }} />
       <Stack.Screen name="WorkerOnboarding" component={WorkerOnboardingScreen} options={{ headerShown: false }} />
 
       {/* App screens — custom back already inside, hide native */}
@@ -161,7 +163,7 @@ function RootNavigator() {
       <Stack.Screen name="Dashboard" component={DashboardScreen} options={{ headerShown: false }} />
 
       {/* Feed screens — native header */}
-      <Stack.Screen name="WorkerJobFeed" component={WorkerJobFeedScreen} options={{ title: "Job Feed" }} />
+      <Stack.Screen name="WorkerJobFeed" component={WorkerJobFeedScreen} options={{ title: "Jobs Near You" }} />
       <Stack.Screen name="FindWork" component={FindWorkScreen} options={{ title: "Find Work" }} />
       <Stack.Screen name="ContactSupport" component={ContactSupportScreen} options={{ title: "Help & Support" }} />
       <Stack.Screen name="WorkerMyProfile" component={WorkerMyProfileScreen} options={{ title: "My Profile" }} />

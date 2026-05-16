@@ -1,119 +1,249 @@
-import { View, Text, Image, StyleSheet, Pressable } from "react-native";
+import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, fonts, radius, spacing } from "../theme";
 import { API_URL } from "../api";
+import { colors, fonts, radius, shadow, spacing } from "../theme";
+import RatingTrustRow from "./RatingTrustRow";
 
-const fullUrl = (url) => !url ? null : url.startsWith("http") ? url : `${API_URL}${url}`;
+const fullUrl = (url) => (!url ? null : url.startsWith("http") ? url : `${API_URL}${url}`);
 
-const TIER_BADGE  = { 2: "✅ Verified", 3: "🔵 Pro", 4: "🏆 Elite" };
-const TIER_COLORS = { 2: "#16a34a", 3: "#2563eb", 4: "#b45309" };
+function initialsFromName(name) {
+  return (name || "?")
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase() || "?";
+}
 
-export default function WorkerCard({ worker, onPress, testID }) {
-  const photo = fullUrl(worker.photo_url);
-  const initials = (worker.name || "?").split(" ").map(w => w[0]).slice(0, 2).join("").toUpperCase();
-  const tier = worker.trust_tier || 1;
-  const tierLabel = TIER_BADGE[tier];
-  const tierColor = TIER_COLORS[tier];
+function getRate(worker) {
+  return worker?.daily_rate ?? worker?.dailyRate ?? worker?.rate;
+}
+
+function getLocation(worker) {
+  return [
+    worker?.village,
+    worker?.district,
+    worker?.state,
+    worker?.pincode,
+  ].filter(Boolean).slice(0, 3).join(", ");
+}
+
+export default function WorkerCard({
+  worker = {},
+  onPress,
+  testID,
+  size = "full",
+  showTrustBadge = true,
+  showChevron = false,
+}) {
+  const isCompact = size === "compact";
+  const photo = fullUrl(worker.photo_url || worker.photoUrl || worker.avatar_url);
+  const initials = initialsFromName(worker.name);
+  const tier = worker.trust_tier ?? worker.trustTier ?? 1;
+  const skills = Array.isArray(worker.skills) ? worker.skills : [];
+  const visibleSkills = skills.slice(0, isCompact ? 2 : 3);
+  const hiddenSkillCount = Math.max(skills.length - visibleSkills.length, 0);
+  const rate = getRate(worker);
+  const location = getLocation(worker);
 
   return (
     <Pressable
       testID={testID}
       onPress={onPress}
-      style={({ pressed }) => [s.card, pressed && { opacity: 0.88 }]}
+      disabled={!onPress}
+      style={({ pressed }) => [
+        styles.card,
+        isCompact && styles.compactCard,
+        pressed && onPress && styles.pressed,
+      ]}
     >
-      {/* Photo or initials */}
-      <View style={s.photoWrap}>
-        {photo
-          ? <Image source={{ uri: photo }} style={s.photo} />
-          : <View style={[s.photo, s.photoFallback]}>
-              <Text style={s.initials}>{initials}</Text>
-            </View>}
-        {worker.is_available && <View style={s.availDot} />}
+      <View style={styles.photoWrap}>
+        {photo ? (
+          <Image source={{ uri: photo }} style={[styles.photo, isCompact && styles.compactPhoto]} />
+        ) : (
+          <View style={[styles.photo, styles.photoFallback, isCompact && styles.compactPhoto]}>
+            <Text style={[styles.initials, isCompact && styles.compactInitials]}>{initials}</Text>
+          </View>
+        )}
+        {worker.is_available ? <View style={styles.availDot} /> : null}
       </View>
 
-      {/* Content */}
-      <View style={{ flex: 1 }}>
-        {/* Name + rate */}
-        <View style={s.nameRow}>
-          <Text style={s.name} numberOfLines={1}>{worker.name}</Text>
-          <Text style={s.rate}>₹{worker.daily_rate}<Text style={s.rateUnit}>/day</Text></Text>
+      <View style={styles.content}>
+        <View style={styles.nameRow}>
+          <Text style={styles.name} numberOfLines={1}>{worker.name || "Worker"}</Text>
+          {rate ? (
+            <Text style={styles.rate}>₹{rate}<Text style={styles.rateUnit}>/day</Text></Text>
+          ) : null}
         </View>
 
-        {/* Skills */}
-        <Text style={s.skills} numberOfLines={1}>
-          {(worker.skills || []).slice(0, 3).join(" · ") || "—"}
-        </Text>
-
-        {/* Footer */}
-        <View style={s.footer}>
-          {/* Rating */}
-          <View style={s.ratingRow}>
-            <Ionicons name="star" size={11} color="#F59E0B" />
-            <Text style={s.ratingTxt}>{(worker.avg_rating || 0).toFixed(1)}</Text>
-            {worker.total_jobs > 0 && (
-              <Text style={s.jobsTxt}> · {worker.total_jobs} jobs</Text>
-            )}
-            {tierLabel && (
-              <View style={[s.tierBadge, { backgroundColor: tierColor + "18", borderColor: tierColor + "40" }]}>
-                <Text style={[s.tierTxt, { color: tierColor }]}>{tierLabel}</Text>
-              </View>
-            )}
-          </View>
-          {/* Location */}
-          {(worker.village || worker.state) && (
-            <View style={s.locRow}>
-              <Ionicons name="location-outline" size={10} color={colors.textMuted} />
-              <Text style={s.locTxt} numberOfLines={1}>
-                {[worker.village, worker.state].filter(Boolean).join(", ")}
-              </Text>
-            </View>
+        <View style={styles.skillRow}>
+          {visibleSkills.length > 0 ? (
+            <>
+              {visibleSkills.map((skill) => (
+                <View key={skill} style={styles.skillChip}>
+                  <Text style={styles.skillChipText} numberOfLines={1}>{skill}</Text>
+                </View>
+              ))}
+              {hiddenSkillCount > 0 ? (
+                <Text style={styles.moreSkills}>+{hiddenSkillCount}</Text>
+              ) : null}
+            </>
+          ) : (
+            <Text style={styles.noSkills}>Skills not added yet</Text>
           )}
         </View>
+
+        <RatingTrustRow
+          rating={worker.avg_rating ?? worker.rating}
+          totalJobs={worker.total_jobs ?? worker.totalJobs}
+          tier={tier}
+          size={isCompact ? "small" : "medium"}
+          showTrustBadge={showTrustBadge}
+        />
+
+        {location ? (
+          <View style={styles.locationRow}>
+            <Ionicons name="location-outline" size={12} color={colors.textMuted} />
+            <Text style={styles.locationText} numberOfLines={1}>{location}</Text>
+          </View>
+        ) : null}
       </View>
 
-      <Ionicons name="chevron-forward" size={16} color={colors.border} style={{ alignSelf: "center" }} />
+      {showChevron ? (
+        <Ionicons name="chevron-forward" size={17} color={colors.borderStrong} style={styles.chevron} />
+      ) : null}
     </Pressable>
   );
 }
 
-const s = StyleSheet.create({
+const styles = StyleSheet.create({
   card: {
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
-    backgroundColor: "#fff",
-    borderRadius: 16,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 14,
+    padding: spacing.lg,
     marginBottom: 10,
+    ...shadow.xs,
   },
-  photoWrap: { position: "relative" },
-  photo: { width: 72, height: 72, borderRadius: 14, backgroundColor: colors.soft },
-  photoFallback: { alignItems: "center", justifyContent: "center", backgroundColor: colors.saffronTint },
-  initials: { fontFamily: fonts.display, fontSize: 26, color: colors.saffron },
+  compactCard: {
+    padding: 14,
+    gap: 12,
+  },
+  pressed: {
+    opacity: 0.94,
+  },
+  photoWrap: {
+    position: "relative",
+  },
+  photo: {
+    width: 80,
+    height: 80,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface2,
+  },
+  compactPhoto: {
+    width: 66,
+    height: 66,
+    borderRadius: 12,
+  },
+  photoFallback: {
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.primaryLight,
+  },
+  initials: {
+    fontFamily: fonts.display,
+    fontSize: 28,
+    color: colors.primary,
+  },
+  compactInitials: {
+    fontSize: 24,
+  },
   availDot: {
     position: "absolute",
     bottom: 3,
     right: 3,
-    width: 11,
-    height: 11,
-    borderRadius: 6,
-    backgroundColor: "#4ADE80",
+    width: 13,
+    height: 13,
+    borderRadius: 7,
+    backgroundColor: colors.success,
     borderWidth: 2,
-    borderColor: "#fff",
+    borderColor: colors.surface,
   },
-  nameRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", gap: 6 },
-  name: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.text, flex: 1 },
-  rate: { fontFamily: fonts.display, fontSize: 16, color: colors.money },
-  rateUnit: { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted },
-  skills: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginTop: 3 },
-  footer: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 8 },
-  ratingRow: { flexDirection: "row", alignItems: "center", gap: 3 },
-  ratingTxt: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.text },
-  jobsTxt: { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted },
-  locRow: { flexDirection: "row", alignItems: "center", gap: 3 },
-  locTxt: { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted, maxWidth: 120 },
-  tierBadge: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2, marginLeft: 6 },
-  tierTxt: { fontFamily: fonts.bodyBold, fontSize: 9, letterSpacing: 0.3 },
+  content: {
+    flex: 1,
+    minWidth: 0,
+  },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  name: {
+    flex: 1,
+    fontFamily: fonts.bodySemi,
+    fontSize: 15,
+    color: colors.text,
+  },
+  rate: {
+    fontFamily: fonts.displayBold,
+    fontSize: 17,
+    color: colors.money,
+  },
+  rateUnit: {
+    fontFamily: fonts.body,
+    fontSize: 11,
+    color: colors.textMuted,
+  },
+  skillRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 7,
+    marginBottom: 8,
+  },
+  skillChip: {
+    maxWidth: 92,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface2,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  skillChipText: {
+    fontFamily: fonts.bodySemi,
+    fontSize: 11,
+    color: colors.textSecondary,
+  },
+  moreSkills: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 11,
+    color: colors.primary,
+  },
+  noSkills: {
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  locationRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 8,
+  },
+  locationText: {
+    flex: 1,
+    fontFamily: fonts.body,
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  chevron: {
+    alignSelf: "center",
+  },
 });

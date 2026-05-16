@@ -54,7 +54,7 @@ const T = {
     nav_logout: "Logout",
 
     // ── Hero ─────────────────────────────────────────────────
-    hero_overline: "India's village labour marketplace",
+    hero_overline: "Find trusted workers and nearby jobs",
     hero_headline_1: "Find work directly,",
     hero_headline_2: "without middlemen —",
     hero_headline_3: "right from your mobile.",
@@ -277,7 +277,7 @@ const T = {
     nav_logout: "लॉगआउट",
 
     // ── Hero ─────────────────────────────────────────────────
-    hero_overline: "भारत का अपना मजदूरी मार्केट",
+    hero_overline: "Trusted workers aur nearby kaam — ek jagah",
     hero_headline_1: "अब काम ढूंढना हुआ आसान —",
     hero_headline_2: "बिना दलाल,",
     hero_headline_3: "सीधे मोबाइल से।",
