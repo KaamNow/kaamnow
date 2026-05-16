@@ -1,7 +1,7 @@
 import "react-native-gesture-handler";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { StatusBar } from "expo-status-bar";
-import { View, ActivityIndicator } from "react-native";
+import { View, Text, Image, Animated } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
@@ -42,6 +42,50 @@ import WorkerMyProfileScreen from "./src/screens/WorkerMyProfileScreen";
 import CustomerProfileScreen from "./src/screens/CustomerProfileScreen";
 import CalendarScreen from "./src/screens/CalendarScreen";
 import AdminScreen from "./src/screens/AdminScreen";
+
+function AnimatedSplash({ onDone }) {
+  const scale  = useRef(new Animated.Value(0.6)).current;
+  const logoOp = useRef(new Animated.Value(0)).current;
+  const textOp = useRef(new Animated.Value(0)).current;
+  const tagOp  = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.sequence([
+      // Logo scales + fades in
+      Animated.parallel([
+        Animated.timing(scale,  { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(logoOp, { toValue: 1, duration: 700, useNativeDriver: true }),
+      ]),
+      // "KaamNow.com" fades in
+      Animated.timing(textOp, { toValue: 1, duration: 450, useNativeDriver: true }),
+      // Tagline fades in below
+      Animated.timing(tagOp,  { toValue: 1, duration: 400, useNativeDriver: true }),
+      // Hold — let it breathe, then snap directly to app
+      Animated.delay(1200),
+    ]).start(() => onDone?.());
+  }, []);
+
+  return (
+    <View style={{ flex: 1, backgroundColor: "#0B1F3A", justifyContent: "center", alignItems: "center" }}>
+      <Animated.View style={{ transform: [{ scale }], opacity: logoOp }}>
+        <Image
+          source={require("./assets/icon.png")}
+          style={{ width: 100, height: 100, borderRadius: 24 }}
+          resizeMode="contain"
+        />
+      </Animated.View>
+      <Animated.View style={{ opacity: textOp, marginTop: 24, alignItems: "center" }}>
+        <Text style={{ color: "#fff", fontSize: 30, fontWeight: "800", letterSpacing: -0.5 }}>
+          Kaam<Text style={{ color: colors.saffron }}>Now</Text>
+          <Text style={{ color: colors.saffron, fontSize: 20, fontWeight: "700" }}>.com</Text>
+        </Text>
+      </Animated.View>
+      <Animated.Text style={{ opacity: tagOp, marginTop: 10, color: "rgba(255,255,255,0.45)", fontSize: 12, fontWeight: "500", letterSpacing: 0.3 }}>
+        काम की बात, KaamNow के साथ
+      </Animated.Text>
+    </View>
+  );
+}
 
 function AccountTab(props) {
   const { user } = useAuth();
@@ -129,11 +173,7 @@ function RootNavigator() {
   const { user } = useAuth();
 
   if (user === undefined) {
-    return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.bg }}>
-        <ActivityIndicator color={colors.saffron} size="large" />
-      </View>
-    );
+    return <View style={{ flex: 1, backgroundColor: "#0B1F3A" }} />;
   }
 
   return (
@@ -182,22 +222,23 @@ export default function App() {
     Manrope_600SemiBold,
     Manrope_700Bold,
   });
+  const [splashDone, setSplashDone] = useState(false);
 
-  if (!outfitLoaded || !manropeLoaded) {
-    return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: colors.bg }}>
-        <ActivityIndicator color={colors.saffron} size="large" />
-      </View>
-    );
-  }
+  const fontsLoaded = outfitLoaded && manropeLoaded;
+  const ready = fontsLoaded && splashDone;
 
   return (
     <LanguageProvider>
       <AuthProvider>
         <NavigationContainer>
-          <StatusBar style="dark" />
+          <StatusBar style="light" backgroundColor="#0B1F3A" />
           <RootNavigator />
         </NavigationContainer>
+        {!ready && (
+          <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}>
+            <AnimatedSplash onDone={() => setSplashDone(true)} />
+          </View>
+        )}
       </AuthProvider>
     </LanguageProvider>
   );
