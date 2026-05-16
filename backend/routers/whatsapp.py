@@ -24,7 +24,7 @@ import math
 import threading
 import uuid
 from datetime import date, timedelta
-from typing import Any, Optional
+from typing import Any, Optional, TypedDict
 
 import requests
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -71,29 +71,125 @@ _HELP_CUSTOMER = (
     "🌐 kaamnow.com/dashboard"
 )
 
+_BUTTONS_UNREGISTERED = [
+    {"id": "CUSTOMER", "title": "Mujhe worker chahiye"},
+    {"id": "WORKER", "title": "Mujhe kaam chahiye"},
+    {"id": "HELP", "title": "Help"},
+]
+_BUTTONS_CUSTOMER_RESULTS = [
+    {"id": "CHANGE_PINCODE", "title": "Change Pincode"},
+    {"id": "MORE", "title": "More Workers"},
+    {"id": "HELP", "title": "Help"},
+]
+_BUTTONS_WORKER_RESULTS = [
+    {"id": "CHANGE_PINCODE", "title": "Change Pincode"},
+    {"id": "MORE", "title": "More Jobs"},
+    {"id": "STATUS", "title": "My Applications"},
+]
+_BUTTONS_MISSING_PINCODE = [
+    {"id": "CHANGE_PINCODE", "title": "Set Pincode"},
+    {"id": "HELP", "title": "Help"},
+]
+_BUTTONS_CUSTOMER_MENU = [
+    {"id": "WORKERS", "title": "Find Workers"},
+    {"id": "STATUS", "title": "My Requests"},
+    {"id": "HELP", "title": "Help"},
+]
+_BUTTONS_WORKER_MENU = [
+    {"id": "JOBS", "title": "Find Jobs"},
+    {"id": "STATUS", "title": "My Applications"},
+    {"id": "HELP", "title": "Help"},
+]
+
+
+def _with_reply_buttons(state: dict, buttons: list[dict]) -> dict:
+    return {**state, "_reply_buttons": buttons[:3]}
+
+
+def _pop_reply_buttons(state: dict) -> tuple[dict, Optional[list[dict]]]:
+    clean_state = dict(state or {})
+    buttons = clean_state.pop("_reply_buttons", None)
+    return clean_state, buttons
+
 
 # ─── Phone helpers ────────────────────────────────────────────────────────────
 
+class NormalizedPhone(TypedDict):
+    e164: str
+    india10: str
+    india91: str
+    variants: list[str]
+
+
+def normalize_whatsapp_phone(phone: str) -> NormalizedPhone:
+    """
+    Canonical India WhatsApp phone forms for exact DB lookups and Gupshup sends.
+    Handles +91, 91, local 10-digit, spaces/dashes, and leading zeroes.
+    """
+    raw_digits = "".join(c for c in str(phone or "") if c.isdigit())
+    digits = raw_digits.lstrip("0")
+    if len(digits) >= 12 and digits.startswith("91"):
+        india10 = digits[-10:]
+    elif len(digits) >= 10:
+        india10 = digits[-10:]
+    else:
+        india10 = digits
+    india91 = f"91{india10}" if len(india10) == 10 else digits
+    e164 = f"+{india91}" if india91 else ""
+    variants = []
+    for value in (e164, india91, india10, f"+{raw_digits}" if raw_digits else "", raw_digits):
+        if value and value not in variants:
+            variants.append(value)
+    return {"e164": e164, "india10": india10, "india91": india91, "variants": variants}
+
+
 def _normalize_phone(phone: str) -> str:
-    digits = "".join(c for c in phone if c.isdigit())
-    return digits[-10:] if len(digits) >= 10 else digits
+    return normalize_whatsapp_phone(phone)["india10"]
 
 
 def _full_phone(phone: str) -> str:
     """Return 12-digit phone with 91 prefix."""
-    digits = "".join(c for c in phone if c.isdigit())
-    if len(digits) == 10:
-        return "91" + digits
-    return digits
+    return normalize_whatsapp_phone(phone)["india91"]
 
 
 async def _lookup_user_by_phone(phone: str) -> Optional[dict]:
-    normalized = _normalize_phone(phone)
-    return await db.users.find_one({"phone_primary": {"$regex": normalized, "$options": "i"}}, {"_id": 0})
+    normalized = normalize_whatsapp_phone(phone)
+    if len(normalized["india10"]) != 10:
+        logger.info(
+            "WhatsApp phone lookup masked=%s variants=%s found=false reason=invalid_phone",
+            _mask_phone(phone),
+            _masked_variants(normalized),
+        )
+        return None
+    phone_fields = ["phone_primary", "phone", "phone_number", "mobile"]
+    query = {"$or": [{field: {"$in": normalized["variants"]}} for field in phone_fields]}
+    user = await db.users.find_one(query, {"_id": 0})
+    logger.info(
+        "WhatsApp phone lookup masked=%s variants=%s found=%s",
+        _mask_phone(phone),
+        _masked_variants(normalized),
+        bool(user),
+    )
+    return user
+
+
+def _mask_phone(phone: str) -> str:
+    digits = "".join(c for c in str(phone or "") if c.isdigit())
+    if len(digits) <= 4:
+        return "****"
+    return f"***{digits[-4:]}"
+
+
+def _masked_variants(normalized: NormalizedPhone) -> dict:
+    return {
+        "e164": f"+***{normalized['india10'][-4:]}" if normalized.get("india10") else "",
+        "india10": f"******{normalized['india10'][-4:]}" if normalized.get("india10") else "",
+        "india91": f"91******{normalized['india10'][-4:]}" if normalized.get("india10") else "",
+    }
 
 
 def _create_session_id(source: str) -> str:
-    return f"whatsapp-{source.strip().lstrip('+')}"
+    return f"whatsapp-{_full_phone(source)}"
 
 
 def _generate_avatar_color(name: str) -> str:
@@ -255,6 +351,209 @@ def _format_job_detail(job: dict, worker_lat: Optional[float], worker_lng: Optio
     )
 
 
+def get_default_pincode(user: Optional[dict], worker_profile: Optional[dict] = None) -> Optional[str]:
+    """Resolve default pincode from existing app/web user and worker records."""
+    candidates = [
+        ((user or {}).get("address") or {}).get("pincode"),
+        (user or {}).get("pincode"),
+        (user or {}).get("pin_code"),
+        (user or {}).get("postal_code"),
+        ((worker_profile or {}).get("address") or {}).get("pincode"),
+        (worker_profile or {}).get("pincode"),
+        (worker_profile or {}).get("pin_code"),
+        (worker_profile or {}).get("postal_code"),
+    ]
+    for value in candidates:
+        digits = "".join(c for c in str(value or "") if c.isdigit())
+        if len(digits) == 6:
+            return digits
+    return None
+
+
+def _display_name(doc: Optional[dict], fallback: str) -> str:
+    name = (doc or {}).get("name") or fallback
+    return str(name).strip().split()[0] if str(name).strip() else fallback
+
+
+def _worker_primary_skill(worker: dict) -> str:
+    structured = worker.get("structured_skills") or []
+    for item in structured:
+        if isinstance(item, dict) and item.get("skill"):
+            return str(item["skill"]).title()
+    skills = worker.get("skills") or []
+    return str(skills[0]).title() if skills else "General"
+
+
+def _location_label(doc: dict) -> str:
+    address = doc.get("address") or {}
+    return (
+        doc.get("village")
+        or address.get("village")
+        or doc.get("district")
+        or address.get("district")
+        or address.get("pincode")
+        or "Area"
+    )
+
+
+async def _fetch_workers_for_customer_pincode(pincode: str, limit: int = 5, offset: int = 0) -> list[dict]:
+    query = {
+        "address.pincode": pincode,
+        "$or": [{"available": True}, {"availability_status": "available"}],
+    }
+    workers = await db.workers.find(query, {"_id": 0}).limit(50).to_list(50)
+    workers.sort(key=lambda w: (-float(w.get("avg_rating", 0) or 0), -int(w.get("trust_tier", 0) or 0), int(w.get("daily_rate", 999999) or 999999)))
+    return workers[offset: offset + limit]
+
+
+async def _fetch_jobs_for_worker_pincode(worker: dict, pincode: str, limit: int = 5) -> list[dict]:
+    jobs, _ = await _fetch_jobs_for_worker(worker, pincode_filter=pincode)
+    return jobs[:limit]
+
+
+def _format_customer_worker_list(name: str, pincode: str, workers: list[dict]) -> str:
+    if not workers:
+        return (
+            f"Namaste {name}! Aapke pincode {pincode} mein abhi koi available worker nahi mila.\n\n"
+            "Kisi aur pincode mein worker chahiye? Reply: PINCODE 841219"
+        )
+    lines = [f"Namaste {name}! Aapke pincode {pincode} ke nearby workers:\n"]
+    for idx, worker in enumerate(workers, 1):
+        lines.append(
+            f"{idx}. {worker.get('name', 'Worker')} — {_worker_primary_skill(worker)} — "
+            f"₹{worker.get('daily_rate', '?')}/day — {_location_label(worker)}"
+        )
+    lines.append("\nKisi aur pincode mein worker chahiye? Reply: PINCODE 841219")
+    lines.append("More workers ke liye reply: MORE")
+    return "\n".join(lines)
+
+
+def _format_worker_job_list(name: str, pincode: str, jobs: list[dict]) -> str:
+    if not jobs:
+        return (
+            f"Namaste {name}! Aapke pincode {pincode} mein abhi koi nearby kaam nahi mila.\n\n"
+            "Kisi aur pincode mein kaam dekhna hai? Reply: PINCODE 841219"
+        )
+    lines = [f"Namaste {name}! Aapke pincode {pincode} ke nearby kaam:\n"]
+    for idx, job in enumerate(jobs, 1):
+        lines.append(
+            f"{idx}. {job.get('title', 'Kaam')} — ₹{job.get('daily_rate', '?')}/day — {_location_label(job)}"
+        )
+    lines.append("\nKisi aur pincode mein kaam dekhna hai? Reply: PINCODE 841219")
+    lines.append("More jobs ke liye reply: MORE")
+    return "\n".join(lines)
+
+
+async def _registered_customer_hi(source_phone: str, state: dict, user: dict, worker: Optional[dict] = None) -> tuple[str, dict]:
+    pincode = get_default_pincode(user, worker)
+    name = _display_name(user, "Customer")
+    if not pincode:
+        logger.info("WhatsApp flow=registered_customer_hi role=customer pincode=missing phone=%s", _mask_phone(source_phone))
+        return (
+            "Aapka pincode missing hai. Kripya pincode update karein.",
+            _with_reply_buttons(
+                {**state, "step": "awaiting_pincode", "role": "customer", "user_id": user.get("id"), "awaiting_pincode_for": "customer"},
+                _BUTTONS_MISSING_PINCODE,
+            ),
+        )
+
+    workers = await _fetch_workers_for_customer_pincode(pincode)
+    logger.info(
+        "WhatsApp flow=registered_customer_hi role=customer pincode=%s workers_count=%s phone=%s",
+        pincode,
+        len(workers),
+        _mask_phone(source_phone),
+    )
+    return (
+        _format_customer_worker_list(name, pincode, workers),
+        _with_reply_buttons(
+            {**state, "step": "customer_worker_list", "role": "customer", "user_id": user.get("id"), "worker_list": workers, "worker_offset": 5, "worker_pincode_filter": pincode},
+            _BUTTONS_CUSTOMER_RESULTS,
+        ),
+    )
+
+
+async def _registered_worker_hi(source_phone: str, state: dict, user: dict, worker: Optional[dict]) -> tuple[str, dict]:
+    if not worker:
+        return ("Worker profile nahi mila. Pehle kaamnow.com/worker/onboarding par profile banayein.", state)
+    pincode = get_default_pincode(user, worker)
+    name = _display_name(worker or user, "Worker")
+    if not pincode:
+        logger.info("WhatsApp flow=registered_worker_hi role=worker pincode=missing phone=%s", _mask_phone(source_phone))
+        return (
+            "Aapka pincode missing hai. Kripya pincode update karein.",
+            _with_reply_buttons(
+                {**state, "step": "awaiting_pincode", "role": "worker", "user_id": user.get("id"), "worker_id": worker.get("id"), "awaiting_pincode_for": "worker"},
+                _BUTTONS_MISSING_PINCODE,
+            ),
+        )
+
+    jobs = await _fetch_jobs_for_worker_pincode(worker, pincode)
+    logger.info(
+        "WhatsApp flow=registered_worker_hi role=worker pincode=%s jobs_count=%s phone=%s",
+        pincode,
+        len(jobs),
+        _mask_phone(source_phone),
+    )
+    return (
+        _format_worker_job_list(name, pincode, jobs),
+        _with_reply_buttons(
+            {**state, "step": "job_list", "role": "worker", "user_id": user.get("id"), "worker_id": worker.get("id"), "job_list": jobs, "job_offset": 5, "job_category": None, "job_pincode_filter": pincode, "viewed_job": None},
+            _BUTTONS_WORKER_RESULTS,
+        ),
+    )
+
+
+async def _customer_workers_for_pincode(source_phone: str, state: dict, pincode: str) -> tuple[str, dict]:
+    user, worker, state = await _identify_user(source_phone, state)
+    if not user:
+        return await _cmd_onboard(source_phone, "hi", state)
+    workers = await _fetch_workers_for_customer_pincode(pincode)
+    name = _display_name(user, "Customer")
+    logger.info("WhatsApp flow=customer_pincode_search role=customer pincode=%s workers_count=%s phone=%s", pincode, len(workers), _mask_phone(source_phone))
+    return (
+        _format_customer_worker_list(name, pincode, workers),
+        _with_reply_buttons({**state, "step": "customer_worker_list", "worker_list": workers, "worker_offset": 5, "worker_pincode_filter": pincode}, _BUTTONS_CUSTOMER_RESULTS),
+    )
+
+
+async def _customer_more_workers(source_phone: str, state: dict) -> tuple[str, dict]:
+    pincode = state.get("worker_pincode_filter")
+    if not pincode:
+        user, worker, state = await _identify_user(source_phone, state)
+        pincode = get_default_pincode(user, worker)
+    if not pincode:
+        return (
+            "Aapka pincode missing hai. Kripya pincode update karein.",
+            _with_reply_buttons({**state, "step": "awaiting_pincode", "awaiting_pincode_for": "customer"}, _BUTTONS_MISSING_PINCODE),
+        )
+    offset = int(state.get("worker_offset", 5) or 5)
+    workers = await _fetch_workers_for_customer_pincode(pincode, offset=offset)
+    if not workers:
+        return (f"Pincode {pincode} mein aur workers nahi mile.\n\nKisi aur pincode ke liye reply: PINCODE 841219", state)
+    user, _, state = await _identify_user(source_phone, state)
+    name = _display_name(user, "Customer")
+    existing = state.get("worker_list", [])
+    return (
+        _format_customer_worker_list(name, pincode, workers),
+        _with_reply_buttons(
+            {**state, "step": "customer_worker_list", "worker_list": existing + workers, "worker_offset": offset + 5, "worker_pincode_filter": pincode},
+            _BUTTONS_CUSTOMER_RESULTS,
+        ),
+    )
+
+
+def _format_worker_brief(worker: dict) -> str:
+    return (
+        f"👷 *{worker.get('name', 'Worker')}*\n\n"
+        f"Kaam: {_worker_primary_skill(worker)}\n"
+        f"Rate: ₹{worker.get('daily_rate', '?')}/day\n"
+        f"Location: {_location_label(worker)}\n\n"
+        "Full booking flow abhi app/website par continue karein: kaamnow.com/marketplace\n"
+        "Aur workers ke liye reply: MORE"
+    )
+
+
 # ─── Identity & authentication ────────────────────────────────────────────────
 
 async def _identify_user(source_phone: str, state: dict) -> tuple[Optional[dict], Optional[dict], dict]:
@@ -267,10 +566,12 @@ async def _identify_user(source_phone: str, state: dict) -> tuple[Optional[dict]
         worker = None
         if state.get("worker_id"):
             worker = await db.workers.find_one({"id": state["worker_id"]}, {"_id": 0})
+        logger.info("WhatsApp identity from session phone=%s user_found=%s role=%s", _mask_phone(source_phone), bool(user), (user or {}).get("role") or state.get("role"))
         return user, worker, state
 
     user = await _lookup_user_by_phone(source_phone)
     if not user:
+        logger.info("WhatsApp identity phone=%s user_found=false role=unregistered", _mask_phone(source_phone))
         return None, None, state
 
     worker = None
@@ -283,6 +584,7 @@ async def _identify_user(source_phone: str, state: dict) -> tuple[Optional[dict]
         "role": user.get("role", "unknown"),
         "worker_id": worker["id"] if worker else None,
     }
+    logger.info("WhatsApp identity phone=%s user_found=true role=%s", _mask_phone(source_phone), user.get("role", "unknown"))
     return user, worker, new_state
 
 
@@ -489,12 +791,9 @@ async def _cmd_set_pincode(source_phone: str, pincode: str, state: dict) -> tupl
         {"id": worker["id"]},
         {"$set": {"address": address}},
     )
-
-    return (
-        f"✅ Pincode update ho gaya: *{pincode}*\n\n"
-        f"Ab JOBS type karein is area ke kaam dekhne ke liye.",
-        state,
-    )
+    updated_worker = {**worker, "address": address}
+    reply, new_state = await _registered_worker_hi(source_phone, state, user, updated_worker)
+    return (f"✅ Pincode update ho gaya: *{pincode}*\n\n{reply}", new_state)
 
 
 async def _cmd_show_pincode(source_phone: str, state: dict) -> tuple[str, dict]:
@@ -595,14 +894,14 @@ _CATEGORY_MAP = {1: "Farm", 2: "Construction", 3: "Construction", 4: "Home", 5: 
 
 
 async def _finish_customer_onboard(source_phone: str, state: dict) -> tuple[str, dict]:
-    phone_digits = "".join(c for c in source_phone if c.isdigit())
-    phone_10 = phone_digits[-10:] if len(phone_digits) >= 10 else phone_digits
-    phone_stored = f"+91{phone_10}"  # consistent with app-registered users
-    existing = await db.users.find_one({"phone_primary": {"$regex": phone_10, "$options": "i"}})
+    phone_info = normalize_whatsapp_phone(source_phone)
+    phone_stored = phone_info["e164"]  # consistent with app-registered users
+    existing = await _lookup_user_by_phone(source_phone)
     if existing:
-        return (
-            f"✅ Aapka account already hai {state['wa_name']}!\nMENU type karein workers dhundhne ke liye.",
+        return await _registered_customer_hi(
+            source_phone,
             {"step": "customer_menu", "user_id": existing["id"], "role": existing.get("role", "customer")},
+            existing,
         )
     address = {
         "village": state["wa_village"], "district": state["wa_district"],
@@ -617,27 +916,34 @@ async def _finish_customer_onboard(source_phone: str, state: dict) -> tuple[str,
         "avatar_color": _generate_avatar_color(state["wa_name"]),
         "created_at": utc_now_iso(), "migration_status": "phone_primary", "source": "whatsapp",
     })
-    return (
-        f"🎉 *Swagat hai {state['wa_name']}!*\n\n"
-        f"Account ban gaya ✅\n"
-        f"📍 {state['wa_village']}, {state['wa_district']}, {state['wa_state']}\n\n"
-        f"MENU type karein workers dhundhne ke liye 🙏",
+    user_doc = {
+        "id": user_id,
+        "name": state["wa_name"],
+        "role": "customer",
+        "pincode": state["wa_pincode"],
+        "address": address,
+    }
+    reply, next_state = await _registered_customer_hi(
+        source_phone,
         {"step": "customer_menu", "user_id": user_id, "role": "customer"},
+        user_doc,
     )
+    return (f"🎉 *Swagat hai {state['wa_name']}!*\n\nAccount ban gaya ✅\n\n{reply}", next_state)
 
 
 async def _finish_worker_onboard(source_phone: str, state: dict) -> tuple[str, dict]:
-    phone_digits = "".join(c for c in source_phone if c.isdigit())
-    phone_10 = phone_digits[-10:] if len(phone_digits) >= 10 else phone_digits
-    phone_stored = f"+91{phone_10}"
-    existing_user = await db.users.find_one({"phone_primary": {"$regex": phone_10, "$options": "i"}})
+    phone_info = normalize_whatsapp_phone(source_phone)
+    phone_stored = phone_info["e164"]
+    existing_user = await _lookup_user_by_phone(source_phone)
     if existing_user:
         user_id = existing_user["id"]
         existing_worker = await db.workers.find_one({"user_id": user_id})
         if existing_worker:
-            return (
-                "✅ Aapka profile already hai!\nJOBS type karein kaam dekhne ke liye.",
+            return await _registered_worker_hi(
+                source_phone,
                 {"step": "worker_menu", "user_id": user_id, "worker_id": existing_worker["id"], "role": "worker"},
+                existing_user,
+                existing_worker,
             )
     else:
         user_id = str(uuid.uuid4())
@@ -667,14 +973,40 @@ async def _finish_worker_onboard(source_phone: str, state: dict) -> tuple[str, d
         "trust_tier": 1, "avg_rating": 0.0, "total_jobs": 0,
         "photo_url": None, "bio": "", "created_at": utc_now_iso(), "source": "whatsapp",
     })
+    user_doc = {
+        "id": user_id,
+        "name": state["wa_name"],
+        "role": "worker",
+        "pincode": state["wa_pincode"],
+        "address": address,
+    }
+    worker_doc = {
+        "id": worker_id,
+        "user_id": user_id,
+        "name": state["wa_name"],
+        "skills": state["wa_skills"],
+        "structured_skills": state["wa_structured_skills"],
+        "daily_rate": state["wa_rate"],
+        "village": state["wa_village"],
+        "district": state["wa_district"],
+        "state": state["wa_state"],
+        "address": address,
+        "lat": 0.0,
+        "lng": 0.0,
+    }
+    reply, next_state = await _registered_worker_hi(
+        source_phone,
+        {"step": "worker_menu", "user_id": user_id, "worker_id": worker_id, "role": "worker"},
+        user_doc,
+        worker_doc,
+    )
     return (
         f"🎉 *Profile ban gaya {state['wa_name']}!*\n\n"
         f"👷 Worker Account ✅\n"
         f"📍 {state['wa_village']}, {state['wa_district']}, {state['wa_state']}\n"
         f"💰 ₹{state['wa_rate']}/day\n\n"
-        f"JOBS type karein kaam dekhne ke liye 💼\n"
-        f"HELP type karein sabhi commands ke liye",
-        {"step": "worker_menu", "user_id": user_id, "worker_id": worker_id, "role": "worker"},
+        f"{reply}",
+        next_state,
     )
 
 
@@ -685,15 +1017,17 @@ async def _cmd_onboard(source_phone: str, message: str, state: dict) -> tuple[st
     step = state.get("step", "wa_ob_role")
 
     if step == "wa_ob_role":
-        if msg == "1":
+        if msg == "1" or msg_up == "CUSTOMER":
             return ("Aapka poora naam kya hai?", {**state, "step": "wa_ob_name", "wa_role": "customer"})
-        if msg == "2":
+        if msg == "2" or msg_up == "WORKER":
             return ("Aapka poora naam kya hai?", {**state, "step": "wa_ob_name", "wa_role": "worker"})
         return (
-            "Sirf *1* ya *2* reply karein 🙏\n\n"
-            "1️⃣ Mujhe workers chahiye *(Customer)*\n"
-            "2️⃣ Main kaam dhundhta/dhundhti hun *(Worker)*",
-            state,
+            "Namaste! KaamNow par aapka swagat hai. Aap kya karna chahte hain?\n\n"
+            "- Mujhe worker chahiye\n"
+            "- Mujhe kaam chahiye\n"
+            "- Help\n\n"
+            "Reply: *CUSTOMER* or *WORKER*",
+            _with_reply_buttons(state, _BUTTONS_UNREGISTERED),
         )
 
     if step == "wa_ob_name":
@@ -758,12 +1092,12 @@ async def _cmd_onboard(source_phone: str, message: str, state: dict) -> tuple[st
 
     # Fallback: restart onboarding
     return (
-        "Namaste! KaamNow mein swagat hai 🙏\n\n"
-        "Aap kya hain?\n\n"
-        "1️⃣ Mujhe workers chahiye *(Customer)*\n"
-        "2️⃣ Main kaam dhundhta/dhundhti hun *(Worker)*\n\n"
-        "Reply *1* ya *2*",
-        {"step": "wa_ob_role"},
+        "Namaste! KaamNow par aapka swagat hai. Aap kya karna chahte hain?\n\n"
+        "- Mujhe worker chahiye\n"
+        "- Mujhe kaam chahiye\n"
+        "- Help\n\n"
+        "Reply: *CUSTOMER* or *WORKER*",
+        _with_reply_buttons({"step": "wa_ob_role"}, _BUTTONS_UNREGISTERED),
     )
 
 
@@ -773,6 +1107,7 @@ async def _handle_message(source_phone: str, message_text: str, state: dict) -> 
     raw = message_text.strip()
     msg_up = raw.upper()
     msg_low = raw.lower()
+    greeting_texts = {"", "HI", "HELLO", "NAMASTE", "HAI", "MENU", "RESET", "START"}
 
     # ── Universal commands ──
     if msg_up in ("HELP", "?", "MADAD"):
@@ -794,25 +1129,43 @@ async def _handle_message(source_phone: str, message_text: str, state: dict) -> 
         clean_state["step"] = "start"
         return await _handle_message(source_phone, "hi", clean_state)
 
+    if msg_up == "CHANGE_PINCODE":
+        role = state.get("role")
+        next_state = {**state, "step": "awaiting_pincode", "awaiting_pincode_for": role or "unknown"}
+        return ("Kaunsa pincode dekhna hai? 6-digit pincode bhejein.", next_state)
+
     # ── Identify user on first contact (or if identity not in state) ──
     user, worker, state = await _identify_user(source_phone, state)
+
+    if state.get("step") == "awaiting_pincode" and raw.isdigit() and len(raw) == 6:
+        if state.get("role") == "worker":
+            return await _cmd_set_pincode(source_phone, raw, state)
+        if user:
+            address = dict((user or {}).get("address") or {})
+            address["pincode"] = raw
+            await db.users.update_one({"id": user["id"]}, {"$set": {"pincode": raw, "address": address}})
+        return await _customer_workers_for_pincode(source_phone, state, raw)
 
     if not user:
         # If mid-onboarding, continue the flow
         if state.get("step", "").startswith("wa_ob_"):
             return await _cmd_onboard(source_phone, raw, state)
         # Any message from unknown number → start onboarding
+        logger.info("WhatsApp flow=unregistered_onboarding role=none phone=%s", _mask_phone(source_phone))
         return (
-            "Namaste! KaamNow mein swagat hai 🙏\n\n"
-            "Aap kya hain?\n\n"
-            "1️⃣ Mujhe workers chahiye *(Customer)*\n"
-            "2️⃣ Main kaam dhundhta/dhundhti hun *(Worker)*\n\n"
-            "Reply *1* ya *2*",
-            {"step": "wa_ob_role"},
+            "Namaste! KaamNow par aapka swagat hai. Aap kya karna chahte hain?\n\n"
+            "- Mujhe worker chahiye\n"
+            "- Mujhe kaam chahiye\n"
+            "- Help\n\n"
+            "Reply: *CUSTOMER* or *WORKER*",
+            _with_reply_buttons({"step": "wa_ob_role"}, _BUTTONS_UNREGISTERED),
         )
 
     # ── Worker commands ──
     if state.get("role") == "worker":
+        if msg_up in greeting_texts or state.get("step") in ("start", None, "unregistered"):
+            return await _registered_worker_hi(source_phone, state, user, worker)
+
         # JOBS / KAAM [category]
         if msg_up in ("JOBS", "KAAM", "FIND JOBS", "FIND WORK"):
             return await _cmd_jobs(source_phone, state)
@@ -850,6 +1203,9 @@ async def _handle_message(source_phone: str, message_text: str, state: dict) -> 
         # STATUS
         if msg_up in ("STATUS", "MY STATUS", "MERI STATUS"):
             return await _cmd_status(source_phone, state)
+
+        if raw.isdigit() and len(raw) == 6 and state.get("step") == "awaiting_pincode":
+            return await _cmd_set_pincode(source_phone, raw, state)
 
         # PINCODE 841219
         if msg_up.startswith("PINCODE"):
@@ -931,38 +1287,44 @@ async def _handle_message(source_phone: str, message_text: str, state: dict) -> 
                 state,
             )
 
-        # First message / unknown → show worker menu
-        if state.get("step") in ("start", None, "unregistered") or msg_up in ("HI", "HELLO", "NAMASTE", "HAI"):
-            name = user.get("name", "").split()[0] if user.get("name") else "Worker"
-            pincode = (worker.get("address") or {}).get("pincode") or "set nahi"
-            return (
-                f"Namaste {name}! 👷 KaamNow mein swagat hai.\n\n"
-                f"📍 Aapka pincode: {pincode}\n\n"
-                f"*JOBS* – Kaam dhundhen\n"
-                f"*STATUS* – Meri requests\n"
-                f"*HELP* – Sabhi commands\n",
-                {**state, "step": "worker_menu"},
-            )
-
         # Unknown command for worker
         return (
             "Samajh nahi aaya. 🙏\n\nJOBS – Kaam dhundhen\nHELP – Sabhi commands",
-            state,
+            _with_reply_buttons(state, _BUTTONS_WORKER_MENU),
         )
 
     # ── Customer commands ──
     if state.get("role") == "customer":
         step = state.get("step", "start")
 
-        if msg_up in ("HI", "HELLO", "NAMASTE", "HAI") or step in ("start", None):
-            name = user.get("name", "").split()[0] if user.get("name") else "Customer"
-            return (
-                f"Namaste {name}! KaamNow mein swagat hai 🙏\n\n"
-                f"Workers dhundhne ke liye: *MENU*\n"
-                f"Help ke liye: *HELP*\n\n"
-                f"🌐 kaamnow.com/dashboard",
-                {**state, "step": "customer_menu"},
-            )
+        if msg_up in greeting_texts or step in ("start", None):
+            return await _registered_customer_hi(source_phone, state, user, worker)
+
+        if msg_up in ("WORKERS", "FIND WORKERS"):
+            return await _registered_customer_hi(source_phone, state, user, worker)
+
+        if msg_up == "MORE":
+            return await _customer_more_workers(source_phone, state)
+
+        if msg_up.startswith("PINCODE"):
+            parts = raw.split()
+            pincode_val = parts[1] if len(parts) > 1 else ""
+            if not pincode_val:
+                return ("Kisi aur pincode mein worker chahiye? Reply: PINCODE 841219", state)
+            if not pincode_val.isdigit() or len(pincode_val) != 6:
+                return ("Valid 6-digit pincode bhejein. Example: *PINCODE 841219*", state)
+            return await _customer_workers_for_pincode(source_phone, state, pincode_val)
+
+        if raw.isdigit() and len(raw) == 6 and step == "awaiting_pincode":
+            if user:
+                address = dict((user or {}).get("address") or {})
+                address["pincode"] = raw
+                await db.users.update_one({"id": user["id"]}, {"$set": {"pincode": raw, "address": address}})
+            return await _customer_workers_for_pincode(source_phone, state, raw)
+
+        if raw.isdigit() and state.get("worker_list") and 1 <= int(raw) <= len(state.get("worker_list", [])):
+            selected_worker = state["worker_list"][int(raw) - 1]
+            return (_format_worker_brief(selected_worker), {**state, "step": "customer_worker_detail", "selected_worker_id": selected_worker.get("id")})
 
         # Village step (with DB lookup)
         if step == "village":
@@ -974,6 +1336,8 @@ async def _handle_message(source_phone: str, message_text: str, state: dict) -> 
 
         # Pure state machine for all other customer steps
         reply, new_state = _bot_reply_customer(state, message_text)
+        if new_state.get("step") in ("start", "customer_menu", "intent"):
+            new_state = _with_reply_buttons(new_state, _BUTTONS_CUSTOMER_MENU)
         return (reply, new_state)
 
     # ── Unknown role fallback ──
@@ -1135,6 +1499,62 @@ def _format_gupshup_message(payload: Any) -> str:
     return str(payload)
 
 
+def _normalize_button_action(value: str) -> str:
+    action = str(value or "").strip()
+    action_up = action.upper()
+    mapping = {
+        "CUSTOMER": "CUSTOMER",
+        "WORKER": "WORKER",
+        "CHANGE_PINCODE": "CHANGE_PINCODE",
+        "MORE": "MORE",
+        "HELP": "HELP",
+        "STATUS": "STATUS",
+        "JOBS": "JOBS",
+        "WORKERS": "WORKERS",
+    }
+    return mapping.get(action_up, action)
+
+
+def _extract_button_reply_text(body: dict) -> str:
+    candidates: list[Any] = []
+    inner = body.get("payload") if isinstance(body.get("payload"), dict) else {}
+    payloads = [
+        body,
+        inner,
+        body.get("message") if isinstance(body.get("message"), dict) else {},
+        inner.get("payload") if isinstance(inner.get("payload"), dict) else {},
+        inner.get("message") if isinstance(inner.get("message"), dict) else {},
+    ]
+    for item in payloads:
+        if not isinstance(item, dict):
+            continue
+        item_type = str(item.get("type") or "").lower()
+        nested = item.get("payload")
+        nested_dict = nested if isinstance(nested, dict) else {}
+        if item_type in ("button_reply", "quick_reply"):
+            candidates.extend([
+                nested_dict.get("id"),
+                nested_dict.get("postbackText"),
+                nested_dict.get("text"),
+                nested_dict.get("title"),
+                item.get("id"),
+                item.get("postbackText"),
+                item.get("text"),
+                item.get("title"),
+            ])
+        interactive = item.get("interactive") if isinstance(item.get("interactive"), dict) else {}
+        button_reply = interactive.get("button_reply") if isinstance(interactive.get("button_reply"), dict) else {}
+        if button_reply:
+            candidates.extend([button_reply.get("id"), button_reply.get("title")])
+        if str(interactive.get("type") or "").lower() in ("button_reply", "quick_reply"):
+            candidates.extend([interactive.get("id"), interactive.get("title"), interactive.get("postbackText"), interactive.get("text")])
+
+    for candidate in candidates:
+        if candidate:
+            return _normalize_button_action(str(candidate))
+    return ""
+
+
 def _extract_gupshup_incoming(body: dict) -> tuple[str, str]:
     """
     Handles multiple Gupshup payload formats:
@@ -1163,7 +1583,7 @@ def _extract_gupshup_incoming(body: dict) -> tuple[str, str]:
             src = sender
 
     # ── Extract message text ──
-    text = _format_gupshup_message(body)
+    text = _extract_button_reply_text(body) or _format_gupshup_message(body)
 
     if not text:
         # Gupshup standard: payload.payload.text
@@ -1179,11 +1599,11 @@ def _extract_gupshup_incoming(body: dict) -> tuple[str, str]:
 
     if not text:
         # Last resort: try _format_gupshup_message on the inner payload dict
-        text = _format_gupshup_message(inner)
+        text = _extract_button_reply_text(inner) or _format_gupshup_message(inner)
 
-    if not src or not text:
+    if not src:
         raise ValueError(f"Invalid Gupshup payload — src={src!r} text={text!r} body_keys={list(body.keys())}")
-    return str(src), text
+    return str(src), text or ""
 
 
 def _send_gupshup_text(destination: str, text: str) -> dict:
@@ -1193,7 +1613,7 @@ def _send_gupshup_text(destination: str, text: str) -> dict:
     payload = {
         "channel": settings.gupshup_channel,
         "source": settings.gupshup_source,
-        "destination": destination,
+        "destination": _full_phone(destination),
         "message": json.dumps({"type": "text", "text": text}),
     }
     if getattr(settings, "gupshup_app_id", None):
@@ -1211,6 +1631,82 @@ def _send_gupshup_text(destination: str, text: str) -> dict:
         return {"text": resp.text}
 
 
+def _button_fallback_text(body_text: str, buttons: list[dict]) -> str:
+    ids = [str(button.get("id") or "").strip() for button in buttons if button.get("id")]
+    return f"{body_text}\n\nReply: {', '.join(ids)}"
+
+
+def _send_gupshup_buttons(destination: str, body_text: str, buttons: list[dict]) -> dict:
+    if not settings.gupshup_api_url or not settings.gupshup_api_key or not settings.gupshup_source:
+        raise RuntimeError("Gupshup settings are not configured")
+
+    clean_buttons = [
+        {"id": str(button.get("id", "")).strip(), "title": str(button.get("title", "")).strip()[:20]}
+        for button in (buttons or [])[:3]
+        if button.get("id") and button.get("title")
+    ]
+    if not clean_buttons:
+        return _send_gupshup_text(destination, body_text)
+
+    button_payload = {
+        "type": "quick_reply",
+        "content": {"type": "text", "text": body_text},
+        "options": [
+            {"type": "text", "title": button["title"], "postbackText": button["id"]}
+            for button in clean_buttons
+        ],
+    }
+    payload = {
+        "channel": settings.gupshup_channel,
+        "source": settings.gupshup_source,
+        "destination": _full_phone(destination),
+        "message": json.dumps(button_payload),
+    }
+    if getattr(settings, "gupshup_app_id", None):
+        payload["src.name"] = settings.gupshup_app_id
+
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "apikey": settings.gupshup_api_key,
+    }
+    logger.info(
+        "WhatsApp outbound_kind=reply_buttons to=%s buttons=%s payload_shape=quick_reply",
+        _mask_phone(destination),
+        clean_buttons,
+    )
+    try:
+        resp = requests.post(settings.gupshup_api_url, data=payload, headers=headers, timeout=10)
+        status_code = getattr(resp, "status_code", None)
+        response_text = getattr(resp, "text", "")
+        logger.info("WhatsApp reply_buttons HTTP status=%s body=%s", status_code, str(response_text)[:500])
+        resp.raise_for_status()
+        try:
+            provider_response = resp.json()
+        except ValueError:
+            provider_response = {"text": response_text}
+
+        provider_status = str(provider_response.get("status") or provider_response.get("success") or "").lower()
+        if provider_status in ("false", "failed", "error"):
+            raise RuntimeError(f"Gupshup rejected reply buttons: {provider_response}")
+
+        logger.info(
+            "WhatsApp reply_buttons provider_status=%s messageId=%s",
+            provider_response.get("status") or provider_response.get("success"),
+            provider_response.get("messageId") or provider_response.get("message_id"),
+        )
+        return {"kind": "reply_buttons", "fallback": False, "provider_response": provider_response}
+    except Exception as exc:
+        logger.warning("WhatsApp reply_buttons fallback reason=%s", exc)
+        fallback_text = _button_fallback_text(body_text, clean_buttons)
+        fallback_response = _send_gupshup_text(destination, fallback_text)
+        return {
+            "kind": "reply_buttons",
+            "fallback": True,
+            "fallback_reason": str(exc),
+            "provider_response": fallback_response,
+        }
+
+
 def send_whatsapp(phone: str, text: str) -> None:
     """Fire-and-forget WhatsApp send. Call from threads to avoid blocking async loops."""
     try:
@@ -1225,6 +1721,8 @@ def send_whatsapp(phone: str, text: str) -> None:
 @router.post("/message")
 async def whatsapp_message(body: WhatsAppMessageIn, current_user: dict = Depends(get_optional_user)):
     """Internal REST endpoint for in-app chat bot."""
+    if not isinstance(current_user, dict):
+        current_user = None
     state_doc = await db.bot_sessions.find_one({"session_id": body.session_id})
     state = state_doc["state"] if state_doc else {"step": "start"}
 
@@ -1240,8 +1738,9 @@ async def whatsapp_message(body: WhatsAppMessageIn, current_user: dict = Depends
         }
 
     reply, new_state = await _handle_message(body.session_id, body.message, state)
-    await _save_bot_state(body.session_id, new_state)
-    return {"reply": reply, "state": new_state}
+    clean_state, buttons = _pop_reply_buttons(new_state)
+    await _save_bot_state(body.session_id, clean_state)
+    return {"reply": reply, "state": clean_state, "buttons": buttons or []}
 
 
 @router.head("/gupshup")
@@ -1284,8 +1783,9 @@ async def gupshup_webhook(request: Request):
     if not settings.gupshup_api_url:
         raise HTTPException(status_code=503, detail="WhatsApp provider not configured")
 
-    content_type = request.headers.get("content-type", "")
-    if "application/json" in content_type:
+    headers = getattr(request, "headers", {}) or {}
+    content_type = headers.get("content-type", "") if hasattr(headers, "get") else ""
+    if "application/json" in content_type or not hasattr(request, "form"):
         body = await request.json()
     else:
         form = await request.form()
@@ -1307,19 +1807,27 @@ async def gupshup_webhook(request: Request):
     except ValueError as e:
         logger.error("Gupshup parse failed: %s | body=%s", e, str(body)[:300])
         return Response(status_code=200)
+    normalized_phone = normalize_whatsapp_phone(source_phone)
+    logger.info(
+        "WhatsApp inbound phone=%s variants=%s text_len=%s",
+        _mask_phone(source_phone),
+        _masked_variants(normalized_phone),
+        len(message_text or ""),
+    )
 
     session_id = _create_session_id(source_phone)
     state_doc = await db.bot_sessions.find_one({"session_id": session_id})
     state = state_doc["state"] if state_doc else {"step": "start"}
 
     reply, new_state = await _handle_message(source_phone, message_text, state)
-    await _save_bot_state(session_id, new_state)
+    clean_state, buttons = _pop_reply_buttons(new_state)
+    await _save_bot_state(session_id, clean_state)
 
     try:
-        response = _send_gupshup_text(source_phone, reply)
+        response = _send_gupshup_buttons(source_phone, reply, buttons) if buttons else _send_gupshup_text(source_phone, reply)
         logger.info("Sent WhatsApp reply to %s", source_phone[-4:])
     except Exception as exc:
         logger.error("WhatsApp send failed: %s", exc)
         raise HTTPException(status_code=502, detail="Failed to send WhatsApp reply")
 
-    return Response(status_code=200)
+    return {"status": "ok", "reply": reply, "provider_response": response}
