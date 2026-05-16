@@ -21,6 +21,7 @@ Customer commands:
 import json
 import logging
 import math
+import re
 import threading
 import uuid
 from datetime import date, timedelta
@@ -86,6 +87,11 @@ _BUTTONS_WORKER_RESULTS = [
     {"id": "MORE", "title": "More Jobs"},
     {"id": "STATUS", "title": "My Applications"},
 ]
+_BUTTONS_WORKER_NO_RESULTS = [
+    {"id": "CHANGE_PINCODE", "title": "Change Pincode"},
+    {"id": "STATUS", "title": "My Applications"},
+    {"id": "HELP", "title": "Help"},
+]
 _BUTTONS_MISSING_PINCODE = [
     {"id": "CHANGE_PINCODE", "title": "Set Pincode"},
     {"id": "HELP", "title": "Help"},
@@ -110,6 +116,26 @@ def _pop_reply_buttons(state: dict) -> tuple[dict, Optional[list[dict]]]:
     clean_state = dict(state or {})
     buttons = clean_state.pop("_reply_buttons", None)
     return clean_state, buttons
+
+
+_GREETING_ALIASES = {"hi", "hii", "hiii", "hello", "hey", "namaste", "menu", "reset", "start"}
+_TYPED_BUTTON_ALIASES = {
+    "find jobs": "JOBS",
+    "more jobs": "MORE",
+    "my applications": "STATUS",
+    "change pincode": "CHANGE_PINCODE",
+    "find workers": "WORKERS",
+    "more workers": "MORE",
+    "my requests": "STATUS",
+    "mujhe worker chahiye": "CUSTOMER",
+    "mujhe kaam chahiye": "WORKER",
+}
+
+
+def _normalize_inbound_text(text: str) -> str:
+    lowered = str(text or "").strip().lower()
+    without_punctuation = re.sub(r"[^\w\s]", " ", lowered)
+    return re.sub(r"\s+", " ", without_punctuation).strip()
 
 
 # ─── Phone helpers ────────────────────────────────────────────────────────────
@@ -414,8 +440,8 @@ async def _fetch_jobs_for_worker_pincode(worker: dict, pincode: str, limit: int 
 def _format_customer_worker_list(name: str, pincode: str, workers: list[dict]) -> str:
     if not workers:
         return (
-            f"Namaste {name}! Aapke pincode {pincode} mein abhi koi available worker nahi mila.\n\n"
-            "Kisi aur pincode mein worker chahiye? Reply: PINCODE 841219"
+            f"Namaste {name}! Aapke pincode {pincode} mein abhi koi worker nahi mila.\n\n"
+            "Kisi aur pincode mein worker dekhna hai?"
         )
     lines = [f"Namaste {name}! Aapke pincode {pincode} ke nearby workers:\n"]
     for idx, worker in enumerate(workers, 1):
@@ -432,7 +458,7 @@ def _format_worker_job_list(name: str, pincode: str, jobs: list[dict]) -> str:
     if not jobs:
         return (
             f"Namaste {name}! Aapke pincode {pincode} mein abhi koi nearby kaam nahi mila.\n\n"
-            "Kisi aur pincode mein kaam dekhna hai? Reply: PINCODE 841219"
+            "Kisi aur pincode mein kaam dekhna hai?"
         )
     lines = [f"Namaste {name}! Aapke pincode {pincode} ke nearby kaam:\n"]
     for idx, job in enumerate(jobs, 1):
@@ -499,7 +525,7 @@ async def _registered_worker_hi(source_phone: str, state: dict, user: dict, work
         _format_worker_job_list(name, pincode, jobs),
         _with_reply_buttons(
             {**state, "step": "job_list", "role": "worker", "user_id": user.get("id"), "worker_id": worker.get("id"), "job_list": jobs, "job_offset": 5, "job_category": None, "job_pincode_filter": pincode, "viewed_job": None},
-            _BUTTONS_WORKER_RESULTS,
+            _BUTTONS_WORKER_RESULTS if jobs else _BUTTONS_WORKER_NO_RESULTS,
         ),
     )
 
@@ -1104,10 +1130,12 @@ async def _cmd_onboard(source_phone: str, message: str, state: dict) -> tuple[st
 # ─── Main message dispatcher ──────────────────────────────────────────────────
 
 async def _handle_message(source_phone: str, message_text: str, state: dict) -> tuple[str, dict]:
-    raw = message_text.strip()
+    original_raw = message_text.strip()
+    normalized_text = _normalize_inbound_text(original_raw)
+    raw = _TYPED_BUTTON_ALIASES.get(normalized_text, original_raw)
     msg_up = raw.upper()
     msg_low = raw.lower()
-    greeting_texts = {"", "HI", "HELLO", "NAMASTE", "HAI", "MENU", "RESET", "START"}
+    is_greeting = normalized_text in _GREETING_ALIASES
 
     # ── Universal commands ──
     if msg_up in ("HELP", "?", "MADAD"):
@@ -1123,7 +1151,7 @@ async def _handle_message(source_phone: str, message_text: str, state: dict) -> 
                 state,
             )
 
-    if msg_up in ("MENU", "RESET", "START"):
+    if normalized_text in ("menu", "reset", "start"):
         # Clear job browsing state, keep identity
         clean_state = {k: v for k, v in state.items() if k in ("user_id", "worker_id", "role")}
         clean_state["step"] = "start"
@@ -1163,7 +1191,7 @@ async def _handle_message(source_phone: str, message_text: str, state: dict) -> 
 
     # ── Worker commands ──
     if state.get("role") == "worker":
-        if msg_up in greeting_texts or state.get("step") in ("start", None, "unregistered"):
+        if is_greeting or state.get("step") in ("start", None, "unregistered"):
             return await _registered_worker_hi(source_phone, state, user, worker)
 
         # JOBS / KAAM [category]
@@ -1297,7 +1325,7 @@ async def _handle_message(source_phone: str, message_text: str, state: dict) -> 
     if state.get("role") == "customer":
         step = state.get("step", "start")
 
-        if msg_up in greeting_texts or step in ("start", None):
+        if is_greeting or step in ("start", None):
             return await _registered_customer_hi(source_phone, state, user, worker)
 
         if msg_up in ("WORKERS", "FIND WORKERS"):

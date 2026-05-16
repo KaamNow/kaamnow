@@ -37,6 +37,14 @@ class DummyUsers:
         return None
 
 
+class DummyWorkers:
+    def __init__(self, worker=None):
+        self.worker = worker or {"id": "w1", "user_id": "u1", "name": "Faiza", "address": {"pincode": "841215"}}
+
+    async def find_one(self, *args, **kwargs):
+        return self.worker
+
+
 class DummyResponse:
     def __init__(self, payload, status_code=200, text=None, fail=False):
         self._payload = payload
@@ -238,3 +246,130 @@ def test_gupshup_unregistered_hi_attempts_buttons(monkeypatch):
     assert response["status"] == "ok"
     assert sent["destination"] == "919876543210"
     assert [button["id"] for button in sent["buttons"]] == ["CUSTOMER", "WORKER", "HELP"]
+
+
+@pytest.mark.parametrize("text", ["Hii", "Namaste"])
+def test_greeting_aliases_route_like_hi(monkeypatch, text):
+    async def fake_identify(source_phone, state):
+        user = {"id": "u1", "role": "worker", "name": "Faiza"}
+        worker = {"id": "w1", "user_id": "u1", "name": "Faiza", "address": {"pincode": "841215"}}
+        return user, worker, {**state, "role": "worker", "user_id": "u1", "worker_id": "w1"}
+
+    async def fake_worker_hi(source_phone, state, user, worker):
+        return "HI_OK", {**state, "step": "job_list"}
+
+    monkeypatch.setattr(whatsapp, "_identify_user", fake_identify)
+    monkeypatch.setattr(whatsapp, "_registered_worker_hi", fake_worker_hi)
+
+    reply, state = asyncio.run(whatsapp._handle_message("919876543210", text, {"step": "worker_menu"}))
+
+    assert reply == "HI_OK"
+    assert state["step"] == "job_list"
+
+
+def test_no_result_worker_response_attempts_reply_buttons(monkeypatch):
+    dummy_collection = DummyCollection()
+    sent = {}
+    monkeypatch.setattr(whatsapp.db, "bot_sessions", dummy_collection)
+    monkeypatch.setattr(whatsapp.db, "workers", DummyWorkers())
+    monkeypatch.setattr(whatsapp.settings, "gupshup_api_url", "https://api.gupshup.io/wa/api/v1/msg")
+
+    async def fake_lookup(source_phone):
+        return {"id": "u1", "role": "worker", "name": "Faiza", "address": {"pincode": "841215"}}
+
+    async def fake_jobs(worker, pincode):
+        return []
+
+    def fake_buttons(destination, text, buttons):
+        sent["text"] = text
+        sent["buttons"] = buttons
+        return {"kind": "reply_buttons", "fallback": False}
+
+    monkeypatch.setattr(whatsapp, "_lookup_user_by_phone", fake_lookup)
+    monkeypatch.setattr(whatsapp, "_fetch_jobs_for_worker_pincode", fake_jobs)
+    monkeypatch.setattr(whatsapp, "_send_gupshup_buttons", fake_buttons)
+
+    request = DummyRequest({"src": "919876543210", "message": {"text": "reset"}})
+    asyncio.run(whatsapp.gupshup_webhook(request))
+
+    assert "abhi koi nearby kaam nahi mila" in sent["text"]
+    assert "Reply: PINCODE" not in sent["text"]
+    assert [button["id"] for button in sent["buttons"]] == ["CHANGE_PINCODE", "STATUS", "HELP"]
+
+
+def test_no_result_customer_response_attempts_reply_buttons(monkeypatch):
+    dummy_collection = DummyCollection()
+    sent = {}
+    monkeypatch.setattr(whatsapp.db, "bot_sessions", dummy_collection)
+    monkeypatch.setattr(whatsapp.settings, "gupshup_api_url", "https://api.gupshup.io/wa/api/v1/msg")
+
+    async def fake_lookup(source_phone):
+        return {"id": "u1", "role": "customer", "name": "Amir", "address": {"pincode": "801505"}}
+
+    async def fake_workers(pincode, limit=5, offset=0):
+        return []
+
+    def fake_buttons(destination, text, buttons):
+        sent["text"] = text
+        sent["buttons"] = buttons
+        return {"kind": "reply_buttons", "fallback": False}
+
+    monkeypatch.setattr(whatsapp, "_lookup_user_by_phone", fake_lookup)
+    monkeypatch.setattr(whatsapp, "_fetch_workers_for_customer_pincode", fake_workers)
+    monkeypatch.setattr(whatsapp, "_send_gupshup_buttons", fake_buttons)
+
+    request = DummyRequest({"src": "919876543210", "message": {"text": "hi"}})
+    asyncio.run(whatsapp.gupshup_webhook(request))
+
+    assert "abhi koi worker nahi mila" in sent["text"]
+    assert "Reply: PINCODE" not in sent["text"]
+    assert [button["id"] for button in sent["buttons"]] == ["CHANGE_PINCODE", "MORE", "HELP"]
+
+
+def test_typed_my_applications_maps_to_status(monkeypatch):
+    async def fake_identify(source_phone, state):
+        user = {"id": "u1", "role": "worker", "name": "Faiza"}
+        worker = {"id": "w1", "user_id": "u1", "name": "Faiza", "address": {"pincode": "841215"}}
+        return user, worker, {**state, "role": "worker", "user_id": "u1", "worker_id": "w1"}
+
+    async def fake_status(source_phone, state):
+        return "STATUS_OK", state
+
+    monkeypatch.setattr(whatsapp, "_identify_user", fake_identify)
+    monkeypatch.setattr(whatsapp, "_cmd_status", fake_status)
+
+    reply, _ = asyncio.run(whatsapp._handle_message("919876543210", "My Applications", {"step": "worker_menu"}))
+
+    assert reply == "STATUS_OK"
+
+
+def test_typed_find_jobs_maps_to_jobs(monkeypatch):
+    async def fake_identify(source_phone, state):
+        user = {"id": "u1", "role": "worker", "name": "Faiza"}
+        worker = {"id": "w1", "user_id": "u1", "name": "Faiza", "address": {"pincode": "841215"}}
+        return user, worker, {**state, "role": "worker", "user_id": "u1", "worker_id": "w1"}
+
+    async def fake_jobs(source_phone, state, category=None, offset=0, pincode_filter=None):
+        return "JOBS_OK", state
+
+    monkeypatch.setattr(whatsapp, "_identify_user", fake_identify)
+    monkeypatch.setattr(whatsapp, "_cmd_jobs", fake_jobs)
+
+    reply, _ = asyncio.run(whatsapp._handle_message("919876543210", "Find Jobs", {"step": "worker_menu"}))
+
+    assert reply == "JOBS_OK"
+
+
+def test_typed_change_pincode_prompts_for_pincode(monkeypatch):
+    dummy_collection = DummyCollection()
+    dummy_collection.storage["test-session"] = {
+        "session_id": "test-session",
+        "state": {"step": "job_list", "role": "worker", "user_id": "u1", "worker_id": "w1"},
+    }
+    monkeypatch.setattr(whatsapp.db, "bot_sessions", dummy_collection)
+
+    body = WhatsAppMessageIn(session_id="test-session", message="Change Pincode")
+    response = asyncio.run(whatsapp.whatsapp_message(body))
+
+    assert response["state"]["step"] == "awaiting_pincode"
+    assert response["reply"] == "Kaunsa pincode dekhna hai? 6-digit pincode bhejein."
