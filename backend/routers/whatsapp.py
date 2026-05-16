@@ -112,10 +112,20 @@ def _with_reply_buttons(state: dict, buttons: list[dict]) -> dict:
     return {**state, "_reply_buttons": buttons[:3]}
 
 
+def _with_reply_list(state: dict, reply_list: dict) -> dict:
+    return {**state, "_reply_list": reply_list}
+
+
 def _pop_reply_buttons(state: dict) -> tuple[dict, Optional[list[dict]]]:
     clean_state = dict(state or {})
     buttons = clean_state.pop("_reply_buttons", None)
     return clean_state, buttons
+
+
+def _pop_reply_list(state: dict) -> tuple[dict, Optional[dict]]:
+    clean_state = dict(state or {})
+    reply_list = clean_state.pop("_reply_list", None)
+    return clean_state, reply_list
 
 
 _GREETING_ALIASES = {"hi", "hii", "hiii", "hello", "hey", "namaste", "menu", "reset", "start"}
@@ -130,6 +140,16 @@ _TYPED_BUTTON_ALIASES = {
     "mujhe worker chahiye": "CUSTOMER",
     "mujhe kaam chahiye": "WORKER",
 }
+
+
+def _safe_wa_title(value: str, limit: int = 24) -> str:
+    cleaned = re.sub(r"\s+", " ", str(value or "")).strip()
+    return cleaned[:limit] if len(cleaned) > limit else cleaned
+
+
+def _safe_wa_description(value: str, limit: int = 72) -> str:
+    cleaned = re.sub(r"\s+", " ", str(value or "")).strip()
+    return cleaned[:limit] if len(cleaned) > limit else cleaned
 
 
 def _normalize_inbound_text(text: str) -> str:
@@ -470,6 +490,62 @@ def _format_worker_job_list(name: str, pincode: str, jobs: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def _job_list_body(name: str, pincode: str) -> str:
+    return f"Namaste {name}! Aapke pincode {pincode} ke nearby kaam mil rahe hain."
+
+
+def _worker_list_body(name: str, pincode: str) -> str:
+    return f"Namaste {name}! Aapke pincode {pincode} ke nearby workers mil rahe hain."
+
+
+def _job_list_sections(jobs: list[dict]) -> list[dict]:
+    rows = []
+    for job in jobs[:10]:
+        location = _location_label(job)
+        workers_needed = job.get("workers_needed", 1)
+        rows.append({
+            "id": f"JOB:{job.get('id')}",
+            "title": _safe_wa_title(job.get("title") or job.get("category") or "Kaam"),
+            "description": _safe_wa_description(f"₹{job.get('daily_rate', '?')}/day · {location} · {workers_needed} workers"),
+        })
+    return [{"title": "Nearby Jobs", "rows": rows}]
+
+
+def _worker_list_sections(workers: list[dict]) -> list[dict]:
+    rows = []
+    for worker in workers[:10]:
+        rows.append({
+            "id": f"WORKER:{worker.get('id')}",
+            "title": _safe_wa_title(worker.get("name") or "Worker"),
+            "description": _safe_wa_description(f"{_worker_primary_skill(worker)} · ₹{worker.get('daily_rate', '?')}/day · {_location_label(worker)}"),
+        })
+    return [{"title": "Nearby Workers", "rows": rows}]
+
+
+def _job_reply_list(name: str, pincode: str, jobs: list[dict]) -> Optional[dict]:
+    if len(jobs) <= 3:
+        return None
+    return {
+        "body_text": _job_list_body(name, pincode),
+        "button_text": "Jobs dekhein",
+        "sections": _job_list_sections(jobs),
+    }
+
+
+def _worker_reply_list(name: str, pincode: str, workers: list[dict]) -> Optional[dict]:
+    if len(workers) <= 3:
+        return None
+    return {
+        "body_text": _worker_list_body(name, pincode),
+        "button_text": "Workers dekhein",
+        "sections": _worker_list_sections(workers),
+    }
+
+
+def _maybe_with_reply_list(state: dict, reply_list: Optional[dict]) -> dict:
+    return _with_reply_list(state, reply_list) if reply_list else state
+
+
 async def _registered_customer_hi(source_phone: str, state: dict, user: dict, worker: Optional[dict] = None) -> tuple[str, dict]:
     pincode = get_default_pincode(user, worker)
     name = _display_name(user, "Customer")
@@ -492,9 +568,12 @@ async def _registered_customer_hi(source_phone: str, state: dict, user: dict, wo
     )
     return (
         _format_customer_worker_list(name, pincode, workers),
-        _with_reply_buttons(
-            {**state, "step": "customer_worker_list", "role": "customer", "user_id": user.get("id"), "worker_list": workers, "worker_offset": 5, "worker_pincode_filter": pincode},
-            _BUTTONS_CUSTOMER_RESULTS,
+        _maybe_with_reply_list(
+            _with_reply_buttons(
+                {**state, "step": "customer_worker_list", "role": "customer", "user_id": user.get("id"), "worker_list": workers, "worker_offset": 5, "worker_pincode_filter": pincode},
+                _BUTTONS_CUSTOMER_RESULTS,
+            ),
+            _worker_reply_list(name, pincode, workers),
         ),
     )
 
@@ -523,9 +602,12 @@ async def _registered_worker_hi(source_phone: str, state: dict, user: dict, work
     )
     return (
         _format_worker_job_list(name, pincode, jobs),
-        _with_reply_buttons(
-            {**state, "step": "job_list", "role": "worker", "user_id": user.get("id"), "worker_id": worker.get("id"), "job_list": jobs, "job_offset": 5, "job_category": None, "job_pincode_filter": pincode, "viewed_job": None},
-            _BUTTONS_WORKER_RESULTS if jobs else _BUTTONS_WORKER_NO_RESULTS,
+        _maybe_with_reply_list(
+            _with_reply_buttons(
+                {**state, "step": "job_list", "role": "worker", "user_id": user.get("id"), "worker_id": worker.get("id"), "job_list": jobs, "job_offset": 5, "job_category": None, "job_pincode_filter": pincode, "viewed_job": None},
+                _BUTTONS_WORKER_RESULTS if jobs else _BUTTONS_WORKER_NO_RESULTS,
+            ),
+            _job_reply_list(name, pincode, jobs),
         ),
     )
 
@@ -539,7 +621,10 @@ async def _customer_workers_for_pincode(source_phone: str, state: dict, pincode:
     logger.info("WhatsApp flow=customer_pincode_search role=customer pincode=%s workers_count=%s phone=%s", pincode, len(workers), _mask_phone(source_phone))
     return (
         _format_customer_worker_list(name, pincode, workers),
-        _with_reply_buttons({**state, "step": "customer_worker_list", "worker_list": workers, "worker_offset": 5, "worker_pincode_filter": pincode}, _BUTTONS_CUSTOMER_RESULTS),
+        _maybe_with_reply_list(
+            _with_reply_buttons({**state, "step": "customer_worker_list", "worker_list": workers, "worker_offset": 5, "worker_pincode_filter": pincode}, _BUTTONS_CUSTOMER_RESULTS),
+            _worker_reply_list(name, pincode, workers),
+        ),
     )
 
 
@@ -562,9 +647,12 @@ async def _customer_more_workers(source_phone: str, state: dict) -> tuple[str, d
     existing = state.get("worker_list", [])
     return (
         _format_customer_worker_list(name, pincode, workers),
-        _with_reply_buttons(
-            {**state, "step": "customer_worker_list", "worker_list": existing + workers, "worker_offset": offset + 5, "worker_pincode_filter": pincode},
-            _BUTTONS_CUSTOMER_RESULTS,
+        _maybe_with_reply_list(
+            _with_reply_buttons(
+                {**state, "step": "customer_worker_list", "worker_list": existing + workers, "worker_offset": offset + 5, "worker_pincode_filter": pincode},
+                _BUTTONS_CUSTOMER_RESULTS,
+            ),
+            _worker_reply_list(name, pincode, workers),
         ),
     )
 
@@ -578,6 +666,44 @@ def _format_worker_brief(worker: dict) -> str:
         "Full booking flow abhi app/website par continue karein: kaamnow.com/marketplace\n"
         "Aur workers ke liye reply: MORE"
     )
+
+
+async def _show_job_detail_by_id(source_phone: str, job_id: str, state: dict) -> tuple[str, dict]:
+    user, worker, state = await _identify_user(source_phone, state)
+    job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        return ("Job nahi mila. MORE ya JOBS try karein.", state)
+    lat = float(worker.get("lat") or 0) if worker else None
+    lng = float(worker.get("lng") or 0) if worker else None
+    buttons = [
+        {"id": f"APPLY:{job_id}", "title": "Apply"},
+        {"id": "MORE", "title": "More Jobs"},
+        {"id": "CHANGE_PINCODE", "title": "Change Pincode"},
+    ]
+    return (_format_job_detail(job, lat, lng), _with_reply_buttons({**state, "step": "job_detail", "viewed_job": job}, buttons))
+
+
+async def _show_worker_detail_by_id(source_phone: str, worker_id: str, state: dict) -> tuple[str, dict]:
+    worker = await db.workers.find_one({"id": worker_id}, {"_id": 0})
+    if not worker:
+        return ("Worker nahi mila. MORE ya WORKERS try karein.", state)
+    skills = ", ".join(worker.get("skills", [])[:5]) or _worker_primary_skill(worker)
+    rating = worker.get("avg_rating")
+    total_jobs = worker.get("total_jobs")
+    rating_line = f"\nRating: {rating} ({total_jobs or 0} jobs)" if rating is not None else ""
+    msg = (
+        f"👷 *{worker.get('name', 'Worker')}*\n\n"
+        f"Skills: {skills}\n"
+        f"Rate: ₹{worker.get('daily_rate', '?')}/day\n"
+        f"Location: {_location_label(worker)}{rating_line}\n\n"
+        "Booking request ke liye app mein job post/select karein: kaamnow.com/marketplace"
+    )
+    buttons = [
+        {"id": f"REQUEST:{worker_id}", "title": "Send Request"},
+        {"id": "MORE", "title": "More Workers"},
+        {"id": "CHANGE_PINCODE", "title": "Change Pincode"},
+    ]
+    return (msg, _with_reply_buttons({**state, "step": "customer_worker_detail", "selected_worker_id": worker_id}, buttons))
 
 
 # ─── Identity & authentication ────────────────────────────────────────────────
@@ -651,6 +777,11 @@ async def _cmd_jobs(
     if has_more:
         msg += "\n\n*MORE* type karein aur jobs ke liye."
 
+    name = "Worker"
+    pincode_for_list = pincode_filter or get_default_pincode(user, worker) or ""
+    if worker:
+        name = _display_name(worker or user, "Worker")
+    reply_list = _job_reply_list(name, pincode_for_list, jobs) if pincode_for_list else None
     new_state = {
         **state,
         "step": "job_list",
@@ -660,6 +791,7 @@ async def _cmd_jobs(
         "job_pincode_filter": pincode_filter,   # temporary — not saved to profile
         "viewed_job": None,
     }
+    new_state = _maybe_with_reply_list(new_state, reply_list)
     return (msg, new_state)
 
 
@@ -1162,6 +1294,28 @@ async def _handle_message(source_phone: str, message_text: str, state: dict) -> 
         next_state = {**state, "step": "awaiting_pincode", "awaiting_pincode_for": role or "unknown"}
         return ("Kaunsa pincode dekhna hai? 6-digit pincode bhejein.", next_state)
 
+    if msg_up.startswith("JOB:") or msg_up.startswith("JOB_DETAIL:"):
+        job_id = raw.split(":", 1)[1].strip()
+        return await _show_job_detail_by_id(source_phone, job_id, state)
+
+    if msg_up.startswith("WORKER:") or msg_up.startswith("WORKER_DETAIL:"):
+        worker_id = raw.split(":", 1)[1].strip()
+        return await _show_worker_detail_by_id(source_phone, worker_id, state)
+
+    if msg_up.startswith("APPLY:"):
+        job_id = raw.split(":", 1)[1].strip()
+        job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
+        if not job:
+            return ("Job nahi mila. MORE ya JOBS try karein.", state)
+        return await _cmd_apply(source_phone, {**state, "viewed_job": job, "step": "job_detail"})
+
+    if msg_up.startswith("REQUEST:"):
+        worker_id = raw.split(":", 1)[1].strip()
+        return (
+            "Booking request ke liye app mein job post/select karein: kaamnow.com/marketplace",
+            _with_reply_buttons({**state, "step": "customer_worker_detail", "selected_worker_id": worker_id}, _BUTTONS_CUSTOMER_RESULTS),
+        )
+
     # ── Identify user on first contact (or if identity not in state) ──
     user, worker, state = await _identify_user(source_phone, state)
 
@@ -1559,7 +1713,7 @@ def _extract_button_reply_text(body: dict) -> str:
         item_type = str(item.get("type") or "").lower()
         nested = item.get("payload")
         nested_dict = nested if isinstance(nested, dict) else {}
-        if item_type in ("button_reply", "quick_reply"):
+        if item_type in ("button_reply", "quick_reply", "list_reply", "list"):
             candidates.extend([
                 nested_dict.get("id"),
                 nested_dict.get("postbackText"),
@@ -1574,7 +1728,10 @@ def _extract_button_reply_text(body: dict) -> str:
         button_reply = interactive.get("button_reply") if isinstance(interactive.get("button_reply"), dict) else {}
         if button_reply:
             candidates.extend([button_reply.get("id"), button_reply.get("title")])
-        if str(interactive.get("type") or "").lower() in ("button_reply", "quick_reply"):
+        list_reply = interactive.get("list_reply") if isinstance(interactive.get("list_reply"), dict) else {}
+        if list_reply:
+            candidates.extend([list_reply.get("id"), list_reply.get("title")])
+        if str(interactive.get("type") or "").lower() in ("button_reply", "quick_reply", "list_reply", "list"):
             candidates.extend([interactive.get("id"), interactive.get("title"), interactive.get("postbackText"), interactive.get("text")])
 
     for candidate in candidates:
@@ -1735,6 +1892,101 @@ def _send_gupshup_buttons(destination: str, body_text: str, buttons: list[dict])
         }
 
 
+def _list_fallback_text(fallback_text: str, reply_list: dict) -> str:
+    return fallback_text or str(reply_list.get("body_text") or "")
+
+
+def _send_gupshup_list(destination: str, body_text: str, button_text: str, sections: list[dict], fallback_text: str = "") -> dict:
+    if not settings.gupshup_api_url or not settings.gupshup_api_key or not settings.gupshup_source:
+        raise RuntimeError("Gupshup settings are not configured")
+
+    clean_sections = []
+    row_log = []
+    for section in (sections or [])[:10]:
+        options = []
+        for row in (section.get("rows") or [])[:10]:
+            row_id = str(row.get("id") or "").strip()
+            title = _safe_wa_title(row.get("title") or "Item")
+            description = _safe_wa_description(row.get("description") or "")
+            if not row_id:
+                continue
+            options.append({
+                "type": "text",
+                "title": title,
+                "description": description,
+                "postbackText": row_id,
+            })
+            row_log.append({"id": row_id, "title": title})
+        if options:
+            clean_sections.append({
+                "title": _safe_wa_title(section.get("title") or "Results"),
+                "subtitle": _safe_wa_description(section.get("subtitle") or ""),
+                "options": options,
+            })
+
+    if not clean_sections:
+        return _send_gupshup_text(destination, fallback_text or body_text)
+
+    list_payload = {
+        "type": "list",
+        "title": _safe_wa_title(button_text, 20),
+        "body": body_text,
+        "msgid": str(uuid.uuid4()),
+        "globalButtons": [{"type": "text", "title": _safe_wa_title(button_text, 20)}],
+        "items": clean_sections,
+    }
+    payload = {
+        "channel": settings.gupshup_channel,
+        "source": settings.gupshup_source,
+        "destination": _full_phone(destination),
+        "message": json.dumps(list_payload),
+    }
+    if getattr(settings, "gupshup_app_id", None):
+        payload["src.name"] = settings.gupshup_app_id
+
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "apikey": settings.gupshup_api_key,
+    }
+    logger.info(
+        "WhatsApp outbound_kind=list to=%s sections=%s rows=%s row_ids_titles=%s payload_shape=list",
+        _mask_phone(destination),
+        len(clean_sections),
+        len(row_log),
+        row_log,
+    )
+    try:
+        resp = requests.post(settings.gupshup_api_url, data=payload, headers=headers, timeout=10)
+        status_code = getattr(resp, "status_code", None)
+        response_text = getattr(resp, "text", "")
+        logger.info("WhatsApp list HTTP status=%s body=%s", status_code, str(response_text)[:500])
+        resp.raise_for_status()
+        try:
+            provider_response = resp.json()
+        except ValueError:
+            provider_response = {"text": response_text}
+
+        provider_status = str(provider_response.get("status") or provider_response.get("success") or "").lower()
+        if provider_status in ("false", "failed", "error"):
+            raise RuntimeError(f"Gupshup rejected list: {provider_response}")
+
+        logger.info(
+            "WhatsApp list provider_status=%s messageId=%s",
+            provider_response.get("status") or provider_response.get("success"),
+            provider_response.get("messageId") or provider_response.get("message_id"),
+        )
+        return {"kind": "list", "fallback": False, "provider_response": provider_response}
+    except Exception as exc:
+        logger.warning("WhatsApp list_fallback reason=%s", exc)
+        fallback_response = _send_gupshup_text(destination, _list_fallback_text(fallback_text, {"body_text": body_text}))
+        return {
+            "kind": "list",
+            "fallback": True,
+            "fallback_reason": str(exc),
+            "provider_response": fallback_response,
+        }
+
+
 def send_whatsapp(phone: str, text: str) -> None:
     """Fire-and-forget WhatsApp send. Call from threads to avoid blocking async loops."""
     try:
@@ -1766,9 +2018,10 @@ async def whatsapp_message(body: WhatsAppMessageIn, current_user: dict = Depends
         }
 
     reply, new_state = await _handle_message(body.session_id, body.message, state)
-    clean_state, buttons = _pop_reply_buttons(new_state)
+    clean_state, reply_list = _pop_reply_list(new_state)
+    clean_state, buttons = _pop_reply_buttons(clean_state)
     await _save_bot_state(body.session_id, clean_state)
-    return {"reply": reply, "state": clean_state, "buttons": buttons or []}
+    return {"reply": reply, "state": clean_state, "buttons": buttons or [], "list": reply_list or None}
 
 
 @router.head("/gupshup")
@@ -1848,11 +2101,25 @@ async def gupshup_webhook(request: Request):
     state = state_doc["state"] if state_doc else {"step": "start"}
 
     reply, new_state = await _handle_message(source_phone, message_text, state)
-    clean_state, buttons = _pop_reply_buttons(new_state)
+    clean_state, reply_list = _pop_reply_list(new_state)
+    clean_state, buttons = _pop_reply_buttons(clean_state)
     await _save_bot_state(session_id, clean_state)
 
     try:
-        response = _send_gupshup_buttons(source_phone, reply, buttons) if buttons else _send_gupshup_text(source_phone, reply)
+        responses = []
+        if reply_list:
+            responses.append(_send_gupshup_list(
+                source_phone,
+                reply_list["body_text"],
+                reply_list["button_text"],
+                reply_list["sections"],
+                fallback_text=reply,
+            ))
+            if buttons:
+                responses.append(_send_gupshup_buttons(source_phone, "Aur options:", buttons))
+        else:
+            responses.append(_send_gupshup_buttons(source_phone, reply, buttons) if buttons else _send_gupshup_text(source_phone, reply))
+        response = responses[0] if len(responses) == 1 else {"responses": responses}
         logger.info("Sent WhatsApp reply to %s", source_phone[-4:])
     except Exception as exc:
         logger.error("WhatsApp send failed: %s", exc)
