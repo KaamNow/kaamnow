@@ -35,7 +35,7 @@
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "apiUrl": "http://13.207.54.156:9000",
+      "apiUrl": "https://dev.kaamnow.com",
       "eas": {
         "projectId": "e3488ace-e7ad-4919-ad70-af37afc967bb"
       }
