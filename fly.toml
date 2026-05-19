@@ -1,0 +1,52 @@
+# Fly.io config — free staging deployment
+# fly launch (first time) or fly deploy
+
+app = "kaamnow-dev"
+primary_region = "bom"  # Mumbai — closest to India
+
+[build]
+  dockerfile = "deploy/Dockerfile.backend"
+
+[env]
+  DB_NAME = "kaamnow_dev"
+  CORS_ORIGINS = "*"
+  SHOW_OTP_IN_RESPONSE = "true"
+  FEATURE_AI = "true"
+  FEATURE_CHAT = "true"
+  FEATURE_VOICE = "true"
+  FEATURE_PAYMENTS = "false"
+
+# Secrets injected via: fly secrets set MONGO_URL="..." JWT_SECRET="..."
+# Or via Doppler: doppler run -- fly deploy
+
+[[services]]
+  internal_port = 8001
+  protocol = "tcp"
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  [services.concurrency]
+    hard_limit = 25
+    soft_limit = 20
+
+  [[services.tcp_checks]]
+    grace_period = "10s"
+    interval = "30s"
+    timeout = "5s"
+
+  [[services.http_checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "15s"
+    method = "GET"
+    path = "/api/stats"
+
+[resources]
+  # Free allowance: shared-cpu-1x, 256MB RAM
+  # Enough for dev/staging

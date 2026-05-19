@@ -1,0 +1,56 @@
+name: Uptime & Performance Check
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"  # Every 30 minutes
+  workflow_dispatch:         # Manual trigger
+
+jobs:
+  health-check:
+    name: API Health Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check dev API
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "${{ secrets.DEV_API_URL }}/api/stats" \
+            --max-time 10)
+
+          if [ "$STATUS" -eq 200 ]; then
+            echo "✅ Dev API healthy (HTTP $STATUS)"
+          else
+            echo "❌ Dev API down (HTTP $STATUS)"
+            exit 1
+          fi
+
+      - name: Response time check
+        run: |
+          TIME=$(curl -s -o /dev/null -w "%{time_total}" \
+            "${{ secrets.DEV_API_URL }}/api/stats" \
+            --max-time 10)
+          echo "Response time: ${TIME}s"
+
+          # Fail if > 3 seconds
+          python3 -c "
+          t = float('$TIME')
+          if t > 3.0:
+              print(f'❌ Slow response: {t:.2f}s (limit: 3s)')
+              exit(1)
+          else:
+              print(f'✅ Response time OK: {t:.2f}s')
+          "
+
+      - name: Notify on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.PROJECT_TOKEN }}
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🚨 Dev API Down — ${new Date().toISOString()}`,
+              body: `The dev API health check failed.\n\nURL: ${{ secrets.DEV_API_URL }}/api/stats\nTime: ${new Date().toISOString()}\n\nPlease check the server.`,
+              labels: ['bug', 'P0'],
+            })
