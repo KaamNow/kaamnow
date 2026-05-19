@@ -108,6 +108,13 @@ if ! kubectl --kubeconfig "$KUBECONFIG_PATH" get ns ingress-nginx &>/dev/null 2>
     --for=condition=ready pod \
     --selector=app.kubernetes.io/component=controller \
     --timeout=120s
+  # Remove admission webhook — causes issues on kind (common fix)
+  kubectl --kubeconfig "$KUBECONFIG_PATH" delete \
+    -A ValidatingWebhookConfiguration ingress-nginx-admission \
+    --ignore-not-found
+  # Label control-plane node as ingress-ready (required for kind NGINX)
+  kubectl --kubeconfig "$KUBECONFIG_PATH" label node \
+    "${CLUSTER_NAME}-control-plane" ingress-ready=true --overwrite
 fi
 
 # ── Step 6: Apply dev manifests ───────────────────────────────────────────────
