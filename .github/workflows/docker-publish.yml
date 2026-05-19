@@ -2,8 +2,7 @@ name: Docker — Build & Push to GHCR
 
 on:
   push:
-    branches: [main, ui-ux]
-    tags: ["v*"]
+    tags: ["v*"]   # only on releases, not every push
 
 env:
   REGISTRY: ghcr.io

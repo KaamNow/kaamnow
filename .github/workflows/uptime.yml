@@ -2,7 +2,7 @@ name: Uptime & Performance Check
 
 on:
   schedule:
-    - cron: "*/30 * * * *"  # Every 30 minutes
+    - cron: "0 * * * *"  # Every hour (was every 30 min)
   workflow_dispatch:         # Manual trigger
 
 jobs:

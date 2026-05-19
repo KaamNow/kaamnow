@@ -2,9 +2,7 @@ name: Security Scan
 
 on:
   push:
-    branches: [main, ui-ux]
-  pull_request:
-    branches: [main]
+    branches: [main]   # only on main, not every feature branch push
   schedule:
     - cron: "0 2 * * 1"  # Every Monday 2am UTC
 

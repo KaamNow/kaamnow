@@ -2,9 +2,7 @@ name: CodeQL — Continuous Security Analysis
 
 on:
   push:
-    branches: [main, ui-ux]
-  pull_request:
-    branches: [main]
+    branches: [main]   # only on main
   schedule:
     - cron: "30 3 * * 0"  # Every Sunday 3:30am UTC
 
