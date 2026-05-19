@@ -31,10 +31,7 @@ jobs:
           FEATURE_PAYMENTS: "false"
           FEATURE_VOICE: "false"
           SHOW_OTP_IN_RESPONSE: "true"
-        run: |
-          pytest tests/test_whatsapp.py -v --tb=short
-          # test_current_flows.py + test_phase_2_* + test_phases_4_to_9 + test_auth_phone_first
-          # are being rewritten in Phase 1 — skipped in CI until then
+        run: pytest tests/ -v --tb=short
 
   lint:
     name: Lint & Format
