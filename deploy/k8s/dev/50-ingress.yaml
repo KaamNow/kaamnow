@@ -9,7 +9,8 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-    - http:
+    - host: dev.kaamnow.com
+      http:
         paths:
           - path: /api
             pathType: Prefix
