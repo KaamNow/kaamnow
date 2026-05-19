@@ -107,7 +107,7 @@ if ! kubectl --kubeconfig "$KUBECONFIG_PATH" get ns ingress-nginx &>/dev/null 2>
     --namespace ingress-nginx \
     --for=condition=ready pod \
     --selector=app.kubernetes.io/component=controller \
-    --timeout=60s
+    --timeout=120s
 fi
 
 # ── Step 6: Apply dev manifests ───────────────────────────────────────────────
