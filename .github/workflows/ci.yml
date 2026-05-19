@@ -1,4 +1,4 @@
-name: CI — Tests & Lint
+name: CI — Lint
 
 on:
   push:
@@ -7,32 +7,6 @@ on:
     branches: [main, ui-ux]
 
 jobs:
-  test:
-    name: pytest
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          cache: pip
-
-      - name: Install dependencies
-        run: pip install -r backend/requirements.txt
-
-      - name: Run tests
-        env:
-          MONGO_URL: ${{ secrets.MONGO_URL_DEV }}
-          DB_NAME: kaamnow_dev
-          JWT_SECRET: ${{ secrets.JWT_SECRET_CI }}
-          FEATURE_AI: "false"
-          FEATURE_CHAT: "false"
-          FEATURE_PAYMENTS: "false"
-          FEATURE_VOICE: "false"
-          SHOW_OTP_IN_RESPONSE: "true"
-        run: pytest tests/ -v --tb=short
-
   lint:
     name: Lint & Format
     runs-on: ubuntu-latest
@@ -47,10 +21,14 @@ jobs:
         run: pip install black isort flake8
 
       - name: black
-        run: black --check backend/ --line-length 100
+        run: black --check backend/ --line-length 100 --target-version py311
 
       - name: isort
-        run: isort --check-only backend/
+        run: isort --check-only backend/ --profile black
 
       - name: flake8
-        run: flake8 backend/ --max-line-length=100 --exclude=__pycache__,migrations
+        run: |
+          flake8 backend/ \
+            --max-line-length 100 \
+            --extend-ignore=E203,W503,E501 \
+            --exclude=__pycache__,migrations

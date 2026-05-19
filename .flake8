@@ -1,0 +1,12 @@
+[flake8]
+max-line-length = 100
+# E203: whitespace before ':' — black formats slices this way, ignore it
+# W503: line break before binary operator — black does this
+# E501: line too long — black handles this; some strings/URLs can't be wrapped
+extend-ignore = E203, W503, E501
+exclude =
+    __pycache__,
+    .git,
+    migrations,
+    backend/seed.py,
+    backend/seed_bulk.py
