@@ -1,0 +1,117 @@
+name: Project Board — Auto-move issues
+
+on:
+  pull_request:
+    types: [opened, closed, reopened]
+  issues:
+    types: [closed, reopened]
+
+jobs:
+  move-to-in-progress:
+    name: PR opened → move linked issue to In Progress
+    if: github.event_name == 'pull_request' && github.event.action == 'opened'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.PROJECT_TOKEN }}
+          script: |
+            const prBody = context.payload.pull_request.body || '';
+            const prTitle = context.payload.pull_request.title || '';
+
+            // Find issue numbers referenced in PR (Fixes #N, Closes #N, Resolves #N)
+            const refs = [...(prBody + ' ' + prTitle).matchAll(
+              /(?:fix(?:es|ed)?|close[sd]?|resolve[sd]?)\s*#(\d+)/gi
+            )].map(m => parseInt(m[1]));
+
+            console.log('Referenced issues:', refs);
+
+            for (const issueNum of refs) {
+              // Get issue node ID
+              const { data: issue } = await github.rest.issues.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNum,
+              });
+
+              // Add label "in-progress" to the issue
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNum,
+                labels: ['in-progress'],
+              });
+
+              console.log(`Marked #${issueNum} as in-progress`);
+            }
+
+  close-on-merge:
+    name: PR merged → close linked issues + comment
+    if: github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.PROJECT_TOKEN }}
+          script: |
+            const prBody = context.payload.pull_request.body || '';
+            const prTitle = context.payload.pull_request.title || '';
+            const prUrl = context.payload.pull_request.html_url;
+            const sha = context.payload.pull_request.merge_commit_sha.slice(0, 7);
+
+            const refs = [...(prBody + ' ' + prTitle).matchAll(
+              /(?:fix(?:es|ed)?|close[sd]?|resolve[sd]?)\s*#(\d+)/gi
+            )].map(m => parseInt(m[1]));
+
+            for (const issueNum of refs) {
+              // Comment on the issue
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNum,
+                body: `✅ **Done** — merged in ${prUrl} (\`${sha}\`)\n\nMerged by @${context.payload.pull_request.merged_by.login}`,
+              });
+
+              // Close the issue
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNum,
+                state: 'closed',
+                state_reason: 'completed',
+              });
+
+              console.log(`Closed #${issueNum}`);
+            }
+
+  update-daily-log:
+    name: Update DAILY_LOG.md on merge to main/ui-ux
+    if: |
+      github.event_name == 'pull_request' &&
+      github.event.action == 'closed' &&
+      github.event.pull_request.merged == true &&
+      (github.event.pull_request.base.ref == 'main' || github.event.pull_request.base.ref == 'ui-ux')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PROJECT_TOKEN }}
+          ref: ${{ github.event.pull_request.base.ref }}
+
+      - name: Append merge to daily log
+        run: |
+          TODAY=$(date '+%B %d, %Y')
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          PR_URL="${{ github.event.pull_request.html_url }}"
+          SHA="${{ github.event.pull_request.merge_commit_sha }}"
+
+          # Append to DAILY_LOG.md
+          printf "\n> **Merged:** [%s](%s) — \`%s\`\n" \
+            "$PR_TITLE" "$PR_URL" "${SHA:0:7}" \
+            >> docs/DAILY_LOG.md
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add docs/DAILY_LOG.md
+          git commit -m "chore: log merge — ${PR_TITLE:0:50}" || echo "Nothing to commit"
+          git push
