@@ -1,4 +1,4 @@
-name: Deploy — Dev (Render)
+name: Deploy — Dev (EC2, isolated cluster)
 
 on:
   push:
@@ -6,11 +6,11 @@ on:
 
 concurrency:
   group: deploy-dev
-  cancel-in-progress: true
+  cancel-in-progress: true  # if 2 pushes queued, cancel older one
 
 jobs:
   test:
-    name: Tests must pass
+    name: Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,31 +32,32 @@ jobs:
         run: pytest tests/ -v --tb=short
 
   deploy:
-    name: Trigger Render deploy
+    name: SSH → EC2 → deploy-dev.sh (~2-3 min)
     runs-on: ubuntu-latest
     needs: test
 
     steps:
-      - name: Trigger Render deploy hook
-        run: |
-          curl -s -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}" | python3 -c "
-          import sys, json
-          d = json.load(sys.stdin)
-          deploy_id = d.get('deploy', {}).get('id', 'unknown')
-          print(f'✅ Deploy triggered — ID: {deploy_id}')
-          "
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.DEV_EC2_HOST }}
+          username: ${{ secrets.DEV_EC2_USER }}
+          key: ${{ secrets.DEV_EC2_SSH_KEY }}
+          command_timeout: "5m"
+          script: |
+            cd /opt/kaamnow
+            git fetch origin
+            git checkout ${{ github.ref_name }}
+            git pull origin ${{ github.ref_name }}
+            export DOPPLER_TOKEN="${{ secrets.DOPPLER_TOKEN }}"
+            sudo -E bash deploy/deploy-dev.sh ${{ github.sha }}
 
-      - name: Wait and health check
+      - name: Health check
         run: |
-          echo "Waiting 60s for Render to build..."
-          sleep 60
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            "${{ secrets.DEV_API_URL }}/api/stats" --max-time 30)
-          if [ "$STATUS" = "200" ]; then
-            echo "✅ Dev API is live"
-          else
-            echo "⚠️  Health check returned $STATUS — deploy may still be building"
-          fi
+          sleep 10
+          curl -f "${{ secrets.DEV_API_URL }}/api/stats" \
+            --max-time 15 --retry 3 --retry-delay 5 || true
+          echo "✅ Done"
 
       - name: Comment on commit
         uses: actions/github-script@v7
@@ -66,5 +67,11 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               commit_sha: context.sha,
-              body: `✅ **Deployed to Render dev** — \`${context.sha.slice(0,7)}\`\n🌏 ${{ secrets.DEV_API_URL }}/api/stats`
+              body: [
+                '✅ **Deployed to dev EC2**',
+                '`' + context.sha.slice(0,7) + '`',
+                '',
+                '🌏 `${{ secrets.DEV_API_URL }}/api/stats`',
+                '🏗️ Cluster: `kaamnow-dev` (isolated)'
+              ].join('\n')
             })
