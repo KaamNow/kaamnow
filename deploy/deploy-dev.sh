@@ -10,8 +10,8 @@ GIT_SHA="${1:-$(git rev-parse --short HEAD 2>/dev/null || echo 'local')}"
 CLUSTER_NAME="kaamnow-dev"
 NAMESPACE="kaamnow-dev"
 DEV_IMAGE_TAG="dev-${GIT_SHA}"
-PORT_HTTP=8080       # dev runs on 8080, prod runs on 80
-PORT_HTTPS=8443      # dev on 8443, prod on 443
+PORT_HTTP=9000       # dev runs on 9000 — prod stays on 80 (no conflict)
+PORT_HTTPS=9443      # dev on 9443 — prod stays on 443 (no conflict)
 KUBECONFIG_PATH="/root/.kube/kaamnow-dev.yaml"
 
 log() { echo "[$(date '+%H:%M:%S')] $*"; }

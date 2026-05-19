@@ -45,7 +45,7 @@ jobs:
           key: ${{ secrets.DEV_EC2_SSH_KEY }}
           command_timeout: "5m"
           script: |
-            cd /opt/kaamnow
+            cd /home/ubuntu/kaamnow
             git fetch origin
             git checkout ${{ github.ref_name }}
             git pull origin ${{ github.ref_name }}

@@ -70,7 +70,7 @@ jobs:
           key: ${{ secrets.PROD_EC2_SSH_KEY }}
           command_timeout: "5m"
           script: |
-            cd /opt/kaamnow
+            cd /home/ubuntu/kaamnow
             git fetch --tags
             git checkout ${{ github.ref_name }}
             export DOPPLER_TOKEN="${{ secrets.DOPPLER_TOKEN_PROD }}"
