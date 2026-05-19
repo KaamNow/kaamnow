@@ -1,4 +1,4 @@
-name: Deploy — Dev
+name: Deploy — Dev (Fly.io)
 
 on:
   push:
@@ -10,7 +10,7 @@ concurrency:
 
 jobs:
   test:
-    name: Tests must pass before deploy
+    name: Tests must pass
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -32,13 +32,15 @@ jobs:
         run: pytest tests/ -v --tb=short
 
   deploy:
-    name: Deploy to dev k8s
+    name: Deploy to Fly.io (Mumbai)
     runs-on: ubuntu-latest
     needs: test
-    environment: dev
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
 
       - name: Install Doppler CLI
         run: |
@@ -48,42 +50,30 @@ jobs:
           echo "deb [signed-by=/usr/share/keyrings/doppler-archive-keyring.gpg] \
             https://packages.doppler.com/public/cli/deb/debian any-version main" \
             | sudo tee /etc/apt/sources.list.d/doppler-cli.list
-          sudo apt-get update && sudo apt-get install doppler
+          sudo apt-get update -q && sudo apt-get install -q doppler
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build backend image
+      - name: Sync Doppler secrets → Fly.io
         run: |
-          IMAGE_TAG="dev-${{ github.sha }}"
-          doppler run --token ${{ secrets.DOPPLER_TOKEN }} --project kaamnow --config dev -- \
-            docker build -f deploy/Dockerfile.backend -t kaamnow-backend:$IMAGE_TAG .
-          echo "BACKEND_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+          # Pull secrets from Doppler dev config → push to Fly.io
+          doppler secrets download \
+            --token "${{ secrets.DOPPLER_TOKEN }}" \
+            --project kaamnow \
+            --config dev \
+            --no-file \
+            --format env | flyctl secrets import --app kaamnow-dev
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
-      - name: Build frontend image
-        run: |
-          IMAGE_TAG="dev-${{ github.sha }}"
-          docker build -f deploy/Dockerfile.frontend -t kaamnow-frontend:$IMAGE_TAG .
-          echo "FRONTEND_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+      - name: Deploy to Fly.io
+        run: flyctl deploy --remote-only --app kaamnow-dev
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.DEV_SERVER_HOST }}
-          username: ${{ secrets.DEV_SERVER_USER }}
-          key: ${{ secrets.DEV_SERVER_SSH_KEY }}
-          script: |
-            cd /opt/kaamnow
-            git pull origin ${{ github.ref_name }}
-            export DOPPLER_TOKEN=${{ secrets.DOPPLER_TOKEN }}
-            sudo bash deploy/deploy-dev.sh ${{ github.sha }}
-
-      - name: Smoke test — health check
+      - name: Health check
         run: |
           sleep 15
-          curl -f "${{ secrets.DEV_API_URL }}/api/stats" \
-            -H "Accept: application/json" || exit 1
-          echo "✅ Dev API is healthy"
+          curl -f "https://kaamnow-dev.fly.dev/api/stats" || exit 1
+          echo "✅ Deployed and healthy"
 
       - name: Comment on commit
         uses: actions/github-script@v7
@@ -93,5 +83,5 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               commit_sha: context.sha,
-              body: `✅ **Deployed to dev** — [\`${context.sha.slice(0,7)}\`](${context.payload.compare})\n\nDev API: ${{ secrets.DEV_API_URL }}/api/stats`
+              body: `✅ **Deployed to Fly.io dev** — \`${context.sha.slice(0,7)}\`\n🌏 https://kaamnow-dev.fly.dev/api/stats`
             })
