@@ -5,9 +5,14 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from ..auth import get_current_user
 from ..cloudinary_service import upload_review_image
 from ..db import db
-from ..engagements import (accept_engagement, cancel_engagement,
-                           complete_engagement, create_engagement_request,
-                           list_engagements_for_user, reject_engagement)
+from ..engagements import (
+    accept_engagement,
+    cancel_engagement,
+    complete_engagement,
+    create_engagement_request,
+    list_engagements_for_user,
+    reject_engagement,
+)
 from ..schemas import BookingIn
 
 router = APIRouter(prefix="/api/engagements", tags=["engagements"])

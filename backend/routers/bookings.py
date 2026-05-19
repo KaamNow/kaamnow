@@ -7,12 +7,15 @@ from pydantic import BaseModel
 
 from ..auth import get_current_user
 from ..db import db
-from ..engagements import (accept_engagement, complete_engagement,
-                           create_engagement_request, engagement_to_booking,
-                           list_engagements_for_user)
+from ..engagements import (
+    accept_engagement,
+    complete_engagement,
+    create_engagement_request,
+    engagement_to_booking,
+    list_engagements_for_user,
+)
 from ..schemas import BookingIn, RatingIn
-from ..whatsapp_notify import (notify_customer_booking_accepted,
-                               notify_worker_job_completed)
+from ..whatsapp_notify import notify_customer_booking_accepted, notify_worker_job_completed
 
 router = APIRouter(prefix="/api/bookings", tags=["bookings"])
 

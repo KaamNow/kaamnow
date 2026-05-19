@@ -11,10 +11,18 @@ from slowapi.util import get_remote_address
 from .config import settings
 from .db import close_client
 from .otp_service import init_otp_service
-from .routers import (admin_router, auth_router, bookings_router,
-                      engagements_router, jobs_router, notifications_router,
-                      stats_router, waitlist_router, whatsapp_router,
-                      workers_router)
+from .routers import (
+    admin_router,
+    auth_router,
+    bookings_router,
+    engagements_router,
+    jobs_router,
+    notifications_router,
+    stats_router,
+    waitlist_router,
+    whatsapp_router,
+    workers_router,
+)
 from .seed import seed_data
 
 logging.basicConfig(

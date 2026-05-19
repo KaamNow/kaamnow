@@ -4,19 +4,30 @@ import random
 import uuid
 from typing import Optional
 
-from fastapi import (APIRouter, Depends, File, Header, HTTPException, Request,
-                     Response, UploadFile)
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, Response, UploadFile
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from ..auth import (create_temp_token, create_token, get_current_user,
-                    hash_password, set_auth_cookie, verify_temp_token)
+from ..auth import (
+    create_temp_token,
+    create_token,
+    get_current_user,
+    hash_password,
+    set_auth_cookie,
+    verify_temp_token,
+)
 from ..config import settings
 from ..db import db
 from ..otp_service import get_otp_service
-from ..schemas import (AuthResponse, SendOTPRequest, SendOTPResponse,
-                       SignupCompleteRequest, UserOut, VerifyOTPRequest,
-                       VerifyOTPResponse)
+from ..schemas import (
+    AuthResponse,
+    SendOTPRequest,
+    SendOTPResponse,
+    SignupCompleteRequest,
+    UserOut,
+    VerifyOTPRequest,
+    VerifyOTPResponse,
+)
 from ..utils import utc_now_iso
 
 logger = logging.getLogger(__name__)

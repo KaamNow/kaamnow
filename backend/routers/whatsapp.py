@@ -37,9 +37,11 @@ from ..db import db
 from ..engagements import _notify, cancel_engagement, create_engagement_request
 from ..schemas import WhatsAppMessageIn
 from ..utils import utc_now_iso
-from ..whatsapp_notify import (notify_customer_booking_accepted,
-                               notify_customer_booking_rejected,
-                               notify_worker_new_booking)
+from ..whatsapp_notify import (
+    notify_customer_booking_accepted,
+    notify_customer_booking_rejected,
+    notify_worker_new_booking,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/whatsapp", tags=["whatsapp"])

@@ -6,9 +6,11 @@ from fastapi import HTTPException
 
 from .db import db
 from .utils import utc_now_iso
-from .whatsapp_notify import (notify_customer_work_completed,
-                              notify_worker_job_completed,
-                              notify_worker_rating_received)
+from .whatsapp_notify import (
+    notify_customer_work_completed,
+    notify_worker_job_completed,
+    notify_worker_rating_received,
+)
 
 
 async def _notify(user_id: str, title: str, body: str, kind: str, ref_id: str = None) -> None:
