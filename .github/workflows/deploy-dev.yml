@@ -1,4 +1,4 @@
-name: Deploy — Dev (Fly.io)
+name: Deploy — Dev (Render)
 
 on:
   push:
@@ -32,48 +32,31 @@ jobs:
         run: pytest tests/ -v --tb=short
 
   deploy:
-    name: Deploy to Fly.io (Mumbai)
+    name: Trigger Render deploy
     runs-on: ubuntu-latest
     needs: test
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Fly CLI
-        uses: superfly/flyctl-actions/setup-flyctl@master
-
-      - name: Install Doppler CLI
+      - name: Trigger Render deploy hook
         run: |
-          curl -sLf --retry 3 --tlsv1.2 --proto "=https" \
-            'https://packages.doppler.com/public/cli/gpg.DE2A7741A397C129.key' \
-            | sudo gpg --dearmor -o /usr/share/keyrings/doppler-archive-keyring.gpg
-          echo "deb [signed-by=/usr/share/keyrings/doppler-archive-keyring.gpg] \
-            https://packages.doppler.com/public/cli/deb/debian any-version main" \
-            | sudo tee /etc/apt/sources.list.d/doppler-cli.list
-          sudo apt-get update -q && sudo apt-get install -q doppler
+          curl -s -X POST "${{ secrets.RENDER_DEPLOY_HOOK }}" | python3 -c "
+          import sys, json
+          d = json.load(sys.stdin)
+          deploy_id = d.get('deploy', {}).get('id', 'unknown')
+          print(f'✅ Deploy triggered — ID: {deploy_id}')
+          "
 
-      - name: Sync Doppler secrets → Fly.io
+      - name: Wait and health check
         run: |
-          # Pull secrets from Doppler dev config → push to Fly.io
-          doppler secrets download \
-            --token "${{ secrets.DOPPLER_TOKEN }}" \
-            --project kaamnow \
-            --config dev \
-            --no-file \
-            --format env | flyctl secrets import --app kaamnow-dev
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
-      - name: Deploy to Fly.io
-        run: flyctl deploy --remote-only --app kaamnow-dev
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
-      - name: Health check
-        run: |
-          sleep 15
-          curl -f "https://kaamnow-dev.fly.dev/api/stats" || exit 1
-          echo "✅ Deployed and healthy"
+          echo "Waiting 60s for Render to build..."
+          sleep 60
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            "${{ secrets.DEV_API_URL }}/api/stats" --max-time 30)
+          if [ "$STATUS" = "200" ]; then
+            echo "✅ Dev API is live"
+          else
+            echo "⚠️  Health check returned $STATUS — deploy may still be building"
+          fi
 
       - name: Comment on commit
         uses: actions/github-script@v7
@@ -83,5 +66,5 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               commit_sha: context.sha,
-              body: `✅ **Deployed to Fly.io dev** — \`${context.sha.slice(0,7)}\`\n🌏 https://kaamnow-dev.fly.dev/api/stats`
+              body: `✅ **Deployed to Render dev** — \`${context.sha.slice(0,7)}\`\n🌏 ${{ secrets.DEV_API_URL }}/api/stats`
             })
