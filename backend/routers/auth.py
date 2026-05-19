@@ -1,34 +1,23 @@
+import logging
 import os
+import random
 import uuid
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, Header, UploadFile
+from fastapi import (APIRouter, Depends, File, Header, HTTPException, Request,
+                     Response, UploadFile)
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from ..auth import (
-    create_token,
-    create_temp_token,
-    verify_temp_token,
-    get_current_user,
-    hash_password,
-    set_auth_cookie,
-)
-from ..db import db
-from ..schemas import (
-    AuthResponse,
-    UserOut,
-    SendOTPRequest,
-    SendOTPResponse,
-    VerifyOTPRequest,
-    VerifyOTPResponse,
-    SignupCompleteRequest
-)
-from ..utils import utc_now_iso
-from ..otp_service import get_otp_service
+from ..auth import (create_temp_token, create_token, get_current_user,
+                    hash_password, set_auth_cookie, verify_temp_token)
 from ..config import settings
-import random
-import logging
+from ..db import db
+from ..otp_service import get_otp_service
+from ..schemas import (AuthResponse, SendOTPRequest, SendOTPResponse,
+                       SignupCompleteRequest, UserOut, VerifyOTPRequest,
+                       VerifyOTPResponse)
+from ..utils import utc_now_iso
 
 logger = logging.getLogger(__name__)
 
@@ -112,10 +101,13 @@ async def update_me(body: dict, user: dict = Depends(get_current_user)):
         else:
             # Delete from Cloudinary before clearing
             from ..cloudinary_service import delete_image
+
             delete_image(user.get("photo_url"))
             update_data["photo_url"] = None
         if user.get("role") == "worker":
-            await db.workers.update_one({"user_id": user["id"]}, {"$set": {"photo_url": body.get("photo_url")}})
+            await db.workers.update_one(
+                {"user_id": user["id"]}, {"$set": {"photo_url": body.get("photo_url")}}
+            )
 
     if not update_data and not unset_data:
         return _user_out(user)
@@ -127,12 +119,14 @@ async def update_me(body: dict, user: dict = Depends(get_current_user)):
         mongo_op["$unset"] = unset_data
     await db.users.update_one({"id": user["id"]}, mongo_op)
     updated_user = await db.users.find_one({"id": user["id"]})
-    
+
     # Also update workers collection if user is a worker
     if user["role"] == "worker":
         worker_update = {}
-        if "name" in body: worker_update["name"] = body["name"]
-        if "village" in body: worker_update["village"] = body["village"]
+        if "name" in body:
+            worker_update["name"] = body["name"]
+        if "village" in body:
+            worker_update["village"] = body["village"]
         if worker_update:
             await db.workers.update_one({"user_id": user["id"]}, {"$set": worker_update})
 
@@ -141,17 +135,19 @@ async def update_me(body: dict, user: dict = Depends(get_current_user)):
 
 # ============ PHONE EXISTENCE CHECK ============
 
+
 @router.get("/check-phone")
 @limiter.limit("10/minute")
 async def check_phone(request: Request, phone: str):
     """Check if phone is registered. Returns exists, role, is_active, and expired status."""
     from datetime import datetime, timezone
+
     # Normalize: match last 10 digits — handles +91XXXXXXXXXX vs XXXXXXXXXX stored formats
     phone_digits = "".join(c for c in phone if c.isdigit())
     phone_10 = phone_digits[-10:] if len(phone_digits) >= 10 else phone_digits
     user = await db.users.find_one(
         {"phone_primary": {"$regex": phone_10, "$options": "i"}},
-        {"_id": 0, "role": 1, "id": 1, "is_active": 1, "deleted_at": 1, "permanently_deleted": 1}
+        {"_id": 0, "role": 1, "id": 1, "is_active": 1, "deleted_at": 1, "permanently_deleted": 1},
     )
     if not user:
         return {"exists": False, "role": None, "is_active": None, "expired": False}
@@ -178,6 +174,7 @@ async def check_phone(request: Request, phone: str):
 
 # ============ PHONE-FIRST OTP SIGNUP ============
 
+
 @router.post("/send-otp", response_model=SendOTPResponse)
 @limiter.limit("5/minute")
 async def send_otp(request: Request, body: SendOTPRequest):
@@ -199,11 +196,11 @@ async def send_otp(request: Request, body: SendOTPRequest):
 
     # Check phone-based rate limit (max 3 requests per 5 min)
     from datetime import datetime, timedelta
+
     five_min_ago = datetime.utcnow() - timedelta(minutes=5)
-    recent_otps = await db.otps.count_documents({
-        "phone": phone,
-        "created_at": {"$gt": five_min_ago.isoformat()}
-    })
+    recent_otps = await db.otps.count_documents(
+        {"phone": phone, "created_at": {"$gt": five_min_ago.isoformat()}}
+    )
     if recent_otps >= 3:
         raise HTTPException(status_code=429, detail="Too many OTP requests. Try again in 5 minutes")
 
@@ -216,16 +213,18 @@ async def send_otp(request: Request, body: SendOTPRequest):
     # Get OTP service and send via multi-channel fallback
     otp_service = get_otp_service()
     delivery_result = await otp_service.send_otp(
-        phone=phone,
-        otp_code=otp_code,
-        user_language="en"  # Can be set from user preferences later
+        phone=phone, otp_code=otp_code, user_language="en"  # Can be set from user preferences later
     )
 
     # Store OTP in database
     if delivery_result.get("success"):
         # Extract channel that succeeded (convert enum to string)
         channels_attempted = delivery_result.get("channels_attempted", [])
-        sent_via = str(channels_attempted[0]).replace("OTPChannel.", "") if channels_attempted else "unknown"
+        sent_via = (
+            str(channels_attempted[0]).replace("OTPChannel.", "")
+            if channels_attempted
+            else "unknown"
+        )
     else:
         sent_via = "failed"
 
@@ -239,11 +238,14 @@ async def send_otp(request: Request, body: SendOTPRequest):
                 "token_expires_at": utc_now_iso(),
                 "verification_attempts": 0,
                 "sent_via": sent_via,  # whatsapp, sms, or voice
-                "channels_attempted": [str(ch).replace("OTPChannel.", "") for ch in delivery_result.get("channels_attempted", [])],
-                "created_at": utc_now_iso()
+                "channels_attempted": [
+                    str(ch).replace("OTPChannel.", "")
+                    for ch in delivery_result.get("channels_attempted", [])
+                ],
+                "created_at": utc_now_iso(),
             }
         },
-        upsert=True
+        upsert=True,
     )
 
     if not delivery_result.get("success"):
@@ -280,10 +282,7 @@ async def verify_otp(request: Request, body: VerifyOTPRequest):
 
     # Verify OTP
     if otp_record["otp"] != otp_code:
-        await db.otps.update_one(
-            {"phone": phone},
-            {"$inc": {"verification_attempts": 1}}
-        )
+        await db.otps.update_one({"phone": phone}, {"$inc": {"verification_attempts": 1}})
         raise HTTPException(status_code=401, detail="Invalid OTP")
 
     # OTP correct! Check if user exists
@@ -301,25 +300,20 @@ async def verify_otp(request: Request, body: VerifyOTPRequest):
                 "otp_token": new_otp_token,
                 "token_expires_at": utc_now_iso(),
                 "verified_at": utc_now_iso(),
-                "otp": None
+                "otp": None,
             }
-        }
+        },
     )
 
     logger.info(f"OTP verified for {phone}. User exists: {created_user}")
 
-    return {
-        "otp_token": new_otp_token,
-        "created_user": created_user
-    }
+    return {"otp_token": new_otp_token, "created_user": created_user}
 
 
 @router.post("/signup-complete", response_model=AuthResponse)
 @limiter.limit("5/minute")
 async def signup_complete(
-    request: Request,
-    body: SignupCompleteRequest,
-    authorization: Optional[str] = Header(None)
+    request: Request, body: SignupCompleteRequest, authorization: Optional[str] = Header(None)
 ):
     """Step 3: Complete signup with name + role, create user account"""
 
@@ -341,7 +335,9 @@ async def signup_complete(
     # Check if user already exists (should not happen, but edge case)
     existing = await db.users.find_one({"phone_primary": phone})
     if existing:
-        raise HTTPException(status_code=409, detail="This phone is already registered. Login instead")
+        raise HTTPException(
+            status_code=409, detail="This phone is already registered. Login instead"
+        )
 
     # Create user document
     user_id = str(uuid.uuid4())
@@ -359,7 +355,7 @@ async def signup_complete(
         "preferred_language": body.preferred_language or "en",
         "avatar_color": _generate_avatar_color(body.name),
         "created_at": utc_now_iso(),
-        "migration_status": "phone_primary"
+        "migration_status": "phone_primary",
     }
 
     # Insert into users collection
@@ -373,42 +369,47 @@ async def signup_complete(
 
     logger.info(f"User created: {user_id} ({body.role}) via phone signup")
 
-    return {
-        "user": _user_out(user_doc),
-        "access_token": access_token,
-        "refresh_token": None
-    }
+    return {"user": _user_out(user_doc), "access_token": access_token, "refresh_token": None}
 
 
 @router.delete("/me")
 async def deactivate_account(user: dict = Depends(get_current_user)):
     """Soft-delete: deactivates account. Reactivate by logging in within 30 days."""
     from ..utils import utc_now_iso
+
     now = utc_now_iso()
-    await db.users.update_one(
-        {"id": user["id"]},
-        {"$set": {"is_active": False, "deleted_at": now}}
-    )
+    await db.users.update_one({"id": user["id"]}, {"$set": {"is_active": False, "deleted_at": now}})
     if user.get("role") == "worker":
         await db.workers.update_one(
             {"user_id": user["id"]},
-            {"$set": {"available": False, "availability_status": "not_available", "is_active": False}}
+            {
+                "$set": {
+                    "available": False,
+                    "availability_status": "not_available",
+                    "is_active": False,
+                }
+            },
         )
     # Log deactivation for future analytics
-    await db.deactivation_log.insert_one({
-        "user_id": user["id"],
-        "phone": user.get("phone_primary") or user.get("phone"),
-        "role": user.get("role"),
-        "deactivated_at": now,
-        "reactivated_at": None,
-    })
-    return {"ok": True, "message": "Account deactivated. You can reactivate within 30 days by logging in."}
+    await db.deactivation_log.insert_one(
+        {
+            "user_id": user["id"],
+            "phone": user.get("phone_primary") or user.get("phone"),
+            "role": user.get("role"),
+            "deactivated_at": now,
+            "reactivated_at": None,
+        }
+    )
+    return {
+        "ok": True,
+        "message": "Account deactivated. You can reactivate within 30 days by logging in.",
+    }
 
 
 @router.post("/me/photo")
 async def upload_user_photo(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
     """Upload profile photo — stored on Cloudinary CDN."""
-    from ..cloudinary_service import upload_image, delete_image
+    from ..cloudinary_service import delete_image, upload_image
 
     file_bytes = await file.read()
     public_id = f"user_{user['id']}"
@@ -427,10 +428,7 @@ async def upload_user_photo(file: UploadFile = File(...), user: dict = Depends(g
 
 @router.post("/login-complete", response_model=AuthResponse)
 @limiter.limit("5/minute")
-async def login_complete(
-    request: Request,
-    authorization: Optional[str] = Header(None)
-):
+async def login_complete(request: Request, authorization: Optional[str] = Header(None)):
     """Complete phone-based login for existing users (after OTP verification)"""
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Authorization required")
@@ -442,11 +440,14 @@ async def login_complete(
     phone_10 = phone_digits[-10:] if len(phone_digits) >= 10 else phone_digits
     user = await db.users.find_one({"phone_primary": {"$regex": phone_10}})
     if not user:
-        raise HTTPException(status_code=404, detail="No account found for this number. Please sign up.")
+        raise HTTPException(
+            status_code=404, detail="No account found for this number. Please sign up."
+        )
 
     # Handle deactivated accounts
     if not user.get("is_active", True):
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime, timedelta, timezone
+
         deleted_at_str = user.get("deleted_at")
         now = datetime.now(timezone.utc)
 
@@ -459,21 +460,23 @@ async def login_complete(
                     # Permanently anonymize and free the phone number
                     await db.users.update_one(
                         {"id": user["id"]},
-                        {"$set": {
-                            "phone_primary": f"DELETED_{user['id'][:8]}",
-                            "name": "Deleted User",
-                            "is_active": False,
-                            "permanently_deleted": True,
-                            "permanently_deleted_at": utc_now_iso(),
-                        }}
+                        {
+                            "$set": {
+                                "phone_primary": f"DELETED_{user['id'][:8]}",
+                                "name": "Deleted User",
+                                "is_active": False,
+                                "permanently_deleted": True,
+                                "permanently_deleted_at": utc_now_iso(),
+                            }
+                        },
                     )
                     await db.deactivation_log.update_one(
                         {"user_id": user["id"], "reactivated_at": None},
-                        {"$set": {"permanently_deleted_at": utc_now_iso()}}
+                        {"$set": {"permanently_deleted_at": utc_now_iso()}},
                     )
                     raise HTTPException(
                         status_code=410,
-                        detail="This account was permanently deleted after 30 days. Please create a new account."
+                        detail="This account was permanently deleted after 30 days. Please create a new account.",
                     )
             except HTTPException:
                 raise
@@ -483,13 +486,18 @@ async def login_complete(
         # Within 30 days — reactivate
         now_str = utc_now_iso()
         await db.users.update_one(
-            {"id": user["id"]},
-            {"$set": {"is_active": True, "deleted_at": None}}
+            {"id": user["id"]}, {"$set": {"is_active": True, "deleted_at": None}}
         )
         if user.get("role") == "worker":
             await db.workers.update_one(
                 {"user_id": user["id"]},
-                {"$set": {"available": True, "availability_status": "available", "is_active": True}}
+                {
+                    "$set": {
+                        "available": True,
+                        "availability_status": "available",
+                        "is_active": True,
+                    }
+                },
             )
         await db.deactivation_log.update_one(
             {"user_id": user["id"], "reactivated_at": None},
@@ -512,8 +520,16 @@ async def login_complete(
 def _generate_avatar_color(name: str) -> str:
     """Generate a consistent avatar color from name initials"""
     colors = [
-        "#FF6B6B", "#4ECDC4", "#45B7D1", "#FFA07A", "#98D8C8",
-        "#F7DC6F", "#BB8FCE", "#85C1E2", "#F8B88B", "#B4E7FF"
+        "#FF6B6B",
+        "#4ECDC4",
+        "#45B7D1",
+        "#FFA07A",
+        "#98D8C8",
+        "#F7DC6F",
+        "#BB8FCE",
+        "#85C1E2",
+        "#F8B88B",
+        "#B4E7FF",
     ]
     # Simple hash of first char of name
     if name:

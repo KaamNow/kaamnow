@@ -1,7 +1,8 @@
+from datetime import datetime, timedelta, timezone
+from typing import Optional
+
 import bcrypt
 import jwt
-from datetime import datetime, timezone, timedelta
-from typing import Optional
 from fastapi import HTTPException, Request, Response
 
 from .config import settings

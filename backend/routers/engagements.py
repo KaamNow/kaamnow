@@ -5,14 +5,9 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from ..auth import get_current_user
 from ..cloudinary_service import upload_review_image
 from ..db import db
-from ..engagements import (
-    accept_engagement,
-    cancel_engagement,
-    complete_engagement,
-    create_engagement_request,
-    list_engagements_for_user,
-    reject_engagement,
-)
+from ..engagements import (accept_engagement, cancel_engagement,
+                           complete_engagement, create_engagement_request,
+                           list_engagements_for_user, reject_engagement)
 from ..schemas import BookingIn
 
 router = APIRouter(prefix="/api/engagements", tags=["engagements"])
@@ -97,6 +92,7 @@ async def rate(engagement_id: str, body: dict, user: dict = Depends(get_current_
     if rating is None:
         raise HTTPException(status_code=422, detail="Rating is required")
     from ..engagements import rate_engagement
+
     return await rate_engagement(engagement_id, rating, comment, user, image_urls=image_urls)
 
 

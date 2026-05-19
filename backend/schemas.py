@@ -1,4 +1,4 @@
-from typing import List, Optional, Literal
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -40,34 +40,40 @@ class AuthResponse(BaseModel):
 
 # ============ PHONE-FIRST OTP SCHEMAS ============
 
+
 class SendOTPRequest(BaseModel):
     """Step 1: User provides phone number"""
-    phone: str = Field(..., pattern=r'^\+91[0-9]{10}$', description="Phone with +91 prefix")
+
+    phone: str = Field(..., pattern=r"^\+91[0-9]{10}$", description="Phone with +91 prefix")
 
 
 class SendOTPResponse(BaseModel):
     """Response: OTP sent, token for verification"""
+
     otp_token: str
     expires_in: int = 900
     message: str = "OTP sent successfully"
-    otp_code: Optional[str] = None       # Only when SHOW_OTP_IN_RESPONSE=true
-    requires_optin: bool = False          # True in sandbox — user must message the bot first
+    otp_code: Optional[str] = None  # Only when SHOW_OTP_IN_RESPONSE=true
+    requires_optin: bool = False  # True in sandbox — user must message the bot first
 
 
 class VerifyOTPRequest(BaseModel):
     """Step 2: User provides OTP received"""
-    phone: str = Field(..., pattern=r'^\+91[0-9]{10}$')
-    otp: str = Field(..., pattern=r'^[0-9]{6}$', description="6-digit OTP")
+
+    phone: str = Field(..., pattern=r"^\+91[0-9]{10}$")
+    otp: str = Field(..., pattern=r"^[0-9]{6}$", description="6-digit OTP")
 
 
 class VerifyOTPResponse(BaseModel):
     """Response: OTP verified, ready for profile completion"""
+
     otp_token: str
     created_user: bool
 
 
 class SignupCompleteRequest(BaseModel):
     """Step 3: Complete signup with name + role"""
+
     name: str = Field(..., min_length=2, max_length=100)
     role: Literal["worker", "customer"]
     password: Optional[str] = Field(None, min_length=8, description="Optional - OTP auth supported")
@@ -149,8 +155,6 @@ class JobOut(BaseModel):
     accepted_worker_ids: List[str] = Field(default_factory=list)
 
 
-
-
 class BookingIn(BaseModel):
     job_id: str
     worker_id: str
@@ -169,7 +173,7 @@ class RatingIn(BaseModel):
 
 
 class WaitlistIn(BaseModel):
-    phone: str = Field(..., pattern=r'^\+91[0-9]{10}$')
+    phone: str = Field(..., pattern=r"^\+91[0-9]{10}$")
     name: Optional[str] = ""
     role: Optional[str] = "customer"
 

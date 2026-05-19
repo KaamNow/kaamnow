@@ -5,6 +5,7 @@ Sends to ExponentPushToken[...] tokens via Expo's push gateway.
 
 import logging
 from typing import Optional
+
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -47,7 +48,11 @@ async def send_push(
                 headers={"Accept": "application/json", "Content-Type": "application/json"},
             )
         result = resp.json() if resp.content else {}
-        ticket = (result.get("data") or [{}])[0] if isinstance(result.get("data"), list) else result.get("data", {})
+        ticket = (
+            (result.get("data") or [{}])[0]
+            if isinstance(result.get("data"), list)
+            else result.get("data", {})
+        )
         if ticket.get("status") == "error":
             logger.warning(f"[Push] Token error for {token[:30]}: {ticket.get('message')}")
             return False

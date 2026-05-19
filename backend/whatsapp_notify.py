@@ -29,7 +29,9 @@ def _send(destination: str, text: str) -> bool:
     Returns True on success, False on failure (non-raising — notifications should never block core flows).
     """
     if not _is_enabled():
-        logger.debug("WhatsApp notifications disabled. Would have sent to %s: %s", destination, text[:60])
+        logger.debug(
+            "WhatsApp notifications disabled. Would have sent to %s: %s", destination, text[:60]
+        )
         return False
 
     if not all([settings.gupshup_api_url, settings.gupshup_api_key, settings.gupshup_source]):
@@ -69,6 +71,7 @@ def _send(destination: str, text: str) -> bool:
 
 
 # ─── Notification Templates ─────────────────────────────────────────────────
+
 
 def notify_worker_new_booking(phone: str, booking: dict) -> bool:
     """

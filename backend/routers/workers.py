@@ -84,9 +84,13 @@ def _worker_wage(worker: dict) -> dict:
     }
 
 
-def _rank_worker(worker: dict, pincode: Optional[str], skills: list[str]) -> tuple[int, int, float, int]:
+def _rank_worker(
+    worker: dict, pincode: Optional[str], skills: list[str]
+) -> tuple[int, int, float, int]:
     worker_skills = _worker_skill_names(worker)
-    skill_match_count = sum(1 for s in skills if _skill_soft_match(worker_skills, [s])) if skills else 0
+    skill_match_count = (
+        sum(1 for s in skills if _skill_soft_match(worker_skills, [s])) if skills else 0
+    )
     same_pincode = bool(pincode and _worker_pincode(worker) == pincode)
 
     if skill_match_count and same_pincode:
@@ -219,7 +223,8 @@ async def search_workers(
     if q:
         lq = q.lower()
         workers = [
-            w for w in workers
+            w
+            for w in workers
             if lq in (w.get("name") or "").lower()
             or lq in (w.get("village") or "").lower()
             or any(lq in s.lower() for s in _worker_skill_names(w))
@@ -227,6 +232,7 @@ async def search_workers(
 
     workers.sort(key=lambda worker: _rank_worker(worker, rank_pincode, selected_skills))
     return [_enrich_worker_for_search(worker, rank_pincode, selected_skills) for worker in workers]
+
 
 @router.get("/me/profile")
 async def my_worker_profile(user: dict = Depends(get_current_user)):
@@ -263,10 +269,7 @@ async def update_worker_profile(
     if "structured_skills" in profile:
         profile["structured_skills"] = profile.get("structured_skills") or []
 
-    result = await db.workers.update_one(
-        {"user_id": user["id"]},
-        {"$set": profile}
-    )
+    result = await db.workers.update_one({"user_id": user["id"]}, {"$set": profile})
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Worker profile not found")
 
@@ -285,7 +288,9 @@ async def toggle_availability(
 
     new_status = body.get("availability_status")
     if new_status not in ("available", "not_available"):
-        raise HTTPException(status_code=422, detail="availability_status must be 'available' or 'not_available'")
+        raise HTTPException(
+            status_code=422, detail="availability_status must be 'available' or 'not_available'"
+        )
 
     available_bool = new_status == "available"
     now = datetime.now(timezone.utc).isoformat()
@@ -312,7 +317,7 @@ async def upload_photo(file: UploadFile = File(...), user: dict = Depends(get_cu
     if user["role"] != "worker":
         raise HTTPException(status_code=403, detail="Only workers can upload photos")
 
-    from ..cloudinary_service import upload_image, delete_image
+    from ..cloudinary_service import delete_image, upload_image
 
     file_bytes = await file.read()
     public_id = f"worker_{user['id']}"

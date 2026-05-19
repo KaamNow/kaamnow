@@ -7,18 +7,12 @@ from pydantic import BaseModel
 
 from ..auth import get_current_user
 from ..db import db
-from ..engagements import (
-    accept_engagement,
-    complete_engagement,
-    create_engagement_request,
-    engagement_to_booking,
-    list_engagements_for_user,
-)
+from ..engagements import (accept_engagement, complete_engagement,
+                           create_engagement_request, engagement_to_booking,
+                           list_engagements_for_user)
 from ..schemas import BookingIn, RatingIn
-from ..whatsapp_notify import (
-    notify_customer_booking_accepted,
-    notify_worker_job_completed,
-)
+from ..whatsapp_notify import (notify_customer_booking_accepted,
+                               notify_worker_job_completed)
 
 router = APIRouter(prefix="/api/bookings", tags=["bookings"])
 
@@ -26,7 +20,12 @@ router = APIRouter(prefix="/api/bookings", tags=["bookings"])
 def _notification_phone(user: Optional[dict]) -> Optional[str]:
     if not user:
         return None
-    return user.get("phone_primary") or user.get("phone") or user.get("mobile") or user.get("phone_number")
+    return (
+        user.get("phone_primary")
+        or user.get("phone")
+        or user.get("mobile")
+        or user.get("phone_number")
+    )
 
 
 @router.post("")
@@ -63,6 +62,7 @@ async def direct_hire(body: DirectHireIn, user: dict = Depends(get_current_user)
         raise HTTPException(status_code=404, detail="Worker not found")
 
     from ..utils import utc_now_iso
+
     job_id = str(uuid.uuid4())
     job_doc = {
         "id": job_id,
@@ -70,7 +70,8 @@ async def direct_hire(body: DirectHireIn, user: dict = Depends(get_current_user)
         "customer_name": user.get("name", ""),
         "title": f"{body.category.title()} work – Direct hire",
         "category": body.category,
-        "description": body.note or f"Direct booking request for {body.category} work on {body.job_date}.",
+        "description": body.note
+        or f"Direct booking request for {body.category} work on {body.job_date}.",
         "workers_needed": 1,
         "daily_rate": body.daily_rate,
         "job_date": body.job_date,
@@ -104,11 +105,21 @@ async def my_bookings(user: dict = Depends(get_current_user)):
         worker = await db.workers.find_one({"user_id": user["id"]}, {"_id": 0})
         if not worker:
             return engagement_bookings
-        bookings = await db.bookings.find({"worker_id": worker["id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
+        bookings = (
+            await db.bookings.find({"worker_id": worker["id"]}, {"_id": 0})
+            .sort("created_at", -1)
+            .to_list(100)
+        )
     else:
-        bookings = await db.bookings.find({"customer_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
+        bookings = (
+            await db.bookings.find({"customer_id": user["id"]}, {"_id": 0})
+            .sort("created_at", -1)
+            .to_list(100)
+        )
     existing_ids = {booking["id"] for booking in engagement_bookings}
-    return engagement_bookings + [booking for booking in bookings if booking["id"] not in existing_ids]
+    return engagement_bookings + [
+        booking for booking in bookings if booking["id"] not in existing_ids
+    ]
 
 
 @router.post("/{booking_id}/accept")

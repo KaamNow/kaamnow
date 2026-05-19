@@ -5,27 +5,21 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 from .config import settings
 from .db import close_client
 from .otp_service import init_otp_service
-from .routers import (
-    admin_router,
-    auth_router,
-    bookings_router,
-    engagements_router,
-    jobs_router,
-    notifications_router,
-    stats_router,
-    waitlist_router,
-    whatsapp_router,
-    workers_router,
-)
+from .routers import (admin_router, auth_router, bookings_router,
+                      engagements_router, jobs_router, notifications_router,
+                      stats_router, waitlist_router, whatsapp_router,
+                      workers_router)
 from .seed import seed_data
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 # Rate limiter — keyed by client IP
@@ -63,6 +57,7 @@ async def _expire_old_engagements() -> None:
     """Background loop: auto-cancel requested engagements older than 24h, every hour."""
     import asyncio
     from datetime import datetime, timedelta
+
     from .db import db as _db
     from .utils import utc_now_iso
 
@@ -80,13 +75,20 @@ async def _expire_old_engagements() -> None:
                 ids = [e["id"] for e in old]
                 await _db.engagements.update_many(
                     {"id": {"$in": ids}},
-                    {"$set": {"status": "cancelled", "cancelled_at": now, "updated_at": now,
-                              "cancel_reason": "auto_expired_24h"}},
+                    {
+                        "$set": {
+                            "status": "cancelled",
+                            "cancelled_at": now,
+                            "updated_at": now,
+                            "cancel_reason": "auto_expired_24h",
+                        }
+                    },
                 )
                 logger.info(f"[Expiry] Auto-cancelled {len(old)} stale engagements")
 
                 # Notify both parties
                 from .engagements import _notify
+
                 for e in old:
                     # Notify customer: their request expired
                     await _notify(
@@ -97,7 +99,9 @@ async def _expire_old_engagements() -> None:
                         e["id"],
                     )
                     # Notify worker: their application expired
-                    worker = await _db.workers.find_one({"id": e["worker_id"]}, {"_id": 0, "user_id": 1})
+                    worker = await _db.workers.find_one(
+                        {"id": e["worker_id"]}, {"_id": 0, "user_id": 1}
+                    )
                     if worker and worker.get("user_id"):
                         await _notify(
                             worker["user_id"],
@@ -115,6 +119,7 @@ async def _weekly_analytics() -> None:
     """Background loop: send weekly WhatsApp report to admin every Monday 9am IST."""
     import asyncio
     from datetime import datetime, timedelta
+
     from .db import db as _db
     from .whatsapp_notify import _send as wa_send
 
@@ -126,7 +131,9 @@ async def _weekly_analytics() -> None:
             # IST = UTC+5:30. Target: Monday 03:30 UTC = Monday 09:00 IST
             # Calculate seconds until next Monday 03:30 UTC
             days_ahead = (7 - now.weekday()) % 7  # days until Monday
-            next_monday = now.replace(hour=3, minute=30, second=0, microsecond=0) + timedelta(days=days_ahead)
+            next_monday = now.replace(hour=3, minute=30, second=0, microsecond=0) + timedelta(
+                days=days_ahead
+            )
             if next_monday <= now:
                 next_monday += timedelta(days=7)
             wait_secs = (next_monday - now).total_seconds()
@@ -135,20 +142,28 @@ async def _weekly_analytics() -> None:
 
             # Gather last 7 days stats
             week_ago = (datetime.utcnow() - timedelta(days=7)).isoformat()
-            new_workers   = await _db.users.count_documents({"role": "worker",   "created_at": {"$gte": week_ago}})
-            new_customers = await _db.users.count_documents({"role": "customer", "created_at": {"$gte": week_ago}})
-            new_jobs      = await _db.jobs.count_documents({"created_at": {"$gte": week_ago}})
-            completed     = await _db.engagements.count_documents({"status": "completed", "created_at": {"$gte": week_ago}})
-            requests      = await _db.engagements.count_documents({"status": {"$ne": "cancelled"}, "created_at": {"$gte": week_ago}})
+            new_workers = await _db.users.count_documents(
+                {"role": "worker", "created_at": {"$gte": week_ago}}
+            )
+            new_customers = await _db.users.count_documents(
+                {"role": "customer", "created_at": {"$gte": week_ago}}
+            )
+            new_jobs = await _db.jobs.count_documents({"created_at": {"$gte": week_ago}})
+            completed = await _db.engagements.count_documents(
+                {"status": "completed", "created_at": {"$gte": week_ago}}
+            )
+            requests = await _db.engagements.count_documents(
+                {"status": {"$ne": "cancelled"}, "created_at": {"$gte": week_ago}}
+            )
 
             gmv_pipe = [
                 {"$match": {"status": "completed", "created_at": {"$gte": week_ago}}},
-                {"$group": {"_id": None, "total": {"$sum": "$daily_rate"}}}
+                {"$group": {"_id": None, "total": {"$sum": "$daily_rate"}}},
             ]
             gmv_docs = await _db.engagements.aggregate(gmv_pipe).to_list(1)
             gmv = gmv_docs[0]["total"] if gmv_docs else 0
 
-            total_workers   = await _db.workers.count_documents({})
+            total_workers = await _db.workers.count_documents({})
             total_customers = await _db.users.count_documents({"role": "customer"})
 
             msg = (
@@ -200,6 +215,7 @@ async def on_startup() -> None:
     logger.info("Seed data loaded.")
 
     import asyncio
+
     asyncio.create_task(_expire_old_engagements())
     logger.info("Engagement expiry background task started.")
     asyncio.create_task(_weekly_analytics())

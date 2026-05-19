@@ -6,11 +6,9 @@ from fastapi import HTTPException
 
 from .db import db
 from .utils import utc_now_iso
-from .whatsapp_notify import (
-    notify_customer_work_completed,
-    notify_worker_job_completed,
-    notify_worker_rating_received,
-)
+from .whatsapp_notify import (notify_customer_work_completed,
+                              notify_worker_job_completed,
+                              notify_worker_rating_received)
 
 
 async def _notify(user_id: str, title: str, body: str, kind: str, ref_id: str = None) -> None:
@@ -22,41 +20,64 @@ async def _notify(user_id: str, title: str, body: str, kind: str, ref_id: str = 
         return
 
     try:
-        await db.notifications.insert_one({
-            "id": str(uuid.uuid4()),
-            "user_id": user_id,
-            "title": title,
-            "body": body,
-            "kind": kind,
-            "ref_id": ref_id,
-            "read": False,
-            "created_at": utc_now_iso(),
-        })
+        await db.notifications.insert_one(
+            {
+                "id": str(uuid.uuid4()),
+                "user_id": user_id,
+                "title": title,
+                "body": body,
+                "kind": kind,
+                "ref_id": ref_id,
+                "read": False,
+                "created_at": utc_now_iso(),
+            }
+        )
     except Exception:
         pass
 
     # Fire push notification + WhatsApp for all engagement events
-    if kind in ("booking_accepted", "booking_rejected", "interest_withdrawn",
-                "booking_request", "booking_completed", "booking_cancelled",
-                "job_rated", "tier_upgraded", "tier_downgraded"):
+    if kind in (
+        "booking_accepted",
+        "booking_rejected",
+        "interest_withdrawn",
+        "booking_request",
+        "booking_completed",
+        "booking_cancelled",
+        "job_rated",
+        "tier_upgraded",
+        "tier_downgraded",
+    ):
         try:
             user = await db.users.find_one(
                 {"id": user_id},
-                {"_id": 0, "phone_primary": 1, "phone": 1, "mobile": 1, "phone_number": 1, "push_token": 1},
+                {
+                    "_id": 0,
+                    "phone_primary": 1,
+                    "phone": 1,
+                    "mobile": 1,
+                    "phone_number": 1,
+                    "push_token": 1,
+                },
             )
             if user:
                 # Push notification (instant, lock-screen)
                 push_token = user.get("push_token")
                 if push_token:
-                    from .push_service import send_push
                     import asyncio
-                    asyncio.create_task(send_push(push_token, title, body, {"kind": kind, "ref_id": ref_id or ""}))
+
+                    from .push_service import send_push
+
+                    asyncio.create_task(
+                        send_push(push_token, title, body, {"kind": kind, "ref_id": ref_id or ""})
+                    )
 
                 # WhatsApp (rich message with details)
                 phone = _notification_phone(user)
                 if phone:
-                    from .whatsapp_notify import _send as _wa_send
                     import threading
+
+                    from .whatsapp_notify import _send as _wa_send
+
                     threading.Thread(
                         target=_wa_send,
                         args=(phone, f"{title}\n{body}"),
@@ -65,12 +86,13 @@ async def _notify(user_id: str, title: str, body: str, kind: str, ref_id: str = 
         except Exception:
             pass
 
+
 TIER_THRESHOLDS = [
     # (tier, name, min_jobs, min_rating, badge_emoji)
-    (4, "Elite",    50, 4.5, "🏆"),
-    (3, "Pro",      20, 4.0, "🔵"),
-    (2, "Verified",  5, 3.5, "✅"),
-    (1, "Basic",     0, 0.0, ""),
+    (4, "Elite", 50, 4.5, "🏆"),
+    (3, "Pro", 20, 4.0, "🔵"),
+    (2, "Verified", 5, 3.5, "✅"),
+    (1, "Basic", 0, 0.0, ""),
 ]
 
 TIER_NAMES = {1: "Basic", 2: "Verified", 3: "Pro", 4: "Elite"}
@@ -80,12 +102,19 @@ TIER_EMOJIS = {1: "", 2: "✅", 3: "🔵", 4: "🏆"}
 def _notification_phone(user: Optional[dict]) -> Optional[str]:
     if not user:
         return None
-    return user.get("phone_primary") or user.get("phone") or user.get("mobile") or user.get("phone_number")
+    return (
+        user.get("phone_primary")
+        or user.get("phone")
+        or user.get("mobile")
+        or user.get("phone_number")
+    )
 
 
 async def _check_tier(worker_id: str, worker_user_id: str) -> None:
     """Recompute trust_tier based on total_jobs + avg_rating. Notify on change."""
-    worker = await db.workers.find_one({"id": worker_id}, {"_id": 0, "total_jobs": 1, "avg_rating": 1, "trust_tier": 1})
+    worker = await db.workers.find_one(
+        {"id": worker_id}, {"_id": 0, "total_jobs": 1, "avg_rating": 1, "trust_tier": 1}
+    )
     if not worker:
         return
 
@@ -193,7 +222,9 @@ async def _ensure_no_duplicate(job_id: str, worker_id: str) -> None:
         }
     )
     if duplicate:
-        raise HTTPException(status_code=400, detail="Request already exists for this job and worker")
+        raise HTTPException(
+            status_code=400, detail="Request already exists for this job and worker"
+        )
 
 
 async def _ensure_active_limits(worker_id: str, customer_id: str) -> None:
@@ -259,12 +290,16 @@ async def create_engagement_request(
         if user["role"] != "customer":
             raise HTTPException(status_code=403, detail="Only customers can book workers")
         if job["customer_id"] != user["id"]:
-            raise HTTPException(status_code=403, detail="You can only book workers for your own jobs")
+            raise HTTPException(
+                status_code=403, detail="You can only book workers for your own jobs"
+            )
     elif source == "worker_interest":
         if user["role"] != "worker":
             raise HTTPException(status_code=403, detail="Only workers can express interest")
         if worker.get("user_id") != user["id"]:
-            raise HTTPException(status_code=403, detail="You can only express interest as your own worker profile")
+            raise HTTPException(
+                status_code=403, detail="You can only express interest as your own worker profile"
+            )
     else:
         raise HTTPException(status_code=400, detail="Invalid request source")
 
@@ -336,16 +371,28 @@ async def list_engagements_for_user(user: dict) -> list[dict]:
         worker = await db.workers.find_one({"user_id": user["id"]}, {"_id": 0})
         if not worker:
             return []
-        return await db.engagements.find({"worker_id": worker["id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
+        return (
+            await db.engagements.find({"worker_id": worker["id"]}, {"_id": 0})
+            .sort("created_at", -1)
+            .to_list(100)
+        )
 
-    return await db.engagements.find({"customer_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return (
+        await db.engagements.find({"customer_id": user["id"]}, {"_id": 0})
+        .sort("created_at", -1)
+        .to_list(100)
+    )
 
 
 def _can_decide_engagement(engagement: dict, user: dict, worker: Optional[dict]) -> bool:
     if engagement["source"] == "worker_interest":
         return user["role"] == "customer" and engagement["customer_id"] == user["id"]
     if engagement["source"] == "customer_booking":
-        return user["role"] == "worker" and worker is not None and worker["id"] == engagement["worker_id"]
+        return (
+            user["role"] == "worker"
+            and worker is not None
+            and worker["id"] == engagement["worker_id"]
+        )
     return False
 
 
@@ -362,29 +409,42 @@ async def accept_engagement(engagement_id: str, user: dict) -> dict:
     if engagement["status"] != "requested":
         raise HTTPException(status_code=400, detail="Only requested engagements can be accepted")
 
-    job, engagement_worker = await _find_job_and_worker(engagement["job_id"], engagement["worker_id"])
+    job, engagement_worker = await _find_job_and_worker(
+        engagement["job_id"], engagement["worker_id"]
+    )
     await _ensure_job_can_accept_more(job)
     await _ensure_worker_can_take_job(engagement_worker, job)
 
     now = utc_now_iso()
 
     # Fetch contact details for sharing
-    worker_user = await db.users.find_one({"id": engagement_worker.get("user_id")}, {"_id": 0, "phone_primary": 1, "name": 1})
-    customer_user = await db.users.find_one({"id": engagement["customer_id"]}, {"_id": 0, "phone_primary": 1, "name": 1, "village": 1, "address": 1})
+    worker_user = await db.users.find_one(
+        {"id": engagement_worker.get("user_id")}, {"_id": 0, "phone_primary": 1, "name": 1}
+    )
+    customer_user = await db.users.find_one(
+        {"id": engagement["customer_id"]},
+        {"_id": 0, "phone_primary": 1, "name": 1, "village": 1, "address": 1},
+    )
 
     customer_phone = customer_user.get("phone_primary") if customer_user else None
-    customer_village = ((customer_user.get("address") or {}).get("village") or customer_user.get("village")) if customer_user else None
+    customer_village = (
+        ((customer_user.get("address") or {}).get("village") or customer_user.get("village"))
+        if customer_user
+        else None
+    )
 
     await db.engagements.update_one(
         {"id": engagement_id},
-        {"$set": {
-            "status": "accepted",
-            "accepted_at": now,
-            "updated_at": now,
-            "worker_phone": worker_user.get("phone_primary") if worker_user else None,
-            "customer_phone": customer_phone,
-            "customer_village": customer_village,
-        }},
+        {
+            "$set": {
+                "status": "accepted",
+                "accepted_at": now,
+                "updated_at": now,
+                "worker_phone": worker_user.get("phone_primary") if worker_user else None,
+                "customer_phone": customer_phone,
+                "customer_village": customer_village,
+            }
+        },
     )
 
     accepted_worker_ids = list(job.get("accepted_worker_ids") or [])
@@ -398,11 +458,13 @@ async def accept_engagement(engagement_id: str, user: dict) -> dict:
 
     await db.jobs.update_one(
         {"id": job["id"]},
-        {"$set": {
-            "accepted_worker_ids": accepted_worker_ids,
-            "filled_count": new_filled,
-            "status": new_job_status,
-        }},
+        {
+            "$set": {
+                "accepted_worker_ids": accepted_worker_ids,
+                "filled_count": new_filled,
+                "status": new_job_status,
+            }
+        },
     )
 
     if engagement.get("source") == "worker_interest":
@@ -422,7 +484,11 @@ async def accept_engagement(engagement_id: str, user: dict) -> dict:
             engagement_id,
         )
 
-    return {"ok": True, "worker_phone": worker_user.get("phone_primary") if worker_user else None, "customer_phone": customer_user.get("phone_primary") if customer_user else None}
+    return {
+        "ok": True,
+        "worker_phone": worker_user.get("phone_primary") if worker_user else None,
+        "customer_phone": customer_user.get("phone_primary") if customer_user else None,
+    }
 
 
 async def reject_engagement(engagement_id: str, user: dict) -> dict:
@@ -493,36 +559,54 @@ async def cancel_engagement(engagement_id: str, user: dict) -> dict:
         # Reopen job + decrement filled_count if accepted booking cancelled
         job = await db.jobs.find_one({"id": engagement["job_id"]}, {"_id": 0})
         if job:
-            accepted_ids = [w for w in (job.get("accepted_worker_ids") or []) if w != engagement["worker_id"]]
+            accepted_ids = [
+                w for w in (job.get("accepted_worker_ids") or []) if w != engagement["worker_id"]
+            ]
             new_filled = len(accepted_ids)
             await db.jobs.update_one(
                 {"id": engagement["job_id"]},
-                {"$set": {"status": "open", "accepted_worker_ids": accepted_ids, "filled_count": new_filled}}
+                {
+                    "$set": {
+                        "status": "open",
+                        "accepted_worker_ids": accepted_ids,
+                        "filled_count": new_filled,
+                    }
+                },
             )
         # Restore worker availability immediately
         await db.workers.update_one(
             {"id": engagement["worker_id"]},
-            {"$set": {"available": True, "availability_status": "available"}}
+            {"$set": {"available": True, "availability_status": "available"}},
         )
 
         # ── Cancellation limit enforcement ────────────────────────────
         from datetime import datetime
-        month_start = datetime.utcnow().strftime("%Y-%m-01")
-        monthly_count = await db.engagements.count_documents({
-            "worker_id": engagement["worker_id"],
-            "status": "cancelled",
-            "cancelled_at": {"$gte": month_start},
-        })
 
-        worker_doc = await db.workers.find_one({"id": engagement["worker_id"]}, {"_id": 0, "user_id": 1})
+        month_start = datetime.utcnow().strftime("%Y-%m-01")
+        monthly_count = await db.engagements.count_documents(
+            {
+                "worker_id": engagement["worker_id"],
+                "status": "cancelled",
+                "cancelled_at": {"$gte": month_start},
+            }
+        )
+
+        worker_doc = await db.workers.find_one(
+            {"id": engagement["worker_id"]}, {"_id": 0, "user_id": 1}
+        )
         worker_user_id = worker_doc.get("user_id") if worker_doc else None
 
         if monthly_count >= 8 and worker_user_id:
             # Restrict account
             await db.workers.update_one(
                 {"id": engagement["worker_id"]},
-                {"$set": {"available": False, "availability_status": "restricted",
-                          "restriction_reason": "cancellation_limit"}}
+                {
+                    "$set": {
+                        "available": False,
+                        "availability_status": "restricted",
+                        "restriction_reason": "cancellation_limit",
+                    }
+                },
             )
             await _notify(
                 worker_user_id,
@@ -561,11 +645,15 @@ async def complete_engagement(engagement_id: str, user: dict) -> dict:
         raise HTTPException(status_code=404, detail="Engagement not found")
 
     # Only the assigned worker can mark as completed
-    worker_doc = await db.workers.find_one({"id": engagement["worker_id"]}, {"_id": 0, "user_id": 1})
+    worker_doc = await db.workers.find_one(
+        {"id": engagement["worker_id"]}, {"_id": 0, "user_id": 1}
+    )
     is_worker = user["role"] == "worker" and worker_doc and worker_doc.get("user_id") == user["id"]
 
     if not is_worker:
-        raise HTTPException(status_code=403, detail="Only the assigned worker can mark a job as complete")
+        raise HTTPException(
+            status_code=403, detail="Only the assigned worker can mark a job as complete"
+        )
     if engagement["status"] != "accepted":
         raise HTTPException(status_code=400, detail="Only accepted engagements can be completed")
 
@@ -582,14 +670,17 @@ async def complete_engagement(engagement_id: str, user: dict) -> dict:
         )
         await db.workers.update_one(
             {"id": engagement["worker_id"]},
-            {"$set": {"available": True, "availability_status": "available", "total_jobs": completed_count}}
+            {
+                "$set": {
+                    "available": True,
+                    "availability_status": "available",
+                    "total_jobs": completed_count,
+                }
+            },
         )
 
     # Mark the parent job as completed
-    await db.jobs.update_one(
-        {"id": engagement["job_id"]},
-        {"$set": {"status": "completed"}}
-    )
+    await db.jobs.update_one({"id": engagement["job_id"]}, {"$set": {"status": "completed"}})
 
     # Notify customer that work is done — rate the worker
     await _notify(
@@ -655,7 +746,7 @@ async def rate_engagement(
     engagement = await db.engagements.find_one({"id": engagement_id})
     if not engagement:
         raise HTTPException(status_code=404, detail="Engagement not found")
-    
+
     if engagement["status"] != "completed":
         raise HTTPException(status_code=400, detail="Only completed engagements can be rated")
 
@@ -677,17 +768,11 @@ async def rate_engagement(
     if user["role"] == "customer":
         if engagement["customer_id"] != user["id"]:
             raise HTTPException(status_code=403, detail="You can only rate your own hires")
-        
+
         await db.engagements.update_one(
-            {"id": engagement_id},
-            {
-                "$set": {
-                    "worker_rating": rating_doc,
-                    "updated_at": now
-                }
-            }
+            {"id": engagement_id}, {"$set": {"worker_rating": rating_doc, "updated_at": now}}
         )
-        
+
         # Recompute worker avg_rating only — total_jobs is set by complete_engagement
         pipeline = [
             {"$match": {"worker_id": engagement["worker_id"], "worker_rating": {"$ne": None}}},
@@ -702,7 +787,9 @@ async def rate_engagement(
 
         # Notify worker they received a rating + check minimum rating thresholds
         new_avg = round(agg[0]["avg"], 2) if agg else None
-        worker_doc = await db.workers.find_one({"id": engagement["worker_id"]}, {"_id": 0, "user_id": 1})
+        worker_doc = await db.workers.find_one(
+            {"id": engagement["worker_id"]}, {"_id": 0, "user_id": 1}
+        )
         if worker_doc and worker_doc.get("user_id"):
             stars = "⭐" * rating
             await _notify(
@@ -731,8 +818,13 @@ async def rate_engagement(
                     # Flag account — hidden from new job matches
                     await db.workers.update_one(
                         {"id": engagement["worker_id"]},
-                        {"$set": {"available": False, "availability_status": "flagged",
-                                  "restriction_reason": "low_rating"}}
+                        {
+                            "$set": {
+                                "available": False,
+                                "availability_status": "flagged",
+                                "restriction_reason": "low_rating",
+                            }
+                        },
                     )
                     await _notify(
                         worker_doc["user_id"],
@@ -745,8 +837,7 @@ async def rate_engagement(
                 elif new_avg < 3.0:
                     # Strong warning + reduce visibility
                     await db.workers.update_one(
-                        {"id": engagement["worker_id"]},
-                        {"$set": {"low_rating_warning": "strong"}}
+                        {"id": engagement["worker_id"]}, {"$set": {"low_rating_warning": "strong"}}
                     )
                     await _notify(
                         worker_doc["user_id"],
@@ -759,8 +850,7 @@ async def rate_engagement(
                 elif new_avg < 3.5:
                     # First warning
                     await db.workers.update_one(
-                        {"id": engagement["worker_id"]},
-                        {"$set": {"low_rating_warning": "first"}}
+                        {"id": engagement["worker_id"]}, {"$set": {"low_rating_warning": "first"}}
                     )
                     await _notify(
                         worker_doc["user_id"],
@@ -772,8 +862,7 @@ async def rate_engagement(
                 else:
                     # Clear any previous warnings if rating recovered
                     await db.workers.update_one(
-                        {"id": engagement["worker_id"]},
-                        {"$unset": {"low_rating_warning": ""}}
+                        {"id": engagement["worker_id"]}, {"$unset": {"low_rating_warning": ""}}
                     )
 
             # Check tier upgrade/downgrade after every rating
@@ -783,16 +872,10 @@ async def rate_engagement(
         worker = await db.workers.find_one({"user_id": user["id"]})
         if not worker or worker["id"] != engagement["worker_id"]:
             raise HTTPException(status_code=403, detail="You can only rate your own jobs")
-            
+
         await db.engagements.update_one(
-            {"id": engagement_id},
-            {
-                "$set": {
-                    "customer_rating": rating_doc,
-                    "updated_at": now
-                }
-            }
+            {"id": engagement_id}, {"$set": {"customer_rating": rating_doc, "updated_at": now}}
         )
         # We could also recompute customer aggregate rating here later
-        
+
     return {"ok": True}

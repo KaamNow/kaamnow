@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ..auth import get_current_user
 from ..db import db
-from ..engagements import create_engagement_request, _notify
+from ..engagements import _notify, create_engagement_request
 from ..schemas import JobIn, JobOut
 from ..utils import utc_now_iso
 from ..whatsapp_notify import notify_worker_job_alert
@@ -53,9 +53,11 @@ def _skill_names(items: Optional[Union[list[dict], list[str]]]) -> set[str]:
 
 
 def _job_skill_names(job: dict) -> set[str]:
-    return _skill_names(job.get("required_skills")) | _skill_names(job.get("skills")) | {
-        str(job.get("category", "")).strip().lower()
-    }
+    return (
+        _skill_names(job.get("required_skills"))
+        | _skill_names(job.get("skills"))
+        | {str(job.get("category", "")).strip().lower()}
+    )
 
 
 def _job_pincode(job: dict) -> Optional[str]:
@@ -75,11 +77,16 @@ def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
     R = 6371.0
     dlat = math.radians(lat2 - lat1)
     dlng = math.radians(lng2 - lng1)
-    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlng / 2) ** 2
+    a = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlng / 2) ** 2
+    )
     return R * 2 * math.asin(math.sqrt(a))
 
 
-def _rank_job(job: dict, worker_lat: Optional[float], worker_lng: Optional[float], skills: list[str]) -> tuple[int, int, float, str]:
+def _rank_job(
+    job: dict, worker_lat: Optional[float], worker_lng: Optional[float], skills: list[str]
+) -> tuple[int, int, float, str]:
     job_skills = _job_skill_names(job)
     skill_match_count = len(job_skills.intersection(skills)) if skills else 0
 
@@ -99,7 +106,13 @@ def _rank_job(job: dict, worker_lat: Optional[float], worker_lng: Optional[float
     return (skill_rank, dist_km, urgent_rank, job.get("created_at", ""))
 
 
-def _enrich_job_for_feed(job: dict, worker_lat: Optional[float], worker_lng: Optional[float], worker_pincode: Optional[str], skills: list[str]) -> dict:
+def _enrich_job_for_feed(
+    job: dict,
+    worker_lat: Optional[float],
+    worker_lng: Optional[float],
+    worker_pincode: Optional[str],
+    skills: list[str],
+) -> dict:
     job_skills = _job_skill_names(job)
     matched_skills = sorted(job_skills.intersection(skills)) if skills else []
     same_pincode = bool(worker_pincode and _job_pincode(job) == worker_pincode)
@@ -108,7 +121,9 @@ def _enrich_job_for_feed(job: dict, worker_lat: Optional[float], worker_lng: Opt
     dist_km = None
     if worker_lat and worker_lng and job_lat and job_lng:
         try:
-            dist_km = round(_haversine_km(worker_lat, worker_lng, float(job_lat), float(job_lng)), 1)
+            dist_km = round(
+                _haversine_km(worker_lat, worker_lng, float(job_lat), float(job_lng)), 1
+            )
         except Exception:
             pass
 
@@ -169,12 +184,21 @@ async def delete_job(job_id: str, user: dict = Depends(get_current_user)):
     if job["customer_id"] != user["id"]:
         raise HTTPException(status_code=403, detail="You can only delete your own jobs")
     if job.get("status") in ("booked", "completed"):
-        raise HTTPException(status_code=400, detail="Cannot delete a booked or completed job. Cancel the booking first.")
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete a booked or completed job. Cancel the booking first.",
+        )
 
     # Cancel any pending engagements for this job
     await db.engagements.update_many(
         {"job_id": job_id, "status": {"$in": ["requested", "accepted"]}},
-        {"$set": {"status": "cancelled", "cancelled_at": utc_now_iso(), "updated_at": utc_now_iso()}}
+        {
+            "$set": {
+                "status": "cancelled",
+                "cancelled_at": utc_now_iso(),
+                "updated_at": utc_now_iso(),
+            }
+        },
     )
     await db.jobs.delete_one({"id": job_id})
     return {"ok": True}
@@ -194,10 +218,23 @@ async def _alert_matching_workers(job: dict) -> None:
         job_lng = float(job.get("lng") or 0) or None
 
         # Available workers only
-        workers = await db.workers.find(
-            {"available": True},
-            {"_id": 0, "id": 1, "user_id": 1, "address": 1, "structured_skills": 1, "skills": 1, "lat": 1, "lng": 1}
-        ).limit(200).to_list(200)
+        workers = (
+            await db.workers.find(
+                {"available": True},
+                {
+                    "_id": 0,
+                    "id": 1,
+                    "user_id": 1,
+                    "address": 1,
+                    "structured_skills": 1,
+                    "skills": 1,
+                    "lat": 1,
+                    "lng": 1,
+                },
+            )
+            .limit(200)
+            .to_list(200)
+        )
 
         matched = []
         for w in workers:
@@ -218,12 +255,13 @@ async def _alert_matching_workers(job: dict) -> None:
         user_ids = [w["user_id"] for w in matched if w.get("user_id")]
         users = await db.users.find(
             {"id": {"$in": user_ids}, "phone_primary": {"$exists": True}},
-            {"_id": 0, "id": 1, "phone_primary": 1}
+            {"_id": 0, "id": 1, "phone_primary": 1},
         ).to_list(50)
 
         phone_by_uid = {u["id"]: u["phone_primary"] for u in users if u.get("phone_primary")}
 
         import threading
+
         now = utc_now_iso()
         for w in matched:
             uid = w.get("user_id")
@@ -246,13 +284,15 @@ async def _alert_matching_workers(job: dict) -> None:
 
             # Log before sending WhatsApp
             phone = phone_by_uid.get(uid)
-            await db.wa_notif_log.insert_one({
-                "job_id": job_id,
-                "user_id": uid,
-                "phone": phone or "",
-                "sent_at": now,
-                "kind": "job_alert",
-            })
+            await db.wa_notif_log.insert_one(
+                {
+                    "job_id": job_id,
+                    "user_id": uid,
+                    "phone": phone or "",
+                    "sent_at": now,
+                    "kind": "job_alert",
+                }
+            )
 
             # WhatsApp (only if phone available)
             if phone:
@@ -264,6 +304,7 @@ async def _alert_matching_workers(job: dict) -> None:
 
     except Exception as exc:
         import logging
+
         logging.getLogger(__name__).error("Job alert dispatch failed: %s", exc)
 
 
@@ -280,7 +321,11 @@ async def list_jobs(category: Optional[str] = None, status: Optional[str] = None
 
 @router.get("/mine", response_model=List[JobOut])
 async def my_jobs(user: dict = Depends(get_current_user)):
-    jobs = await db.jobs.find({"customer_id": user["id"]}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    jobs = (
+        await db.jobs.find({"customer_id": user["id"]}, {"_id": 0})
+        .sort("created_at", -1)
+        .to_list(100)
+    )
     return jobs
 
 
@@ -301,17 +346,17 @@ async def job_feed(
         if worker:
             selected_pincode = selected_pincode or (worker.get("address") or {}).get("pincode")
             if not selected_skills:
-                selected_skills = sorted(_skill_names(worker.get("structured_skills")) | _skill_names(worker.get("skills")))
+                selected_skills = sorted(
+                    _skill_names(worker.get("structured_skills"))
+                    | _skill_names(worker.get("skills"))
+                )
             try:
                 worker_lat = float(worker.get("lat") or 0) or None
                 worker_lng = float(worker.get("lng") or 0) or None
             except (TypeError, ValueError):
                 pass
 
-    query: dict = {
-        "status": "open",
-        "$expr": {"$lt": ["$filled_count", "$workers_needed"]}
-    }
+    query: dict = {"status": "open", "$expr": {"$lt": ["$filled_count", "$workers_needed"]}}
     if category:
         query["category"] = category
 
@@ -319,6 +364,7 @@ async def job_feed(
 
     # Filter expired jobs (job_date < today) — mark them expired
     from datetime import date as _date
+
     today_str = _date.today().isoformat()
     active_jobs = []
     expired_ids = []
@@ -330,9 +376,9 @@ async def job_feed(
 
     if expired_ids:
         from ..utils import utc_now_iso as _now
+
         await db.jobs.update_many(
-            {"id": {"$in": expired_ids}},
-            {"$set": {"status": "expired", "expired_at": _now()}}
+            {"id": {"$in": expired_ids}}, {"$set": {"status": "expired", "expired_at": _now()}}
         )
 
     # Strict filters when user explicitly provides params
@@ -344,7 +390,10 @@ async def job_feed(
         active_jobs = [j for j in active_jobs if _job_skill_names(j).intersection(selected_set)]
 
     active_jobs.sort(key=lambda job: _rank_job(job, worker_lat, worker_lng, selected_skills))
-    return [_enrich_job_for_feed(job, worker_lat, worker_lng, selected_pincode, selected_skills) for job in active_jobs]
+    return [
+        _enrich_job_for_feed(job, worker_lat, worker_lng, selected_pincode, selected_skills)
+        for job in active_jobs
+    ]
 
 
 @router.get("/public")
@@ -355,6 +404,7 @@ async def list_public_jobs(
 ):
     """Public job board — no auth required, no PII returned."""
     from datetime import date as _date
+
     today_str = _date.today().isoformat()
 
     query: dict = {"status": "open", "job_date": {"$gte": today_str}}
@@ -363,7 +413,9 @@ async def list_public_jobs(
     if pincode:
         query["address.pincode"] = pincode
 
-    sort_spec = [("filled_count", -1), ("created_at", -1)] if sort == "popular" else [("created_at", -1)]
+    sort_spec = (
+        [("filled_count", -1), ("created_at", -1)] if sort == "popular" else [("created_at", -1)]
+    )
 
     raw = await db.jobs.find(query, {"_id": 0}).sort(sort_spec).limit(60).to_list(60)
 

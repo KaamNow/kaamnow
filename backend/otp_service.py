@@ -10,9 +10,9 @@ Fallback chain:
 
 import json
 import logging
-from enum import Enum
-from typing import Optional, Dict, Any
 from datetime import datetime
+from enum import Enum
+from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -136,8 +136,12 @@ class VoiceOTPProvider(OTPProvider):
     """Voice OTP fallback (IVR). Currently mocked."""
 
     LANGUAGE_NAMES = {
-        "en": "English", "hi": "हिंदी", "mr": "मराठी",
-        "gu": "ગુજરાતી", "ta": "தமிழ்", "te": "తెలుగు",
+        "en": "English",
+        "hi": "हिंदी",
+        "mr": "मराठी",
+        "gu": "ગુજરાતી",
+        "ta": "தமிழ்",
+        "te": "తెలుగు",
     }
 
     def __init__(self, api_key: Optional[str] = None, language: str = "hi"):
@@ -157,7 +161,11 @@ class VoiceOTPProvider(OTPProvider):
                 "timestamp": datetime.utcnow().isoformat(),
                 "note": "MOCK — set VOICE_OTP_API_KEY to enable real voice OTP",
             }
-        return {"success": False, "channel": OTPChannel.VOICE, "error": "Voice provider not configured"}
+        return {
+            "success": False,
+            "channel": OTPChannel.VOICE,
+            "error": "Voice provider not configured",
+        }
 
 
 class OTPService:
@@ -228,8 +236,8 @@ class OTPService:
     async def get_channel_status(self) -> Dict[str, Any]:
         return {
             "whatsapp": {"provider": "Gupshup", "mocked": self.whatsapp.is_mocked},
-            "sms":       {"provider": "Exotel",  "mocked": self.sms.is_mocked},
-            "voice":     {"provider": "IVR",     "mocked": self.voice.is_mocked},
+            "sms": {"provider": "Exotel", "mocked": self.sms.is_mocked},
+            "voice": {"provider": "IVR", "mocked": self.voice.is_mocked},
         }
 
 
@@ -266,6 +274,7 @@ def get_otp_service() -> OTPService:
     global otp_service
     if otp_service is None:
         from .config import settings
+
         otp_service = OTPService(
             gupshup_api_key=settings.gupshup_api_key,
             gupshup_source=settings.gupshup_source,
