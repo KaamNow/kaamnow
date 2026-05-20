@@ -4,6 +4,7 @@ import * as Notifications from "expo-notifications";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
 import api from "../api";
+import { identify, track, reset as analyticsReset } from "../lib/analytics";
 
 // Show notification banners when app is in foreground
 Notifications.setNotificationHandler({
@@ -75,7 +76,7 @@ export function AuthProvider({ children }) {
       try {
         const r = await api.get("/auth/me");
         setUser(r.data);
-        // Register push token now that we have a valid session
+        identify(r.data.id, { name: r.data.name, is_worker: r.data.is_worker });
         registerPushToken();
       } catch {
         await SecureStore.deleteItemAsync(TOKEN_KEY);
@@ -109,19 +110,20 @@ export function AuthProvider({ children }) {
     return r.data; // { otp_token, created_user }
   };
 
-  const completeSignup = async (name, role, password, preferredLanguage = "en") => {
+  const completeSignup = async (name, gender, preferredLanguage = "en") => {
     const r = await api.post(
       "/auth/signup-complete",
       {
         name,
-        role,
-        password: password || undefined,
+        gender: gender || undefined,
         preferred_language: preferredLanguage,
       },
       { headers: { Authorization: `Bearer ${otpFlow.otpToken}` } }
     );
     await SecureStore.setItemAsync(TOKEN_KEY, r.data.access_token);
     setUser(r.data.user);
+    identify(r.data.user.id, { name: r.data.user.name });
+    track("signup", { preferred_language: preferredLanguage });
     resetOTPFlow();
     registerPushToken();
     return r.data.user;
@@ -154,6 +156,7 @@ export function AuthProvider({ children }) {
       await api.post("/auth/logout");
     } catch {}
     await SecureStore.deleteItemAsync(TOKEN_KEY);
+    analyticsReset();
     setUser(null);
     resetOTPFlow();
   };
@@ -170,6 +173,8 @@ export function AuthProvider({ children }) {
         loginComplete,
         resetOTPFlow,
         refreshUser,
+        isWorker: user?.is_worker === true,
+        isCustomer: user?.is_customer !== false,
       }}
     >
       {children}

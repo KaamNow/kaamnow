@@ -21,6 +21,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useLanguage } from "../contexts/LanguageContext";
 import { usePincodeLookup } from "../lib/usePincode";
 import { colors, fonts, radius, shadow, spacing } from "../theme";
+import OnboardingWalkthrough, { hasSeenOnboarding, markOnboardingSeen } from "../components/OnboardingWalkthrough";
 
 /* ─────────────────────────────────────────────
    Copy
@@ -105,8 +106,19 @@ export default function LandingScreen({ navigation }) {
   const { lang, setLang } = useLanguage();
   const t = C[lang] || C.en;
 
-  const isWorker   = user?.role === "worker";
-  const isCustomer = user?.role === "customer";
+  const isWorker   = user?.is_worker === true;
+  const isCustomer = !user?.is_worker;
+
+  const [showWalkthrough, setShowWalkthrough] = useState(false);
+
+  useEffect(() => {
+    hasSeenOnboarding().then((seen) => { if (!seen) setShowWalkthrough(true); });
+  }, []);
+
+  const handleWalkthroughDone = () => {
+    setShowWalkthrough(false);
+    markOnboardingSeen();
+  };
 
   const [stats, setStats]         = useState({ workers: 0, villages: 0, completed_bookings: 0 });
   const [workers, setWorkers]     = useState([]);
@@ -246,6 +258,7 @@ export default function LandingScreen({ navigation }) {
   /* ══ GUEST ══════════════════════════════════════════════════════ */
   if (!user) return (
     <AppScreen edges={["top"]} style={s.safe}>
+      <OnboardingWalkthrough visible={showWalkthrough} onDone={handleWalkthroughDone} />
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={s.guestScroll}
@@ -673,7 +686,7 @@ export default function LandingScreen({ navigation }) {
             </Text>
           </View>
           <Pressable
-            onPress={() => navigation.navigate("CustomerProfile")}
+            onPress={() => navigation.navigate("Profile")}
             style={({ pressed }) => [s.customerProfileButton, pressed && s.pressed]}
           >
             <Ionicons name="person-circle-outline" size={26} color={colors.primary} />

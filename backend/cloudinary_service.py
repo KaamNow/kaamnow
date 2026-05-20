@@ -27,7 +27,7 @@ def upload_image(file_bytes: bytes, public_id: str) -> str:
         file_bytes,
         public_id=public_id,
         overwrite=True,
-        folder="kaamnow/profiles",
+        folder="kaamnow-dev/profiles",
         transformation=[
             {"width": 400, "height": 400, "crop": "fill", "gravity": "face"},
             {"quality": "auto", "fetch_format": "auto"},
@@ -43,7 +43,7 @@ def upload_review_image(file_bytes: bytes, public_id: str) -> str:
         file_bytes,
         public_id=public_id,
         overwrite=True,
-        folder="kaamnow/reviews",
+        folder="kaamnow-dev/reviews",
         transformation=[
             {"width": 1200, "height": 1200, "crop": "limit"},
             {"quality": "auto", "fetch_format": "auto"},
@@ -75,7 +75,7 @@ def upload_portfolio_image(file_bytes: bytes, public_id: str) -> str:
     return _upload_media(
         file_bytes,
         public_id,
-        "kaamnow/portfolio",
+        "kaamnow-dev/portfolio",
         transformation=[
             {"width": 1200, "height": 1200, "crop": "limit"},
             {"quality": "auto", "fetch_format": "auto"},
@@ -87,7 +87,7 @@ def upload_cert_image(file_bytes: bytes, public_id: str) -> str:
     return _upload_media(
         file_bytes,
         public_id,
-        "kaamnow/certifications",
+        "kaamnow-dev/certifications",
         transformation=[
             {"width": 1600, "height": 1600, "crop": "limit"},
             {"quality": "auto", "fetch_format": "auto"},
@@ -99,21 +99,21 @@ def upload_video(file_bytes: bytes, public_id: str) -> str:
     return _upload_media(
         file_bytes,
         public_id,
-        "kaamnow/videos",
+        "kaamnow-dev/videos",
         resource_type="video",
         transformation=[{"duration": "30"}],
     )
 
 
 def upload_voice_clip(file_bytes: bytes, public_id: str) -> str:
-    return _upload_media(file_bytes, public_id, "kaamnow/audio", resource_type="video")
+    return _upload_media(file_bytes, public_id, "kaamnow-dev/audio", resource_type="video")
 
 
 def upload_job_photo(file_bytes: bytes, public_id: str) -> str:
     return _upload_media(
         file_bytes,
         public_id,
-        "kaamnow/job-photos",
+        "kaamnow-dev/job-photos",
         transformation=[
             {"width": 1400, "height": 1400, "crop": "limit"},
             {"quality": "auto", "fetch_format": "auto"},
@@ -127,7 +127,7 @@ def delete_image(photo_url: str) -> None:
         return
     try:
         _require_cloudinary()
-        # Extract public_id from URL: .../kaamnow/profiles/user_xxx → kaamnow/profiles/user_xxx
+        # Extract public_id from URL: .../kaamnow-dev/profiles/user_xxx → kaamnow-dev/profiles/user_xxx
         parts = photo_url.split("/upload/")
         if len(parts) < 2:
             return

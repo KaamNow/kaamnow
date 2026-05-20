@@ -5,13 +5,11 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import Navbar from "@/components/Navbar";
 import KaamSaathi from "@/components/KaamSaathi";
 import Landing from "@/pages/Landing";
-import Strategy from "@/pages/Strategy";
 import Login from "@/pages/Login";
 import PhoneSignup from "@/pages/PhoneSignup";
 import CustomerOnboarding from "@/pages/CustomerOnboarding";
 import Marketplace from "@/pages/Marketplace";
 import WorkerProfile from "@/pages/WorkerProfile";
-import WorkerSetup from "@/pages/WorkerSetup";
 import WorkerOnboarding from "@/pages/WorkerOnboarding";
 import WorkerDashboard from "@/pages/WorkerDashboard";
 import WorkerJobFeed from "@/pages/WorkerJobFeed";
@@ -60,14 +58,6 @@ function App() {
             }
           />
           <Route
-            path="/strategy"
-            element={
-              <Layout>
-                <Strategy />
-              </Layout>
-            }
-          />
-          <Route
             path="/marketplace"
             element={
               <Layout>
@@ -83,15 +73,7 @@ function App() {
               </Layout>
             }
           />
-          {/* Legacy worker setup – kept for backwards compat */}
-          <Route
-            path="/worker/setup"
-            element={
-              <Protected>
-                <WorkerSetup />
-              </Protected>
-            }
-          />
+          <Route path="/worker/setup" element={<Navigate to="/dashboard" replace />} />
           {/* New step-by-step onboarding */}
           <Route
             path="/worker/onboarding"

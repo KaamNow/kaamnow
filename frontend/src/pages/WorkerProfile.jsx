@@ -30,7 +30,7 @@ export default function WorkerProfile() {
   }, [id]);
 
   useEffect(() => {
-    if (user?.role === "customer") {
+    if (!user?.is_worker) {
       Promise.all([
         api.get("/jobs/mine"),
         api.get("/bookings/mine"),
@@ -138,10 +138,10 @@ export default function WorkerProfile() {
         {!user && (
           <Link to="/login" className="btn-saffron w-full text-center block text-sm">Log in to book</Link>
         )}
-        {user?.role === "worker" && (
+        {user?.is_worker === true && (
           <p className="text-sm text-gray-500">Workers can't book other workers.</p>
         )}
-        {user?.role === "customer" && (
+        {!user?.is_worker && (
           <div className="space-y-2">
             {existingBooking ? (
               <div className="space-y-2">

@@ -40,8 +40,8 @@ export default function DashboardScreen({ navigation, route }) {
   const [engagements, setEngagements]   = useState([]);
   const [jobs, setJobs]                 = useState([]);
   const [nearbyCount, setNearbyCount]   = useState(null);
-  const isWorkerRole = user?.role !== "customer";
-  const [tab, setTab] = useState(route?.params?.initialTab || (isWorkerRole ? "active" : "overview"));
+  const isWorkerRole = user?.is_worker === true;
+  const [tab, setTab] = useState(route?.params?.initialTab || (isWorkerRole ? "active" : "posted"));
 
   useEffect(() => {
     if (route?.params?.initialTab) setTab(route.params.initialTab);
@@ -62,14 +62,12 @@ export default function DashboardScreen({ navigation, route }) {
     try {
       const [engR, jobR] = await Promise.all([
         api.get("/engagements/mine").catch(() => ({ data: [] })),
-        user.role === "customer"
-          ? api.get("/jobs/mine").catch(() => ({ data: [] }))
-          : Promise.resolve({ data: [] }),
+        api.get("/jobs/mine").catch(() => ({ data: [] })),
       ]);
       setEngagements(Array.isArray(engR.data) ? engR.data : []);
       setJobs(Array.isArray(jobR.data) ? jobR.data : []);
     } catch {}
-    if (user.role === "worker") {
+    if (user.is_worker) {
       api.get("/jobs/feed").then(r => setNearbyCount(Array.isArray(r.data) ? r.data.length : null)).catch(() => {});
     } else {
       api.get("/workers/search?available_only=true").then(r => setNearbyCount(r.data?.length ?? r.data?.workers?.length ?? null)).catch(() => {});
@@ -100,7 +98,7 @@ export default function DashboardScreen({ navigation, route }) {
     try {
       await api.post(`/engagements/${id}/complete`);
       load();
-      if (user?.role === "customer") {
+      if (!user?.is_worker) {
         setRatingModal({ id, targetName: targetName || "", targetRole: "worker" });
       } else {
         setRatingModal({ id, targetName: targetName || "", targetRole: "customer" });
@@ -240,7 +238,7 @@ export default function DashboardScreen({ navigation, route }) {
   if (!user) return null;
 
   const firstName = (user.name || "").split(" ")[0] || "there";
-  const isCustomer = user.role === "customer";
+  const isCustomer = !user?.is_worker;
 
   // Derived data
   const pendingEngs   = engagements.filter(e => (e.engagement_status || e.status) === "requested");
@@ -264,14 +262,12 @@ export default function DashboardScreen({ navigation, route }) {
     return { steps, pct: Math.round((steps.filter(s => s.done).length / steps.length) * 100) };
   })() : null;
 
-  const TABS = isCustomer
-    ? [{ id:"overview", label:"Overview" }, { id:"pending", label:`Responses${pendingEngs.length ? ` (${pendingEngs.length})` : ""}` }, { id:"jobs", label:"My Jobs" }, { id:"history", label:"History" }]
-    : [
-        { id:"active",    label:`Active${activeEngs.length ? ` (${activeEngs.length})` : ""}` },
-        { id:"pending",   label:`Pending${pendingEngs.length ? ` (${pendingEngs.length})` : ""}` },
-        { id:"completed", label:`Completed${completedEngs.length ? ` (${completedEngs.length})` : ""}` },
-        { id:"cancelled", label:"Cancelled" },
-      ];
+  const TABS = [
+    { id:"posted",    label:`Jobs Posted${openJobs.length ? ` (${openJobs.length})` : ""}` },
+    { id:"active",    label:`Active${activeEngs.length ? ` (${activeEngs.length})` : ""}` },
+    { id:"pending",   label:`Pending${pendingEngs.length ? ` (${pendingEngs.length})` : ""}` },
+    { id:"history",   label:"History" },
+  ];
 
   if (isCustomer) {
     const hasAnyCustomerWork = jobs.length > 0 || engagements.length > 0;

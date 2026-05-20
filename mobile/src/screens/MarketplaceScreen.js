@@ -10,9 +10,12 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  TouchableOpacity,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import * as Location from "expo-location";
+import { setCache, getCache } from "../lib/cache";
 import api from "../api";
 import AppScreen from "../components/AppScreen";
 import EmptyState from "../components/EmptyState";
@@ -56,6 +59,21 @@ export default function MarketplaceScreen({ navigation, route }) {
   const [searchFocused, setSearchFocused] = useState(false);
   const [showLocModal, setShowLocModal] = useState(false);
   const [tempPincode, setTempPincode] = useState("");
+  const [gpsLoading, setGpsLoading] = useState(false);
+  const [nearMeLat, setNearMeLat] = useState(null);
+  const [nearMeLng, setNearMeLng] = useState(null);
+
+  const useNearMe = async () => {
+    setGpsLoading(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") { return; }
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      setNearMeLat(loc.coords.latitude);
+      setNearMeLng(loc.coords.longitude);
+    } catch {}
+    finally { setGpsLoading(false); }
+  };
 
   useEffect(() => {
     if (route?.params?.filterPincode) setPincode(route.params.filterPincode);
@@ -68,12 +86,20 @@ export default function MarketplaceScreen({ navigation, route }) {
     if (q.trim()) params.q = q.trim();
     if (pincode.length === 6) params.pincode = pincode;
     if (avail === "true") params.available_only = true;
+    if (nearMeLat && nearMeLng) { params.lat = nearMeLat; params.lng = nearMeLng; params.radius = 20; }
 
     api.get("/workers/search", { params })
-      .then((r) => setWorkers(Array.isArray(r.data) ? r.data : r.data?.workers || []))
-      .catch(() => setWorkers([]))
+      .then((r) => {
+        const list = Array.isArray(r.data) ? r.data : r.data?.workers || [];
+        setWorkers(list);
+        if (list.length > 0) setCache("worker_list", list);
+      })
+      .catch(async () => {
+        const cached = await getCache("worker_list");
+        setWorkers(cached || []);
+      })
       .finally(() => setLoading(false));
-  }, [skill, q, pincode, avail]);
+  }, [skill, q, pincode, avail, nearMeLat, nearMeLng]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -105,9 +131,18 @@ export default function MarketplaceScreen({ navigation, route }) {
       <View style={styles.header}>
         <View style={styles.titleRow}>
           <View style={styles.titleTextBlock}>
-            <Text style={styles.title}>Find Workers</Text>
-            <Text style={styles.subtitle}>Aapke area ke trusted workers</Text>
+            <Text style={styles.title}>Find Local Experts</Text>
+            <Text style={styles.subtitle}>Trusted workers near you</Text>
           </View>
+          <TouchableOpacity style={styles.nearMeBtn} onPress={useNearMe} disabled={gpsLoading}>
+            {gpsLoading
+              ? <ActivityIndicator size="small" color={colors.indigo} />
+              : <><Ionicons name="locate-outline" size={14} color={colors.indigo} /><Text style={styles.nearMeBtnText}>Near Me</Text></>
+            }
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.mapBtn} onPress={() => navigation.navigate("Map")}>
+            <Ionicons name="map-outline" size={16} color={colors.indigo} />
+          </TouchableOpacity>
         </View>
 
         <LocationBar
@@ -280,6 +315,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   titleTextBlock: { flex: 1 },
+  nearMeBtn: { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: spacing.sm, paddingVertical: 7, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.indigo, backgroundColor: "#f0f4ff" },
+  nearMeBtnText: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.indigo },
+  mapBtn: { width: 34, height: 34, borderRadius: 17, borderWidth: 1, borderColor: colors.indigo, backgroundColor: "#f0f4ff", alignItems: "center", justifyContent: "center" },
   title: {
     fontFamily: fonts.display,
     fontSize: 26,

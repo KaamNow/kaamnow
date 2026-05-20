@@ -630,7 +630,7 @@ export default function Dashboard() {
 
   if (user && user.role === "admin") return <Navigate to="/admin" replace />;
   // Workers have their own dedicated dashboard
-  if (user && user.role === "worker") return <Navigate to="/worker/dashboard" replace />;
+  if (user && user?.is_worker === true) return <Navigate to="/worker/dashboard" replace />;
   if (!user) return null;
 
   const approveEngagement = async (engId, workerName) => {

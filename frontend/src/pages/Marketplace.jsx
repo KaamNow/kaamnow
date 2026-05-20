@@ -473,7 +473,7 @@ export default function Marketplace() {
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "20px 16px 72px" }}>
 
         {/* Customer job panel */}
-        {user?.role === "customer" && (
+        {!user?.is_worker && (
           <div style={{ background: C.card, borderRadius: 14, border: `1px solid ${C.border}`, padding: "16px 20px", marginBottom: 18, boxShadow: C.shadow }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
               <div>
@@ -643,7 +643,7 @@ export default function Marketplace() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {sorted.map((w, i) => (
-              <WorkerCard key={w.id} w={w} jobId={selectedJobId} availabilityFilter={availability} onHire={user?.role === "customer" ? setHireWorker : undefined} />
+              <WorkerCard key={w.id} w={w} jobId={selectedJobId} availabilityFilter={availability} onHire={!user?.is_worker ? setHireWorker : undefined} />
             ))}
           </div>
         )}

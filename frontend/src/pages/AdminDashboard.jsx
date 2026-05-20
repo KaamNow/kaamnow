@@ -8,6 +8,7 @@ import {
   ShieldCheck, ShieldOff, Loader2, Search, MessageSquare,
   Star, MapPin, RefreshCw, X, IndianRupee, Flag, Eye,
   Settings, ClipboardList, Trash2, ToggleLeft, ToggleRight, LogOut,
+  FileText, HelpCircle, Scale, Wallet, Gift, Send, Plus, Edit3, Ban,
 } from "lucide-react";
 
 const TIER_LABEL = { 1: "Basic", 2: "Verified", 3: "Pro", 4: "Elite" };
@@ -99,6 +100,42 @@ export default function AdminDashboard() {
   const [auditLoading, setAuditLoading] = useState(false);
   const [auditPage, setAuditPage] = useState(0);
 
+  // Reports
+  const [reports, setReports] = useState([]);
+  const [reportsLoading, setReportsLoading] = useState(false);
+  const [reportFilter, setReportFilter] = useState("pending");
+  const [reportNote, setReportNote] = useState("");
+  const [resolveModal, setResolveModal] = useState(null);
+
+  // FAQ Management
+  const [faqs, setFaqs] = useState([]);
+  const [faqsLoading, setFaqsLoading] = useState(false);
+  const [faqModal, setFaqModal] = useState(null); // null | "add" | faq object
+  const [faqForm, setFaqForm] = useState({ question_en: "", question_hi: "", answer_en: "", answer_hi: "", category: "general", order: 1 });
+
+  // Legal
+  const [legalDocs, setLegalDocs] = useState([]);
+  const [legalLoading, setLegalLoading] = useState(false);
+  const [legalModal, setLegalModal] = useState(null);
+  const [legalForm, setLegalForm] = useState({ type: "terms", version: "", content_en: "", content_hi: "", effective_date: "" });
+
+  // Users
+  const [adminUsers, setAdminUsers] = useState([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [userSearch, setUserSearch] = useState("");
+  const [userPage, setUserPage] = useState(0);
+  const [userTotal, setUserTotal] = useState(0);
+
+  // Wallet Audit
+  const [walletTxs, setWalletTxs] = useState([]);
+  const [walletLoading, setWalletLoading] = useState(false);
+  const [walletPage, setWalletPage] = useState(0);
+  const [walletTotal, setWalletTotal] = useState(0);
+
+  // Referrals
+  const [referrals, setReferrals] = useState([]);
+  const [referralsLoading, setReferralsLoading] = useState(false);
+
   // ── Fetch helpers ──
 
   const fetchStats = useCallback(async () => {
@@ -180,6 +217,91 @@ export default function AdminDashboard() {
     finally { setAuditLoading(false); }
   }, []);
 
+  const fetchReports = useCallback(async (status = "pending") => {
+    setReportsLoading(true);
+    try {
+      const res = await api.get(`/admin/reports?status=${status}`);
+      setReports(res.data?.items || res.data || []);
+    } catch { toast.error("Failed to load reports"); }
+    finally { setReportsLoading(false); }
+  }, []);
+
+  const resolveReport = async (id, action, note) => {
+    try {
+      await api.post(`/admin/reports/${id}/${action}`, { admin_note: note });
+      toast.success(`Report ${action}d`);
+      setResolveModal(null); setReportNote("");
+      fetchReports(reportFilter);
+    } catch { toast.error("Action failed"); }
+  };
+
+  const fetchFAQs = useCallback(async () => {
+    setFaqsLoading(true);
+    try {
+      const res = await api.get("/admin/faq");
+      setFaqs(res.data?.items || res.data || []);
+    } catch { toast.error("Failed to load FAQs"); }
+    finally { setFaqsLoading(false); }
+  }, []);
+
+  const saveFAQ = async () => {
+    try {
+      if (faqModal === "add") await api.post("/admin/faq", faqForm);
+      else await api.patch(`/admin/faq/${faqModal.id}`, faqForm);
+      toast.success("FAQ saved"); setFaqModal(null); fetchFAQs();
+    } catch { toast.error("Save failed"); }
+  };
+
+  const deleteFAQ = async (id) => {
+    if (!window.confirm("Delete this FAQ?")) return;
+    try { await api.delete(`/admin/faq/${id}`); fetchFAQs(); } catch { toast.error("Delete failed"); }
+  };
+
+  const fetchLegal = useCallback(async () => {
+    setLegalLoading(true);
+    try {
+      const res = await api.get("/admin/legal");
+      setLegalDocs(res.data?.items || res.data || []);
+    } catch { toast.error("Failed to load legal docs"); }
+    finally { setLegalLoading(false); }
+  }, []);
+
+  const publishLegal = async () => {
+    try {
+      await api.post("/admin/legal", legalForm);
+      toast.success("Published"); setLegalModal(null); fetchLegal();
+    } catch { toast.error("Publish failed"); }
+  };
+
+  const fetchAdminUsers = useCallback(async (page = 0, q = "") => {
+    setUsersLoading(true);
+    try {
+      const res = await api.get(`/admin/users?limit=${LIMIT}&skip=${page * LIMIT}${q ? `&q=${encodeURIComponent(q)}` : ""}`);
+      setAdminUsers(res.data?.items || res.data || []);
+      setUserTotal(res.data?.total || 0);
+    } catch { toast.error("Failed to load users"); }
+    finally { setUsersLoading(false); }
+  }, []);
+
+  const fetchWalletAudit = useCallback(async (page = 0) => {
+    setWalletLoading(true);
+    try {
+      const res = await api.get(`/admin/wallet?limit=${LIMIT}&skip=${page * LIMIT}`);
+      setWalletTxs(res.data?.items || res.data || []);
+      setWalletTotal(res.data?.total || 0);
+    } catch { toast.error("Failed to load wallet transactions"); }
+    finally { setWalletLoading(false); }
+  }, []);
+
+  const fetchReferrals = useCallback(async () => {
+    setReferralsLoading(true);
+    try {
+      const res = await api.get("/admin/referrals");
+      setReferrals(res.data?.items || res.data || []);
+    } catch { toast.error("Failed to load referrals"); }
+    finally { setReferralsLoading(false); }
+  }, []);
+
   const wipeSeedData = async () => {
     if (!window.confirm("Delete ALL dummy +717000* accounts? This cannot be undone.")) return;
     setWipingSeeds(true);
@@ -200,6 +322,12 @@ export default function AdminDashboard() {
     if (activeTab === "engagements") { setEngPage(0);       fetchEngagements(0); }
     if (activeTab === "platform")    { fetchPlatform(); }
     if (activeTab === "audit")       { setAuditPage(0);     fetchAuditLog(0); }
+    if (activeTab === "reports")     { fetchReports(reportFilter); }
+    if (activeTab === "faq")         { fetchFAQs(); }
+    if (activeTab === "legal")       { fetchLegal(); }
+    if (activeTab === "users")       { setUserPage(0); fetchAdminUsers(0, userSearch); }
+    if (activeTab === "wallet_audit"){ setWalletPage(0); fetchWalletAudit(0); }
+    if (activeTab === "referrals")   { fetchReferrals(); }
   }, [activeTab, workerSearch, workerTierFilter, workerAvailFilter,
       customerSearch, jobStatusFilter, jobSearch, engStatusFilter, engSearch]);
 
@@ -270,13 +398,19 @@ export default function AdminDashboard() {
   if (!user || user.role !== "admin") return <Navigate to="/dashboard" replace />;
 
   const tabs = [
-    { id: "overview", label: "Overview" },
-    { id: "workers", label: "Workers" },
-    { id: "customers", label: "Customers" },
-    { id: "jobs", label: "Jobs" },
-    { id: "engagements", label: "Engagements" },
-    { id: "platform", label: "Platform" },
-    { id: "audit", label: "Audit Log" },
+    { id: "overview",     label: "Overview" },
+    { id: "reports",      label: "Reports",      badge: reports.filter(r => r.status === "pending").length || null },
+    { id: "users",        label: "Users" },
+    { id: "workers",      label: "Local Experts" },
+    { id: "customers",    label: "Customers" },
+    { id: "jobs",         label: "Jobs" },
+    { id: "engagements",  label: "Engagements" },
+    { id: "faq",          label: "FAQ" },
+    { id: "legal",        label: "Legal" },
+    { id: "wallet_audit", label: "Wallet" },
+    { id: "referrals",    label: "Referrals" },
+    { id: "platform",     label: "Platform" },
+    { id: "audit",        label: "Audit Log" },
   ];
 
   return (
@@ -310,10 +444,11 @@ export default function AdminDashboard() {
       <div className="flex gap-1 border-b border-gray-200 mb-6 overflow-x-auto">
         {tabs.map(t => (
           <button key={t.id} onClick={() => setActiveTab(t.id)}
-            className={`px-5 py-2.5 text-sm font-bold rounded-t-lg transition-colors -mb-px border border-transparent whitespace-nowrap ${
+            className={`flex items-center gap-1.5 px-5 py-2.5 text-sm font-bold rounded-t-lg transition-colors -mb-px border border-transparent whitespace-nowrap ${
               activeTab === t.id ? "border-gray-200 border-b-white bg-white text-[#ff6b35]" : "text-gray-500 hover:text-gray-900"
             }`}>
             {t.label}
+            {t.badge > 0 && <span className="ml-1 bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5 leading-none">{t.badge}</span>}
           </button>
         ))}
       </div>
@@ -677,6 +812,248 @@ export default function AdminDashboard() {
         </>
       )}
 
+      {/* ── REPORTS ── */}
+      {activeTab === "reports" && (
+        <>
+          <div className="flex items-center gap-3 mb-4">
+            {["pending","resolved","dismissed"].map(s => (
+              <button key={s} onClick={() => { setReportFilter(s); fetchReports(s); }}
+                className={`px-4 py-1.5 rounded-full text-sm font-bold border transition-colors capitalize ${reportFilter === s ? "bg-red-500 text-white border-red-500" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
+                {s}
+              </button>
+            ))}
+          </div>
+          <div className="kn-card overflow-hidden">
+            {reportsLoading ? <Spinner /> : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead><tr className="bg-gray-50 border-b border-gray-100 text-gray-500 uppercase tracking-wider text-xs">
+                    <th className="p-4">Reporter</th><th className="p-4">Reported User</th>
+                    <th className="p-4">Reason</th><th className="p-4">Date</th><th className="p-4">Actions</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {reports.map(r => (
+                      <tr key={r.id} className="hover:bg-gray-50/50">
+                        <td className="p-4 text-xs text-gray-700 font-mono">{r.reporter_id?.slice(0,8)}…</td>
+                        <td className="p-4 text-xs text-gray-700 font-mono">{r.reported_user_id?.slice(0,8)}…</td>
+                        <td className="p-4"><span className="text-xs font-bold bg-red-50 text-red-700 px-2 py-0.5 rounded">{r.reason}</span></td>
+                        <td className="p-4 text-xs text-gray-400">{(r.created_at||"").slice(0,10)}</td>
+                        <td className="p-4">
+                          {r.status === "pending" && (
+                            <div className="flex gap-2">
+                              <ActionBtn color="green" onClick={() => setResolveModal({ id: r.id, action: "resolve" })} title="Resolve"><CheckCircle size={14}/></ActionBtn>
+                              <ActionBtn color="gray" onClick={() => setResolveModal({ id: r.id, action: "dismiss" })} title="Dismiss"><X size={14}/></ActionBtn>
+                            </div>
+                          )}
+                          {r.status !== "pending" && <span className="text-xs text-gray-400 capitalize">{r.status}</span>}
+                        </td>
+                      </tr>
+                    ))}
+                    {reports.length === 0 && <EmptyRow cols={5} />}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ── USERS ── */}
+      {activeTab === "users" && (
+        <>
+          <div className="flex gap-3 mb-4">
+            <SearchBox value={userSearch} onChange={v => setUserSearch(v)} placeholder="Search by name or phone…" />
+            <button onClick={() => { setUserPage(0); fetchAdminUsers(0, userSearch); }} className="px-4 py-2 bg-[#ff6b35] text-white rounded-lg text-sm font-bold">Search</button>
+          </div>
+          <div className="kn-card overflow-hidden">
+            {usersLoading ? <Spinner /> : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead><tr className="bg-gray-50 border-b border-gray-100 text-gray-500 uppercase tracking-wider text-xs">
+                    <th className="p-4">Name</th><th className="p-4">Phone</th><th className="p-4">Role</th>
+                    <th className="p-4">Wallet</th><th className="p-4">Joined</th><th className="p-4">Actions</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {adminUsers.map(u => (
+                      <tr key={u.id} className="hover:bg-gray-50/50">
+                        <td className="p-4 font-bold text-gray-900">{u.name || "—"}</td>
+                        <td className="p-4 text-xs font-mono text-gray-600">{u.phone_primary}</td>
+                        <td className="p-4">
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded ${u.is_worker ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"}`}>
+                            {u.is_worker ? "Local Expert" : "Customer"}
+                          </span>
+                        </td>
+                        <td className="p-4 text-sm font-bold text-green-700">₹{u.wallet_balance || 0}</td>
+                        <td className="p-4 text-xs text-gray-400">{(u.created_at||"").slice(0,10)}</td>
+                        <td className="p-4">
+                          <div className="flex gap-2">
+                            <ActionBtn color="amber" title="Flag" onClick={async () => { try { await api.post(`/admin/users/${u.id}/flag`); toast.success("Flagged"); fetchAdminUsers(userPage, userSearch); } catch { toast.error("Failed"); }}}><Flag size={14}/></ActionBtn>
+                            <ActionBtn color="red" title="Ban" onClick={async () => { if (!window.confirm(`Ban ${u.name}?`)) return; try { await api.post(`/admin/users/${u.id}/ban`); toast.success("Banned"); fetchAdminUsers(userPage, userSearch); } catch { toast.error("Failed"); }}}><Ban size={14}/></ActionBtn>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {adminUsers.length === 0 && <EmptyRow cols={6} />}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <Pagination total={userTotal} page={userPage} onPage={p => { setUserPage(p); fetchAdminUsers(p, userSearch); }} />
+          </div>
+        </>
+      )}
+
+      {/* ── FAQ MANAGEMENT ── */}
+      {activeTab === "faq" && (
+        <>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-bold text-gray-900">FAQ Management</h3>
+            <button onClick={() => { setFaqForm({ question_en: "", question_hi: "", answer_en: "", answer_hi: "", category: "general", order: 1 }); setFaqModal("add"); }}
+              className="flex items-center gap-2 px-4 py-2 bg-[#ff6b35] text-white rounded-lg text-sm font-bold">
+              <Plus size={14}/> Add FAQ
+            </button>
+          </div>
+          <div className="kn-card overflow-hidden">
+            {faqsLoading ? <Spinner /> : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead><tr className="bg-gray-50 border-b border-gray-100 text-gray-500 uppercase tracking-wider text-xs">
+                    <th className="p-4">Question (EN)</th><th className="p-4">Category</th>
+                    <th className="p-4">Status</th><th className="p-4">Actions</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {faqs.map(f => (
+                      <tr key={f.id} className="hover:bg-gray-50/50">
+                        <td className="p-4 max-w-xs"><div className="font-medium text-gray-900 truncate">{f.question_en}</div><div className="text-xs text-gray-400 truncate">{f.question_hi}</div></td>
+                        <td className="p-4"><span className="text-xs font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded capitalize">{f.category}</span></td>
+                        <td className="p-4"><span className={`text-xs font-bold px-2 py-0.5 rounded ${f.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>{f.is_active ? "Active" : "Inactive"}</span></td>
+                        <td className="p-4">
+                          <div className="flex gap-2">
+                            <ActionBtn color="gray" title="Edit" onClick={() => { setFaqForm({ question_en: f.question_en||"", question_hi: f.question_hi||"", answer_en: f.answer_en||"", answer_hi: f.answer_hi||"", category: f.category, order: f.order||1 }); setFaqModal(f); }}><Edit3 size={14}/></ActionBtn>
+                            <ActionBtn color="red" title="Delete" onClick={() => deleteFAQ(f.id)}><Trash2 size={14}/></ActionBtn>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {faqs.length === 0 && <EmptyRow cols={4} />}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ── LEGAL ── */}
+      {activeTab === "legal" && (
+        <>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-bold text-gray-900">Terms & Privacy</h3>
+            <button onClick={() => { setLegalForm({ type: "terms", version: "", content_en: "", content_hi: "", effective_date: new Date().toISOString().slice(0,10) }); setLegalModal(true); }}
+              className="flex items-center gap-2 px-4 py-2 bg-[#ff6b35] text-white rounded-lg text-sm font-bold">
+              <Plus size={14}/> Publish New Version
+            </button>
+          </div>
+          <div className="kn-card overflow-hidden">
+            {legalLoading ? <Spinner /> : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead><tr className="bg-gray-50 border-b border-gray-100 text-gray-500 uppercase tracking-wider text-xs">
+                    <th className="p-4">Type</th><th className="p-4">Version</th>
+                    <th className="p-4">Effective</th><th className="p-4">Current</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {legalDocs.map(d => (
+                      <tr key={d.id} className="hover:bg-gray-50/50">
+                        <td className="p-4 capitalize font-bold text-gray-700">{d.doc_type || d.type}</td>
+                        <td className="p-4 font-mono text-xs">{d.version}</td>
+                        <td className="p-4 text-xs text-gray-500">{d.effective_date}</td>
+                        <td className="p-4">{d.is_current && <span className="text-xs font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded">Current</span>}</td>
+                      </tr>
+                    ))}
+                    {legalDocs.length === 0 && <EmptyRow cols={4} />}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ── WALLET AUDIT ── */}
+      {activeTab === "wallet_audit" && (
+        <>
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-sm text-gray-500 flex items-center gap-2"><Wallet size={16}/> Platform wallet transactions</div>
+            <button onClick={() => fetchWalletAudit(walletPage)} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-bold">
+              <RefreshCw size={12}/> Refresh
+            </button>
+          </div>
+          <div className="kn-card overflow-hidden">
+            {walletLoading ? <Spinner /> : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead><tr className="bg-gray-50 border-b border-gray-100 text-gray-500 uppercase tracking-wider text-xs">
+                    <th className="p-4">User</th><th className="p-4">Type</th><th className="p-4">Amount</th>
+                    <th className="p-4">Reason</th><th className="p-4">Date</th><th className="p-4">Expires</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {walletTxs.map(tx => (
+                      <tr key={tx.id} className="hover:bg-gray-50/50">
+                        <td className="p-4 text-xs font-mono text-gray-600">{tx.user_id?.slice(0,8)}…</td>
+                        <td className="p-4"><span className={`text-xs font-bold px-2 py-0.5 rounded ${tx.type==="credit" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>{tx.type}</span></td>
+                        <td className="p-4 font-bold">₹{tx.amount}</td>
+                        <td className="p-4 text-xs text-gray-500">{tx.reason}</td>
+                        <td className="p-4 text-xs text-gray-400">{(tx.created_at||"").slice(0,10)}</td>
+                        <td className="p-4 text-xs text-gray-400">{tx.expires_at ? (tx.expired ? <span className="text-red-500">Expired</span> : (tx.expires_at||"").slice(0,10)) : "—"}</td>
+                      </tr>
+                    ))}
+                    {walletTxs.length === 0 && <EmptyRow cols={6} />}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <Pagination total={walletTotal} page={walletPage} onPage={p => { setWalletPage(p); fetchWalletAudit(p); }} />
+          </div>
+        </>
+      )}
+
+      {/* ── REFERRALS ── */}
+      {activeTab === "referrals" && (
+        <>
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-sm text-gray-500 flex items-center gap-2"><Gift size={16}/> Referral audit</div>
+            <button onClick={fetchReferrals} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-bold">
+              <RefreshCw size={12}/> Refresh
+            </button>
+          </div>
+          <div className="kn-card overflow-hidden">
+            {referralsLoading ? <Spinner /> : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead><tr className="bg-gray-50 border-b border-gray-100 text-gray-500 uppercase tracking-wider text-xs">
+                    <th className="p-4">Referrer</th><th className="p-4">Referred</th>
+                    <th className="p-4">Referral Code</th><th className="p-4">Credits Issued</th><th className="p-4">Date</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {referrals.map(r => (
+                      <tr key={r.id || r.referrer_id} className="hover:bg-gray-50/50">
+                        <td className="p-4 font-bold text-gray-900">{r.referrer_name || r.referrer_id?.slice(0,8)}</td>
+                        <td className="p-4 text-gray-700">{r.referred_name || r.referred_id?.slice(0,8)}</td>
+                        <td className="p-4 font-mono text-xs text-blue-600">{r.code}</td>
+                        <td className="p-4"><span className="font-bold text-green-700">₹{r.credits_issued || 0}</span></td>
+                        <td className="p-4 text-xs text-gray-400">{(r.created_at||"").slice(0,10)}</td>
+                      </tr>
+                    ))}
+                    {referrals.length === 0 && <EmptyRow cols={5} />}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
       {/* ── WhatsApp Modal ── */}
       {waModal && (
         <Modal title={`WhatsApp → ${waModal.name}`} onClose={() => setWaModal(null)}>
@@ -702,6 +1079,85 @@ export default function AdminDashboard() {
           <div className="flex gap-3 mt-4">
             <button onClick={() => setFlagModal(null)} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50">Cancel</button>
             <button onClick={flagEngagement} className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm font-bold">Flag</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Resolve Report Modal ── */}
+      {resolveModal && (
+        <Modal title={resolveModal.action === "resolve" ? "Resolve Report" : "Dismiss Report"} onClose={() => { setResolveModal(null); setReportNote(""); }}>
+          <textarea value={reportNote} onChange={e => setReportNote(e.target.value)} placeholder="Admin note (optional)…" rows={3}
+            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none resize-none"/>
+          <div className="flex gap-3 mt-4">
+            <button onClick={() => { setResolveModal(null); setReportNote(""); }} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50">Cancel</button>
+            <button onClick={() => resolveReport(resolveModal.id, resolveModal.action, reportNote)}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-bold text-white ${resolveModal.action === "resolve" ? "bg-green-500 hover:bg-green-600" : "bg-gray-500 hover:bg-gray-600"}`}>
+              {resolveModal.action === "resolve" ? "Resolve" : "Dismiss"}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── FAQ Add/Edit Modal ── */}
+      {faqModal && (
+        <Modal title={faqModal === "add" ? "Add FAQ" : "Edit FAQ"} onClose={() => setFaqModal(null)}>
+          <div className="space-y-3 max-h-[70vh] overflow-y-auto">
+            {[["question_en","Question (English)"],["question_hi","Question (Hindi)"],["answer_en","Answer (English)"],["answer_hi","Answer (Hindi)"]].map(([k,l]) => (
+              <div key={k}>
+                <label className="block text-xs font-bold text-gray-500 mb-1">{l}</label>
+                <textarea value={faqForm[k]} onChange={e => setFaqForm(f => ({...f, [k]: e.target.value}))} rows={k.startsWith("answer") ? 3 : 1}
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none resize-none"/>
+              </div>
+            ))}
+            <div>
+              <label className="block text-xs font-bold text-gray-500 mb-1">Category</label>
+              <select value={faqForm.category} onChange={e => setFaqForm(f => ({...f, category: e.target.value}))}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none">
+                {["general","local_expert","customer","payments","safety"].map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-3 mt-4">
+            <button onClick={() => setFaqModal(null)} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50">Cancel</button>
+            <button onClick={saveFAQ} className="flex-1 py-2.5 bg-[#ff6b35] hover:bg-orange-600 text-white rounded-xl text-sm font-bold">Save</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Legal Publish Modal ── */}
+      {legalModal && (
+        <Modal title="Publish Legal Document" onClose={() => setLegalModal(null)}>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-bold text-gray-500 mb-1">Document Type</label>
+              <select value={legalForm.type} onChange={e => setLegalForm(f => ({...f, type: e.target.value}))}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                <option value="terms">Terms of Service</option>
+                <option value="privacy">Privacy Policy</option>
+              </select>
+            </div>
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <label className="block text-xs font-bold text-gray-500 mb-1">Version (e.g. 1.1)</label>
+                <input value={legalForm.version} onChange={e => setLegalForm(f => ({...f, version: e.target.value}))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"/>
+              </div>
+              <div className="flex-1">
+                <label className="block text-xs font-bold text-gray-500 mb-1">Effective Date</label>
+                <input type="date" value={legalForm.effective_date} onChange={e => setLegalForm(f => ({...f, effective_date: e.target.value}))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"/>
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-500 mb-1">Content (English)</label>
+              <textarea value={legalForm.content_en} onChange={e => setLegalForm(f => ({...f, content_en: e.target.value}))} rows={4} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none"/>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-500 mb-1">Content (Hindi)</label>
+              <textarea value={legalForm.content_hi} onChange={e => setLegalForm(f => ({...f, content_hi: e.target.value}))} rows={4} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none"/>
+            </div>
+          </div>
+          <div className="flex gap-3 mt-4">
+            <button onClick={() => setLegalModal(null)} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50">Cancel</button>
+            <button onClick={publishLegal} className="flex-1 py-2.5 bg-[#ff6b35] hover:bg-orange-600 text-white rounded-xl text-sm font-bold">Publish</button>
           </div>
         </Modal>
       )}

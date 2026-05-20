@@ -1051,7 +1051,7 @@ export default function WorkerDashboard() {
     setRatingImages((existing?.image_urls || []).map(url => ({ url, preview: url })));
   };
 
-  if (!user || user.role !== "worker") {
+  if (!user || user?.is_worker !== true) {
     return <div className="p-12 text-center text-gray-500">This page is only for workers.</div>;
   }
 

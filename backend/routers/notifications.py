@@ -30,6 +30,7 @@ async def create_notification(
         pass
 
 
+@router.get("")
 @router.get("/mine")
 async def my_notifications(user: dict = Depends(get_current_user)):
     notes = (
@@ -38,7 +39,7 @@ async def my_notifications(user: dict = Depends(get_current_user)):
         .limit(50)
         .to_list(50)
     )
-    return notes
+    return {"items": notes, "total": len(notes)}
 
 
 @router.get("/mine/unread-count")

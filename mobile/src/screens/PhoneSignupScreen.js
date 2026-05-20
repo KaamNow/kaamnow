@@ -88,7 +88,7 @@ export default function PhoneSignupScreen({ navigation, route }) {
         navigation.reset({ index: 0, routes: [{ name: "Tabs" }] });
         return;
       }
-      navigation.replace("RoleSelection");
+      navigation.replace("Login");
     } catch (err) {
       Alert.alert("Error", formatApiError(err));
     } finally {

@@ -131,7 +131,7 @@ export default function PostJob() {
 
   const rateInsight = getRateInsight(form.skill, form.daily_rate ? Number(form.daily_rate) : null);
 
-  if (user?.role === "worker") {
+  if (user?.is_worker === true) {
     return <div className="p-12 text-center text-gray-500">Only customers can post jobs.</div>;
   }
 

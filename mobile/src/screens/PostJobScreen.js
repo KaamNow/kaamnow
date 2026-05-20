@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, Pressable,
+  View, Text, StyleSheet, ScrollView, Pressable, Switch,
   Alert, KeyboardAvoidingView, Platform,
-  ActivityIndicator,
+  ActivityIndicator, TouchableOpacity,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import * as Location from "expo-location";
+import * as ImagePicker from "expo-image-picker";
 import api, { formatApiError } from "../api";
+import { track } from "../lib/analytics";
 import AppScreen from "../components/AppScreen";
 import InputField from "../components/InputField";
 import PrimaryButton from "../components/PrimaryButton";
@@ -82,6 +85,8 @@ export default function PostJobScreen({ navigation }) {
 
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [gpsLoading, setGpsLoading] = useState(false);
   const [form, setForm] = useState({
     category: null, categoryLabel: null,
     skill: null, customSkill: "",
@@ -90,6 +95,9 @@ export default function PostJobScreen({ navigation }) {
     job_date: TOMORROW,
     pincode: "", village: "",
     description: "",
+    urgency: "normal",
+    recurrence: "once",
+    is_anonymous: false,
   });
 
   // Sync pincode hook → form
@@ -128,9 +136,67 @@ export default function PostJobScreen({ navigation }) {
 
   const back = () => { scrollRef.current?.scrollTo({ y: 0, animated: true }); setStep(s => Math.max(s - 1, 1)); };
 
+  const useGPS = async () => {
+    setGpsLoading(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") { Alert.alert("Location permission denied. Enter pincode manually."); return; }
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const { latitude, longitude } = loc.coords;
+      // reverse geocode via postalpincode API isn't available here; just store lat/lng
+      setForm(f => ({ ...f, lat: latitude, lng: longitude }));
+      Alert.alert("Location captured", `Lat: ${latitude.toFixed(4)}, Lng: ${longitude.toFixed(4)}. Enter your pincode to complete.`);
+    } catch {
+      Alert.alert("Could not get location. Enter pincode manually.");
+    } finally {
+      setGpsLoading(false);
+    }
+  };
+
+  const voiceToJob = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Videos });
+      if (result.canceled) return;
+      setAiLoading(true);
+      const uri = result.assets[0].uri;
+      const formData = new FormData();
+      formData.append("file", { uri, name: "voice.m4a", type: "audio/m4a" });
+      const r = await api.post("/ai/voice-to-job", formData, { headers: { "Content-Type": "multipart/form-data" } });
+      const fields = r.data?.job_fields || {};
+      if (fields.category) setForm(f => ({ ...f, category: fields.category, categoryLabel: fields.category, skill: fields.skill || f.skill, daily_rate: String(fields.daily_rate || f.daily_rate), description: fields.description || f.description }));
+      Alert.alert("AI filled the form", r.data?.transcript ? `Heard: "${r.data.transcript}"` : "Review and confirm.");
+    } catch {
+      Alert.alert("Voice processing failed. Please fill the form manually.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const photoToJob = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== "granted") { Alert.alert("Photo permission denied."); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
+    if (result.canceled) return;
+    setAiLoading(true);
+    try {
+      const uri = result.assets[0].uri;
+      const formData = new FormData();
+      formData.append("file", { uri, name: "job_photo.jpg", type: "image/jpeg" });
+      const r = await api.post("/ai/photo-to-job", formData, { headers: { "Content-Type": "multipart/form-data" } });
+      const fields = r.data || {};
+      if (fields.category) setForm(f => ({ ...f, category: fields.category, categoryLabel: fields.category, skill: fields.skill || f.skill, description: fields.description || f.description }));
+      Alert.alert("Photo analyzed", "Review the auto-filled fields and continue.");
+    } catch {
+      Alert.alert("Photo analysis failed. Please fill the form manually.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   const submit = async () => {
     setSaving(true);
     try {
+      track("post_job", { category: form.category, urgency: form.urgency, recurrence: form.recurrence, ai_generated: form.ai_generated || false });
       await api.post("/jobs", {
         title: `Need ${form.workers_needed} ${effectiveSkill} — ${form.categoryLabel}`,
         category: form.category,
@@ -139,8 +205,11 @@ export default function PostJobScreen({ navigation }) {
         daily_rate: Number(form.daily_rate),
         job_date: form.job_date,
         village: form.village,
-        lat: pinResult?.lat || 22.97,
-        lng: pinResult?.lng || 78.66,
+        lat: form.lat || pinResult?.lat || 22.97,
+        lng: form.lng || pinResult?.lng || 78.66,
+        urgency: form.urgency,
+        recurrence: form.recurrence,
+        is_anonymous: form.is_anonymous,
         address: {
           village: form.village,
           post: pinResult?.name || "",
@@ -151,8 +220,8 @@ export default function PostJobScreen({ navigation }) {
         },
         required_skills: [{ category: form.categoryLabel, skill: effectiveSkill }],
       });
-      Alert.alert("🎉 Job posted!", "Workers nearby will be notified.", [
-        { text: "OK", onPress: () => navigation.navigate("Tabs", { screen: "Workers" }) },
+      Alert.alert("Job posted!", "Local Experts nearby will be notified.", [
+        { text: "OK", onPress: () => navigation.navigate("Tabs", { screen: "FindWork" }) },
       ]);
     } catch (e) {
       Alert.alert("Failed", formatApiError(e));
@@ -160,17 +229,6 @@ export default function PostJobScreen({ navigation }) {
       setSaving(false);
     }
   };
-
-  if (user?.role === "worker") {
-    return (
-      <AppScreen style={styles.safe}>
-        <View style={styles.centerState}>
-          <Ionicons name="lock-closed-outline" size={32} color={colors.textMuted} />
-          <Text style={styles.centerStateText}>Only customers can post jobs.</Text>
-        </View>
-      </AppScreen>
-    );
-  }
 
   return (
     <AppScreen edges={["top"]} style={styles.safe}>
@@ -195,8 +253,22 @@ export default function PostJobScreen({ navigation }) {
           {/* ══ STEP 1: Category ══════════════════════════════════════════ */}
           {step === 1 && (
             <View>
-              <Text style={styles.h1}>{lang === "hi" ? "Kya kaam chahiye?" : "Kya kaam chahiye?"}</Text>
-              <Text style={styles.sub}>{lang === "hi" ? "Category chunein" : "Category chunein"}</Text>
+              <Text style={styles.h1}>What work do you need?</Text>
+              <Text style={styles.sub}>Pick a category, or use AI to fill the form</Text>
+
+              {/* ── AI quick-fill buttons ── */}
+              <View style={styles.aiRow}>
+                <TouchableOpacity style={styles.aiBtn} onPress={voiceToJob} disabled={aiLoading}>
+                  <Ionicons name="mic-outline" size={16} color={colors.indigo} />
+                  <Text style={styles.aiBtnText}>Voice</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.aiBtn} onPress={photoToJob} disabled={aiLoading}>
+                  <Ionicons name="camera-outline" size={16} color={colors.indigo} />
+                  <Text style={styles.aiBtnText}>Photo</Text>
+                </TouchableOpacity>
+                {aiLoading && <ActivityIndicator color={colors.saffron} style={{ marginLeft: 8 }} />}
+              </View>
+
               <View style={styles.catGrid}>
                 {CATEGORIES.map(cat => (
                   <View key={cat.v} style={styles.catGridItem}>
@@ -316,6 +388,26 @@ export default function PostJobScreen({ navigation }) {
                 leftIcon={<Ionicons name="calendar-outline" size={17} color={colors.textMuted} />}
               />
 
+              {/* ── Urgency ── */}
+              <Label text="How urgent?" />
+              <View style={styles.chipRow}>
+                {[{ v:"normal", label:"Normal" }, { v:"urgent", label:"Urgent" }, { v:"asap", label:"Need Today" }].map(u => (
+                  <Pressable key={u.v} style={[styles.optChip, form.urgency === u.v && styles.optChipActive]} onPress={() => setForm(f => ({ ...f, urgency: u.v }))}>
+                    <Text style={[styles.optChipText, form.urgency === u.v && styles.optChipTextActive]}>{u.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              {/* ── Recurrence ── */}
+              <Label text="How often?" />
+              <View style={styles.chipRow}>
+                {[{ v:"once", label:"One Time" }, { v:"weekly", label:"Every Week" }, { v:"monthly", label:"Every Month" }].map(r => (
+                  <Pressable key={r.v} style={[styles.optChip, form.recurrence === r.v && styles.optChipActive]} onPress={() => setForm(f => ({ ...f, recurrence: r.v }))}>
+                    <Text style={[styles.optChipText, form.recurrence === r.v && styles.optChipTextActive]}>{r.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+
               <InputField
                 label="Pincode"
                 placeholder="6-digit pincode"
@@ -332,6 +424,28 @@ export default function PostJobScreen({ navigation }) {
                 successText={pinStatus === "success" && pinResult ? `${form.village} · ${pinResult.district} · ${pinResult.state}` : undefined}
                 errorText={pinStatus === "error" ? pinError : undefined}
               />
+
+              {/* ── GPS button ── */}
+              <TouchableOpacity style={styles.gpsBtn} onPress={useGPS} disabled={gpsLoading}>
+                {gpsLoading
+                  ? <ActivityIndicator size="small" color={colors.indigo} />
+                  : <Ionicons name="locate-outline" size={16} color={colors.indigo} />
+                }
+                <Text style={styles.gpsBtnText}>Use my location</Text>
+              </TouchableOpacity>
+
+              {/* ── Anonymous ── */}
+              <View style={styles.anonRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.anonLabel}>Post anonymously</Text>
+                  <Text style={styles.anonSub}>Your name won't be shown until you accept</Text>
+                </View>
+                <Switch
+                  value={form.is_anonymous}
+                  onValueChange={v => setForm(f => ({ ...f, is_anonymous: v }))}
+                  trackColor={{ false: colors.border, true: colors.success }}
+                />
+              </View>
             </View>
           )}
 
@@ -737,4 +851,25 @@ const styles = StyleSheet.create({
   footerPrimary: {
     flex: 1,
   },
+
+  // ── AI quick-fill ──────────────────────────────────────────────────────
+  aiRow:     { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.md },
+  aiBtn:     { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: spacing.sm, paddingVertical: 8, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.indigo, backgroundColor: "#f0f4ff" },
+  aiBtnText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.indigo },
+
+  // ── Urgency / Recurrence chips ─────────────────────────────────────────
+  chipRow:        { flexDirection: "row", gap: spacing.xs, marginBottom: spacing.md, flexWrap: "wrap" },
+  optChip:        { paddingHorizontal: spacing.sm, paddingVertical: 8, borderRadius: radius.pill, borderWidth: 1.5, borderColor: colors.border, backgroundColor: "#fff" },
+  optChipActive:  { backgroundColor: colors.indigo, borderColor: colors.indigo },
+  optChipText:    { fontFamily: fonts.body, fontSize: 13, color: colors.textMuted },
+  optChipTextActive: { color: "#fff", fontFamily: fonts.bodyBold },
+
+  // ── GPS button ────────────────────────────────────────────────────────
+  gpsBtn:     { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingHorizontal: spacing.sm, paddingVertical: 8, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.indigo, backgroundColor: "#f0f4ff", marginBottom: spacing.md },
+  gpsBtnText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.indigo },
+
+  // ── Anonymous toggle ──────────────────────────────────────────────────
+  anonRow:   { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderRadius: radius.lg, padding: spacing.md, marginBottom: spacing.md, borderWidth: 1, borderColor: colors.border },
+  anonLabel: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.text },
+  anonSub:   { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginTop: 2 },
 });

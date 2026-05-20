@@ -33,7 +33,7 @@ export default function WorkerProfileScreen({ route, navigation }) {
   }, [id]);
 
   useEffect(() => {
-    if (user?.role === "customer") {
+    if (!user?.is_worker) {
       api.get("/jobs/mine")
         .then(r => setMyJobs(Array.isArray(r.data) ? r.data.filter(j => j.status === "open") : []))
         .catch(() => {});
@@ -216,7 +216,7 @@ export default function WorkerProfileScreen({ route, navigation }) {
               </View>
             )}
 
-            {user?.role === "worker" && (
+            {user?.is_worker === true && (
               <View style={s.infoCard}>
                 <Ionicons name="information-circle-outline" size={18} color={colors.primary} />
                 <Text style={s.note}>
@@ -225,7 +225,7 @@ export default function WorkerProfileScreen({ route, navigation }) {
               </View>
             )}
 
-            {user?.role === "customer" && (
+            {!user?.is_worker && (
               <View style={s.bookingState}>
                 {myJobs.length === 0 ? (
                   <>

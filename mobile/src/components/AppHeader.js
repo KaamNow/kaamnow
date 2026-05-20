@@ -1,6 +1,10 @@
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useLanguage } from "../contexts/LanguageContext";
 import { colors, fonts, radius, spacing } from "../theme";
+
+const LANG_LABELS = { en: "EN", hi: "हिं", bho: "भोज", mai: "मैथ" };
+const LANG_CYCLE  = ["en", "hi", "bho", "mai"];
 
 export default function AppHeader({
   showLogo = true,
@@ -9,10 +13,15 @@ export default function AppHeader({
   notifCount = 0,
   onNotifPress,
   rightElement,
-  lang = "en",
-  onLangToggle,
   style,
 }) {
+  const { lang, setLang } = useLanguage();
+
+  const cycleLang = () => {
+    const idx = LANG_CYCLE.indexOf(lang);
+    setLang(LANG_CYCLE[(idx + 1) % LANG_CYCLE.length]);
+  };
+
   return (
     <View style={[styles.header, style]}>
       <View style={styles.left}>
@@ -26,12 +35,8 @@ export default function AppHeader({
 
       <View style={styles.actions}>
         {showLangToggle ? (
-          <Pressable
-            onPress={onLangToggle}
-            disabled={!onLangToggle}
-            style={({ pressed }) => [styles.langToggle, pressed && onLangToggle && styles.pressed]}
-          >
-            <Text style={styles.langText}>{lang === "hi" ? "हिं" : "EN"}</Text>
+          <Pressable onPress={cycleLang} style={({ pressed }) => [styles.langToggle, pressed && styles.pressed]}>
+            <Text style={styles.langText}>{LANG_LABELS[lang] || "EN"}</Text>
           </Pressable>
         ) : null}
 

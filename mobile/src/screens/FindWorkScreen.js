@@ -59,7 +59,7 @@ export default function FindWorkScreen({ navigation }) {
 
   /* ── Auto-detect worker pincode on mount ── */
   useEffect(() => {
-    if (user?.role === "worker") {
+    if (user?.is_worker === true) {
       api.get("/workers/me/profile")
         .then(r => {
           const pc = r.data?.address?.pincode || r.data?.pincode || "";
@@ -77,7 +77,7 @@ export default function FindWorkScreen({ navigation }) {
         api.get("/jobs/public", { params: p })
           .catch(() => api.get("/jobs/feed", { params: p })
           .catch(() => ({ data: [] }))),
-        user?.role === "worker"
+        user?.is_worker === true
           ? api.get("/engagements/mine").catch(() => ({ data: [] }))
           : Promise.resolve({ data: [] }),
       ]);
@@ -127,7 +127,7 @@ export default function FindWorkScreen({ navigation }) {
       );
       return;
     }
-    if (user.role !== "worker") {
+    if (user?.is_worker !== true) {
       Alert.alert(lang === "hi" ? "सिर्फ workers के लिए" : "Workers only");
       return;
     }
@@ -257,7 +257,7 @@ export default function FindWorkScreen({ navigation }) {
             const cat = CATS.find(c => c.v === item.category) || CATS[0];
             return (
               <JobCard item={item} eng={eng} cat={cat} lang={lang}
-                isWorker={user?.role === "worker"}
+                isWorker={user?.is_worker === true}
                 onApply={() => apply(item.id)}
                 onWithdraw={() => withdraw(eng?.id)}
               />

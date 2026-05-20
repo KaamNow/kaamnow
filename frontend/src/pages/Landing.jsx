@@ -94,8 +94,8 @@ function SectionHead({ overline, heading, accent, sub, center }) {
 export default function Landing() {
   const { t, lang } = useLanguage();
   const { user } = useAuth();
-  const isCustomer = user?.role === "customer";
-  const isWorker   = user?.role === "worker";
+  const isCustomer = !user?.is_worker;
+  const isWorker   = user?.is_worker === true;
   const [stats, setStats]               = useState({ workers: 0, jobs: 0, villages: 0 });
   const [featuredWorkers, setWorkers]   = useState([]);
   const [featuredJobs, setJobs]         = useState([]);

@@ -212,6 +212,22 @@ async def update_user_status(user_id: str, body: dict, admin: dict = Depends(get
     return {"ok": True}
 
 
+@router.post("/users/{user_id}/ban")
+async def ban_user(user_id: str, admin: dict = Depends(get_admin_user)):
+    res = await db.users.update_one({"id": user_id}, {"$set": {"is_active": False, "status": "banned"}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"ok": True}
+
+
+@router.post("/users/{user_id}/flag")
+async def flag_user(user_id: str, admin: dict = Depends(get_admin_user)):
+    res = await db.users.update_one({"id": user_id}, {"$set": {"status": "flagged"}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    return {"ok": True}
+
+
 # ---------------------------------------------------------------------------
 # Workers
 # ---------------------------------------------------------------------------

@@ -78,7 +78,7 @@ function NotifBell({ size = 18 }) {
 
   const handleClick = () => {
     const tab = "notifications";
-    const base = user?.role === "worker" ? "/worker/dashboard" : "/dashboard";
+    const base = user?.is_worker === true ? "/worker/dashboard" : "/dashboard";
     nav(`${base}?tab=${tab}`, { replace: false });
   };
 
@@ -106,7 +106,7 @@ function UserDropdown({ user, logout, t }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const nav = useNavigate();
-  const dashLink = user?.role === "worker" ? "/worker/dashboard" : "/dashboard";
+  const dashLink = user?.is_worker === true ? "/worker/dashboard" : "/dashboard";
 
   useEffect(() => {
     const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
@@ -293,7 +293,7 @@ function MobileMenu({ open, onClose, user, logout, t, onContact, nav, onHowItWor
   }, [open]);
   if (!open) return null;
 
-  const dashLink = user?.role === "worker" ? "/worker/dashboard" : "/dashboard";
+  const dashLink = user?.is_worker === true ? "/worker/dashboard" : "/dashboard";
 
   return (
     <>
@@ -318,7 +318,7 @@ function MobileMenu({ open, onClose, user, logout, t, onContact, nav, onHowItWor
 
         {/* Nav links */}
         <div style={{ padding: "12px 12px 0" }}>
-          {user?.role === "worker" ? (
+          {user?.is_worker === true ? (
             <>
               <MobNavItem to="/worker/dashboard" onClose={onClose}>{t("nav_dashboard")}</MobNavItem>
               <MobNavItem to="/worker/job-feed"  onClose={onClose}>{t("nav_work")}</MobNavItem>
@@ -329,7 +329,7 @@ function MobileMenu({ open, onClose, user, logout, t, onContact, nav, onHowItWor
               <MobNavItem to="/"            onClose={onClose}>{t("nav_home")}</MobNavItem>
               <MobNavItem to="/marketplace" onClose={onClose}>{t("nav_workers")}</MobNavItem>
               <MobNavItem to="/find-work" onClose={onClose}>{t("nav_work")}</MobNavItem>
-              {user?.role === "customer" && <MobNavItem to="/post-job" onClose={onClose}>Post a Job</MobNavItem>}
+              {!user?.is_worker && <MobNavItem to="/post-job" onClose={onClose}>Post a Job</MobNavItem>}
               <button
                 onClick={() => { onClose(); onHowItWorks(); }}
                 style={{ width: "100%", display: "flex", alignItems: "center", padding: "13px 16px", borderRadius: 12, fontWeight: 500, fontSize: 15, color: C.text, background: "none", border: "none", cursor: "pointer", textAlign: "left", borderLeft: "3px solid transparent" }}
@@ -398,7 +398,7 @@ export default function Navbar() {
     sessionStorage.setItem("scrollTo", "how-it-works");
   }, [loc.pathname, nav]);
 
-  const isWorker = user?.role === "worker";
+  const isWorker = user?.is_worker === true;
 
   return (
     <>

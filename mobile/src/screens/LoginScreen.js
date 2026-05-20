@@ -31,7 +31,7 @@ export default function LoginScreen() {
   const [phone, setPhone]   = useState(initialPhone);
   const [otp, setOtp]       = useState("");
   const [name, setName]     = useState("");
-  const [role, setRole]     = useState("customer");
+  const [gender, setGender] = useState("");
   const [loading, setLoading] = useState(false);
   const [notRegistered, setNotRegistered] = useState(false);
   const [requiresOptin, setRequiresOptin] = useState(false);
@@ -136,8 +136,8 @@ export default function LoginScreen() {
       return Alert.alert(lang === "hi" ? "नाम डालो" : "Enter your name");
     setLoading(true);
     try {
-      const user = await completeSignup(name.trim(), role);
-      navigation.reset({ index: 0, routes: [{ name: user.role === "worker" ? "WorkerOnboarding" : "CustomerOnboarding" }] });
+      await completeSignup(name.trim(), gender || undefined);
+      navigation.reset({ index: 0, routes: [{ name: "Tabs" }] });
     } catch (err) {
       Alert.alert("Error", formatApiError(err));
     } finally {
@@ -176,7 +176,7 @@ export default function LoginScreen() {
             <Text style={s.subtitle}>
               {step === 1 && "Apna mobile number dalein"}
               {step === 2 && `6-digit code bheja: +91 ${maskPhoneNumber(otpFlow.phone)}`}
-              {step === 3 && (lang === "hi" ? "नाम और role बताओ।" : "Add your name and role to continue.")}
+              {step === 3 && (lang === "hi" ? "अपना नाम बताओ।" : "Add your name to continue.")}
             </Text>
           </View>
 
@@ -269,21 +269,6 @@ export default function LoginScreen() {
           {/* ── Step 3 — Signup fallback ──────────────────────────── */}
           {step === 3 && (
             <View style={s.form}>
-              <Text style={s.fieldLabel}>{lang === "hi" ? "आप कौन हो?" : "I am a"}</Text>
-              <View style={s.roleCards}>
-                {[
-                  { v: "customer", emoji: "🏠", title: lang === "hi" ? "काम देने वाला" : "Customer", sub: lang === "hi" ? "मुझे कारीगर चाहिए" : "I need workers" },
-                  { v: "worker",   emoji: "💼", title: lang === "hi" ? "काम करने वाला" : "Worker",   sub: lang === "hi" ? "मुझे काम चाहिए"    : "I want jobs" },
-                ].map(r => (
-                  <Pressable key={r.v} onPress={() => setRole(r.v)} style={[s.roleCard, role === r.v && s.roleCardOn]}>
-                    <Text style={s.roleEmoji}>{r.emoji}</Text>
-                    <Text style={[s.roleTitle, role === r.v && s.roleTitleOn]}>{r.title}</Text>
-                    <Text style={s.roleSub}>{r.sub}</Text>
-                    {role === r.v && <View style={s.roleTick}><Ionicons name="checkmark" size={12} color="#fff" /></View>}
-                  </Pressable>
-                ))}
-              </View>
-
               <Text style={s.fieldLabel}>{lang === "hi" ? "पूरा नाम" : "Full name"}</Text>
               <TextInput
                 style={s.textInput}
@@ -294,7 +279,20 @@ export default function LoginScreen() {
                 autoCapitalize="words"
               />
 
-              <Button
+              <Text style={[s.fieldLabel, { marginTop: 16 }]}>{lang === "hi" ? "लिंग (वैकल्पिक)" : "Gender (optional)"}</Text>
+              <View style={s.genderRow}>
+                {[
+                  { v: "male",   label: lang === "hi" ? "पुरुष"  : "Male"   },
+                  { v: "female", label: lang === "hi" ? "महिला"  : "Female" },
+                  { v: "other",  label: lang === "hi" ? "अन्य"   : "Other"  },
+                ].map((g) => (
+                  <Pressable key={g.v} onPress={() => setGender(gender === g.v ? "" : g.v)} style={[s.genderBtn, gender === g.v && s.genderBtnOn]}>
+                    <Text style={[s.genderBtnText, gender === g.v && s.genderBtnTextOn]}>{g.label}</Text>
+                  </Pressable>
+                ))}
+              </View>
+
+              <PrimaryButton
                 title={lang === "hi" ? "Account बनाओ" : "Create account"}
                 onPress={handleSignupFallback}
                 loading={loading}
@@ -362,14 +360,11 @@ const s = StyleSheet.create({
   switchTxt: { fontFamily: fonts.bodySemi, fontSize: 14, color: colors.textSecondary },
   switchAccent: { color: colors.primary, fontFamily: fonts.bodyBold },
 
-  roleCards: { flexDirection: "row", gap: 12, marginBottom: 20 },
-  roleCard: { flex: 1, backgroundColor: "#fff", borderRadius: 16, borderWidth: 1.5, borderColor: colors.border, padding: 16, alignItems: "center", gap: 6, position: "relative" },
-  roleCardOn: { borderColor: colors.primary, backgroundColor: colors.primaryLight },
-  roleEmoji: { fontSize: 28 },
-  roleTitle: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.text },
-  roleTitleOn: { color: colors.primary },
-  roleSub: { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted, textAlign: "center" },
-  roleTick: { position: "absolute", top: 8, right: 8, width: 20, height: 20, borderRadius: 10, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  genderRow:       { flexDirection: "row", gap: 8, marginBottom: 20 },
+  genderBtn:       { flex: 1, paddingVertical: 10, borderRadius: 12, borderWidth: 1.5, borderColor: colors.border, alignItems: "center", backgroundColor: "#fff" },
+  genderBtnOn:     { borderColor: colors.primary, backgroundColor: colors.primaryLight },
+  genderBtnText:   { fontFamily: fonts.body, fontSize: 13, color: colors.textMuted },
+  genderBtnTextOn: { fontFamily: fonts.bodyBold, color: colors.primary },
 
   optinBanner: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.infoLight, borderRadius: radius.md, borderWidth: 1, borderColor: "#BAE6FD", padding: 12, marginBottom: 16 },
   optinTitle: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.info },

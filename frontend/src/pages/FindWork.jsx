@@ -161,7 +161,7 @@ function ApplyAction({ job, eng, user, sending, withdrawing, accepting, declinin
   if (!user)
     return applyBtn("Apply Now →", () => { sessionStorage.setItem("fw_after_login", "/find-work"); nav("/login"); });
 
-  if (user.role === "customer")
+  if (!user?.is_worker)
     return <span style={{ fontSize: 11.5, color: C.muted, fontStyle: "italic" }}>Employer view</span>;
 
   if (!eng)
@@ -506,7 +506,7 @@ export default function FindWork() {
   const [sort, setSort]         = useState("newest");
 
   const loadEngs = useCallback(async () => {
-    if (!user || user.role !== "worker") return;
+    if (!user || user?.is_worker !== true) return;
     try {
       const r = await api.get("/engagements/mine");
       const map = {};

@@ -29,7 +29,7 @@ function todayStr() {
 export default function CalendarScreen({ navigation }) {
   const { user } = useAuth();
   const { lang } = useLanguage();
-  const isWorker = user?.role === "worker";
+  const isWorker = user?.is_worker === true;
   const months = MONTH_NAMES[lang] || MONTH_NAMES.en;
   const days   = DAY_LABELS[lang]  || DAY_LABELS.en;
   const now = new Date();

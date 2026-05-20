@@ -21,6 +21,8 @@ import JobCard from "../components/JobCard";
 import LocationBar from "../components/LocationBar";
 import ServiceCategoryCard from "../components/ServiceCategoryCard";
 import api, { formatApiError } from "../api";
+import { setCache, getCache } from "../lib/cache";
+import { track } from "../lib/analytics";
 import { useAuth } from "../contexts/AuthContext";
 import { useLanguage } from "../contexts/LanguageContext";
 import { colors, fonts, radius, shadow, spacing } from "../theme";
@@ -59,7 +61,7 @@ export default function WorkerJobFeedScreen({ navigation }) {
   const [applied, setApplied] = useState({ category: "", skill: "", pincode: "", query: "" });
 
   useEffect(() => {
-    if (user?.role !== "worker") return;
+    if (!user?.is_worker) return;
     api.get("/workers/me/profile")
       .then((res) => {
         const pc = res.data?.address?.pincode || res.data?.pincode || "";
@@ -81,11 +83,16 @@ export default function WorkerJobFeedScreen({ navigation }) {
       if (applied.query?.trim()) params.search = applied.query.trim();
 
       const [feed, mine] = await Promise.all([
-        api.get("/jobs/feed", { params }).catch(() => ({ data: [] })),
+        api.get("/jobs/feed", { params }).catch(async () => {
+          const cached = await getCache("job_feed");
+          return { data: cached || [], _fromCache: true };
+        }),
         api.get("/engagements/mine").catch(() => ({ data: [] })),
       ]);
-      setJobs(Array.isArray(feed.data) ? feed.data : []);
+      const jobs = Array.isArray(feed.data) ? feed.data : [];
+      setJobs(jobs);
       setEngagements(Array.isArray(mine.data) ? mine.data : []);
+      if (!feed._fromCache && jobs.length > 0) setCache("job_feed", jobs);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -99,6 +106,7 @@ export default function WorkerJobFeedScreen({ navigation }) {
 
   const expressInterest = async (jobId) => {
     try {
+      track("apply_for_job", { job_id: jobId });
       await api.post(`/jobs/${jobId}/interest`);
       Alert.alert(
         lang === "hi" ? "Apply ho gaya! ✅" : "Applied! ✅",
@@ -148,26 +156,26 @@ export default function WorkerJobFeedScreen({ navigation }) {
     setApplied({ category: "", skill: "", pincode: workerPincode, query: "" });
   };
 
-  if (user?.role !== "worker") {
-    return (
-      <AppScreen edges={["top"]} style={styles.safe}>
-        <EmptyState
-          icon="briefcase-outline"
-          title={lang === "hi" ? "Workers ke liye" : "Workers only"}
-          subtitle={lang === "hi" ? "Yeh view sirf workers ke liye hai." : "This view is for workers only."}
-        />
-      </AppScreen>
-    );
-  }
+  const isWorker = user?.is_worker === true;
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
       <AppScreen edges={["top"]} style={styles.safe}>
+        {/* ── Become a Local Expert banner (non-workers only) ── */}
+        {!isWorker && (
+          <Pressable style={styles.becomeExpertBanner} onPress={() => navigation.navigate("BecomeExpert")}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.becomeExpertTitle}>Want to earn from these jobs?</Text>
+              <Text style={styles.becomeExpertSub}>Become a Local Expert to apply →</Text>
+            </View>
+            <Ionicons name="arrow-forward-circle" size={28} color={colors.saffron} />
+          </Pressable>
+        )}
         <View style={styles.header}>
           <View style={styles.titleRow}>
             <View style={styles.titleTextBlock}>
               <Text style={styles.title}>Jobs Near You</Text>
-              <Text style={styles.subtitle}>Aapke area ke kaam</Text>
+              <Text style={styles.subtitle}>Browse and apply for nearby work</Text>
             </View>
             {activeFilterCount > 0 ? (
               <Pressable onPress={clearAll} style={styles.resetPill}>
@@ -283,7 +291,7 @@ export default function WorkerJobFeedScreen({ navigation }) {
                 job={item}
                 engagement={engagement}
                 lang={lang}
-                onApply={() => expressInterest(item.id)}
+                onApply={() => isWorker ? expressInterest(item.id) : navigation.navigate("BecomeExpert")}
                 onWithdraw={engagement ? () => withdraw(engagement.id) : undefined}
               />
             );
@@ -383,6 +391,13 @@ export default function WorkerJobFeedScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.bg },
+  becomeExpertBanner: {
+    flexDirection: "row", alignItems: "center",
+    backgroundColor: colors.indigo, paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+    gap: spacing.sm,
+  },
+  becomeExpertTitle: { fontFamily: fonts.bodyBold, fontSize: 13, color: "#fff" },
+  becomeExpertSub:   { fontFamily: fonts.body, fontSize: 12, color: "rgba(255,255,255,0.75)" },
   header: {
     backgroundColor: colors.bg,
     borderBottomWidth: 1,

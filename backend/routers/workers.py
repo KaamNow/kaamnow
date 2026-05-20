@@ -433,6 +433,7 @@ async def search_workers(
     return enriched_workers
 
 
+@router.get("/me")
 @router.get("/me/profile")
 async def my_worker_profile(user: dict = Depends(get_current_user)):
     worker = await db.workers.find_one({"user_id": user["id"]}, {"_id": 0})
@@ -648,6 +649,44 @@ async def clear_available_now(user: dict = Depends(get_current_user)):
         {"$set": {"is_available_now": False, "available_now_expires_at": None}},
     )
     return {"ok": True}
+
+
+@router.get("/me/earnings")
+async def my_earnings(user: dict = Depends(get_current_user)):
+    """Monthly earnings summary + list of completed engagements for the worker."""
+    worker = await db.workers.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not worker:
+        raise HTTPException(status_code=404, detail="Worker profile not found")
+
+    from datetime import date
+    first_of_month = date.today().replace(day=1).isoformat()
+
+    completed = await db.engagements.find(
+        {"worker_id": worker["id"], "status": "completed"},
+        {"_id": 0},
+    ).to_list(200)
+
+    this_month = [e for e in completed if (e.get("updated_at") or "")[:10] >= first_of_month]
+    total_this_month = sum(e.get("payment_amount") or e.get("daily_rate") or 0 for e in this_month)
+    jobs_done = len(completed)
+
+    ratings = [e["worker_rating"]["rating"] for e in completed if e.get("worker_rating")]
+    avg_rating = round(sum(ratings) / len(ratings), 1) if ratings else None
+
+    return {
+        "total_this_month": total_this_month,
+        "jobs_done": jobs_done,
+        "avg_rating": avg_rating,
+        "engagements": [
+            {
+                "id": e["id"],
+                "job_title": e.get("job_title", ""),
+                "job_date": e.get("job_date", ""),
+                "payment_amount": e.get("payment_amount") or e.get("daily_rate"),
+            }
+            for e in completed
+        ],
+    }
 
 
 @router.get("/me/qr-code")

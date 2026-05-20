@@ -18,31 +18,80 @@ import {
   Manrope_600SemiBold,
   Manrope_700Bold,
 } from "@expo-google-fonts/manrope";
-
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as Sentry from "@sentry/react-native";
+
 import { AuthProvider, useAuth } from "./src/contexts/AuthContext";
 import { LanguageProvider } from "./src/contexts/LanguageContext";
+import { useTranslation } from "./src/i18n";
 import { colors, fonts } from "./src/theme";
 
-import LandingScreen from "./src/screens/LandingScreen";
-import MarketplaceScreen from "./src/screens/MarketplaceScreen";
-import WorkerProfileScreen from "./src/screens/WorkerProfileScreen";
-import WorkerOnboardingScreen from "./src/screens/WorkerOnboardingScreen";
-import CustomerOnboardingScreen from "./src/screens/CustomerOnboardingScreen";
-import PostJobScreen from "./src/screens/PostJobScreen";
-import DashboardScreen from "./src/screens/DashboardScreen";
-import WhatsAppDemoScreen from "./src/screens/WhatsAppDemoScreen";
-import PhoneSignupScreen from "./src/screens/PhoneSignupScreen";
-import LoginScreen from "./src/screens/LoginScreen";
-import RoleSelectionScreen from "./src/screens/RoleSelectionScreen";
-import WorkerJobFeedScreen from "./src/screens/WorkerJobFeedScreen";
-import FindWorkScreen from "./src/screens/FindWorkScreen";
-import ContactSupportScreen from "./src/screens/ContactSupportScreen";
-import WorkerMyProfileScreen from "./src/screens/WorkerMyProfileScreen";
-import CustomerProfileScreen from "./src/screens/CustomerProfileScreen";
-import CalendarScreen from "./src/screens/CalendarScreen";
-import AdminScreen from "./src/screens/AdminScreen";
+// ── Screens ────────────────────────────────────────────────────────────────
+import LandingScreen          from "./src/screens/LandingScreen";
+import LoginScreen            from "./src/screens/LoginScreen";
+import PhoneSignupScreen      from "./src/screens/PhoneSignupScreen";
+import MarketplaceScreen      from "./src/screens/MarketplaceScreen";
+import WorkerProfileScreen    from "./src/screens/WorkerProfileScreen";
+import PostJobScreen          from "./src/screens/PostJobScreen";
+import DashboardScreen        from "./src/screens/DashboardScreen";
+import WorkerJobFeedScreen    from "./src/screens/WorkerJobFeedScreen";
+import FindWorkScreen         from "./src/screens/FindWorkScreen";
+import ContactSupportScreen   from "./src/screens/ContactSupportScreen";
+import CalendarScreen         from "./src/screens/CalendarScreen";
+import AdminScreen            from "./src/screens/AdminScreen";
+import WhatsAppDemoScreen     from "./src/screens/WhatsAppDemoScreen";
+import ProfileScreen          from "./src/screens/ProfileScreen";
 
+// ── New screens (Phase 3B) ─────────────────────────────────────────────────
+import EngagementDetailScreen from "./src/screens/EngagementDetailScreen";
+import ChatScreen             from "./src/screens/ChatScreen";
+import NotificationsScreen    from "./src/screens/NotificationsScreen";
+import EarningsScreen         from "./src/screens/EarningsScreen";
+import WalletScreen           from "./src/screens/WalletScreen";
+import FAQScreen              from "./src/screens/FAQScreen";
+import TermsScreen            from "./src/screens/TermsScreen";
+import PrivacyScreen          from "./src/screens/PrivacyScreen";
+import SupportChatScreen      from "./src/screens/SupportChatScreen";
+import MapScreen              from "./src/screens/MapScreen";
+import QRCodeScreen           from "./src/screens/QRCodeScreen";
+import ActivityScreen         from "./src/screens/ActivityScreen";
+import SavedExpertsScreen     from "./src/screens/SavedExpertsScreen";
+import SavedAddressesScreen   from "./src/screens/SavedAddressesScreen";
+import EmergencyContactScreen from "./src/screens/EmergencyContactScreen";
+import EditPhotoScreen        from "./src/screens/EditPhotoScreen";
+import BecomeExpertScreen     from "./src/screens/BecomeExpertScreen";
+import PortfolioScreen        from "./src/screens/PortfolioScreen";
+import CertificationsScreen   from "./src/screens/CertificationsScreen";
+import VideoProfileScreen     from "./src/screens/VideoProfileScreen";
+import KYCScreen              from "./src/screens/KYCScreen";
+
+Sentry.init({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN || "",
+  tracesSampleRate: 0.2,
+});
+
+// ── Deep link config ───────────────────────────────────────────────────────
+const linking = {
+  prefixes: ["kaamnow://"],
+  config: {
+    screens: {
+      Tabs: {
+        screens: {
+          Home:     "home",
+          FindWork: "find-work",
+          PostJob:  "post-job",
+          Activity: "activity",
+          Profile:  "profile",
+        },
+      },
+      EngagementDetail: "engagement/:id",
+      Chat:             "chat/:engagementId",
+      Notifications:    "notifications",
+    },
+  },
+};
+
+// ── Animated splash ────────────────────────────────────────────────────────
 function AnimatedSplash({ onDone }) {
   const scale  = useRef(new Animated.Value(0.6)).current;
   const logoOp = useRef(new Animated.Value(0)).current;
@@ -51,16 +100,12 @@ function AnimatedSplash({ onDone }) {
 
   useEffect(() => {
     Animated.sequence([
-      // Logo scales + fades in
       Animated.parallel([
         Animated.timing(scale,  { toValue: 1, duration: 700, useNativeDriver: true }),
         Animated.timing(logoOp, { toValue: 1, duration: 700, useNativeDriver: true }),
       ]),
-      // "KaamNow.com" fades in
       Animated.timing(textOp, { toValue: 1, duration: 450, useNativeDriver: true }),
-      // Tagline fades in below
       Animated.timing(tagOp,  { toValue: 1, duration: 400, useNativeDriver: true }),
-      // Hold — let it breathe, then snap directly to app
       Animated.delay(1200),
     ]).start(() => onDone?.());
   }, []);
@@ -87,84 +132,50 @@ function AnimatedSplash({ onDone }) {
   );
 }
 
-function AccountTab(props) {
-  const { user } = useAuth();
-  return user ? <DashboardScreen {...props} /> : <LoginScreen {...props} />;
-}
-
-function WorkOrWorkersTab(props) {
-  const { user } = useAuth();
-  return user?.role === "worker"
-    ? <WorkerJobFeedScreen {...props} />
-    : <MarketplaceScreen {...props} />;
-}
-
+// ── Navigation ─────────────────────────────────────────────────────────────
 const Stack = createNativeStackNavigator();
-const Tab = createBottomTabNavigator();
+const Tab   = createBottomTabNavigator();
 
-const TAB_OPTS = {
-  icon: (name) => ({ tabBarIcon: ({ color }) => <Ionicons name={name} size={22} color={color} /> }),
-};
+const tabIcon = (name) => ({ tabBarIcon: ({ color }) => <Ionicons name={name} size={22} color={color} /> });
 
 function Tabs() {
   const { user } = useAuth();
-  const role = user?.role || "guest";
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
+  const isLoggedIn = !!user;
 
   const sharedOpts = {
     headerShown: false,
     tabBarActiveTintColor: colors.saffron,
     tabBarInactiveTintColor: colors.textMuted,
-    tabBarStyle: { backgroundColor: "#fff", borderTopColor: colors.border, height: 64 + insets.bottom, paddingBottom: 8 + insets.bottom, paddingTop: 6 },
+    tabBarStyle: {
+      backgroundColor: "#fff",
+      borderTopColor: colors.border,
+      height: 64 + insets.bottom,
+      paddingBottom: 8 + insets.bottom,
+      paddingTop: 6,
+    },
     tabBarLabelStyle: { fontFamily: fonts.bodyBold, fontSize: 11 },
   };
 
+  if (!isLoggedIn) {
+    return (
+      <Tab.Navigator screenOptions={sharedOpts}>
+        <Tab.Screen name="Home"    component={LandingScreen}    options={{ title: t("nav_home"),      ...tabIcon("home-outline") }} />
+        <Tab.Screen name="Browse"  component={MarketplaceScreen} options={{ title: t("nav_browse"),    ...tabIcon("search-outline") }} />
+        <Tab.Screen name="FindWork" component={FindWorkScreen}   options={{ title: t("nav_find_work"), ...tabIcon("hammer-outline") }} />
+        <Tab.Screen name="Login"   component={LoginScreen}      options={{ title: t("nav_login"),     ...tabIcon("person-outline") }} />
+      </Tab.Navigator>
+    );
+  }
+
   return (
-    <Tab.Navigator key={role} screenOptions={sharedOpts}>
-      <Tab.Screen name="Home" component={LandingScreen}
-        options={{ title: "Home", ...TAB_OPTS.icon("home-outline") }} />
-
-      {/* ── GUEST ──────────────────────────────────────── */}
-      {role === "guest" && <>
-        <Tab.Screen name="Workers" component={MarketplaceScreen}
-          options={{ title: "Find Workers", ...TAB_OPTS.icon("search-outline") }} />
-        <Tab.Screen name="Jobs" component={FindWorkScreen}
-          options={{ title: "Find Work", ...TAB_OPTS.icon("hammer-outline") }} />
-        <Tab.Screen name="Chat" component={WhatsAppDemoScreen}
-          options={{ title: "WhatsApp", ...TAB_OPTS.icon("chatbubble-ellipses-outline") }} />
-        <Tab.Screen name="Account" component={AccountTab}
-          options={{ title: "Log in", ...TAB_OPTS.icon("person-outline") }} />
-      </>}
-
-      {/* ── CUSTOMER ───────────────────────────────────── */}
-      {role === "customer" && <>
-        <Tab.Screen name="Workers" component={MarketplaceScreen}
-          options={{ title: "Find Workers", ...TAB_OPTS.icon("search-outline") }} />
-        <Tab.Screen name="Calendar" component={CalendarScreen}
-          options={{ title: "Schedule", ...TAB_OPTS.icon("calendar-outline") }} />
-        <Tab.Screen name="PostJob" component={PostJobScreen}
-          options={{ title: "Post a Job", ...TAB_OPTS.icon("add-circle-outline") }} />
-        <Tab.Screen name="Account" component={AccountTab}
-          options={{ title: "Dashboard", ...TAB_OPTS.icon("apps-outline") }} />
-      </>}
-
-      {/* ── WORKER ─────────────────────────────────────── */}
-      {role === "worker" && <>
-        <Tab.Screen name="Jobs" component={WorkerJobFeedScreen}
-          options={{ title: "Find Jobs", ...TAB_OPTS.icon("briefcase-outline") }} />
-        <Tab.Screen name="Calendar" component={CalendarScreen}
-          options={{ title: "Schedule", ...TAB_OPTS.icon("calendar-outline") }} />
-        <Tab.Screen name="Account" component={AccountTab}
-          options={{ title: "My Work", ...TAB_OPTS.icon("wallet-outline") }} />
-        <Tab.Screen name="MyProfile" component={WorkerMyProfileScreen}
-          options={{ title: "My Profile", ...TAB_OPTS.icon("person-circle-outline") }} />
-      </>}
-
-      {/* ── ADMIN ──────────────────────────────────────── */}
-      {role === "admin" && <>
-        <Tab.Screen name="Admin" component={AdminScreen}
-          options={{ title: "Dashboard", ...TAB_OPTS.icon("shield-checkmark-outline") }} />
-      </>}
+    <Tab.Navigator screenOptions={sharedOpts}>
+      <Tab.Screen name="Home"     component={LandingScreen}      options={{ title: t("nav_home"),     ...tabIcon("home-outline") }} />
+      <Tab.Screen name="FindWork" component={WorkerJobFeedScreen} options={{ title: t("nav_find_work"), ...tabIcon("briefcase-outline") }} />
+      <Tab.Screen name="PostJob"  component={PostJobScreen}       options={{ title: t("nav_post_job"), ...tabIcon("add-circle-outline") }} />
+      <Tab.Screen name="Activity" component={DashboardScreen}     options={{ title: t("nav_activity"), ...tabIcon("apps-outline") }} />
+      <Tab.Screen name="Profile"  component={ProfileScreen}       options={{ title: t("nav_profile"),  ...tabIcon("person-circle-outline") }} />
     </Tab.Navigator>
   );
 }
@@ -187,34 +198,56 @@ function RootNavigator() {
         headerShadowVisible: false,
       }}
     >
-      {/* Tab root — no header */}
+      {/* ── Tab root ────────────────────────────────────── */}
       <Stack.Screen name="Tabs" component={Tabs} options={{ headerShown: false }} />
 
-      {/* Auth screens — custom back handled inside, hide native header */}
-      <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
+      {/* ── Auth ────────────────────────────────────────── */}
+      <Stack.Screen name="Login"      component={LoginScreen}       options={{ headerShown: false }} />
       <Stack.Screen name="PhoneSignup" component={PhoneSignupScreen} options={{ headerShown: false }} />
-      <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} options={{ headerShown: false }} />
 
-      {/* Onboarding — native header gives back arrow + title */}
-      <Stack.Screen name="CustomerOnboarding" component={CustomerOnboardingScreen} options={{ title: "Location" }} />
-      <Stack.Screen name="WorkerOnboarding" component={WorkerOnboardingScreen} options={{ headerShown: false }} />
+      {/* ── Engagement ──────────────────────────────────── */}
+      <Stack.Screen name="EngagementDetail" component={EngagementDetailScreen} options={{ headerShown: false }} />
+      <Stack.Screen name="Chat"             component={ChatScreen}             options={{ title: "" }} />
+      <Stack.Screen name="Notifications"    component={NotificationsScreen}    options={{ title: "Notifications" }} />
 
-      {/* App screens — custom back already inside, hide native */}
-      <Stack.Screen name="WorkerProfile" component={WorkerProfileScreen} options={{ headerShown: false }} />
-      <Stack.Screen name="PostJob" component={PostJobScreen} options={{ headerShown: false }} />
-      <Stack.Screen name="Dashboard" component={DashboardScreen} options={{ headerShown: false }} />
+      {/* ── Worker marketplace ──────────────────────────── */}
+      <Stack.Screen name="WorkerProfile"    component={WorkerProfileScreen}   options={{ headerShown: false }} />
+      <Stack.Screen name="Marketplace"      component={MarketplaceScreen}     options={{ headerShown: false }} />
+      <Stack.Screen name="Map"              component={MapScreen}             options={{ title: "Workers Near You" }} />
 
-      {/* Feed screens — native header */}
-      <Stack.Screen name="WorkerJobFeed" component={WorkerJobFeedScreen} options={{ title: "Jobs Near You" }} />
-      <Stack.Screen name="FindWork" component={FindWorkScreen} options={{ title: "Find Work" }} />
+      {/* ── Profile sub-screens ─────────────────────────── */}
+      <Stack.Screen name="EditPhoto"        component={EditPhotoScreen}        options={{ title: "Change Photo" }} />
+      <Stack.Screen name="BecomeExpert"     component={BecomeExpertScreen}     options={{ headerShown: false }} />
+      <Stack.Screen name="Portfolio"        component={PortfolioScreen}        options={{ title: "My Portfolio" }} />
+      <Stack.Screen name="Certifications"   component={CertificationsScreen}   options={{ title: "Certifications" }} />
+      <Stack.Screen name="VideoProfile"     component={VideoProfileScreen}     options={{ title: "Video Profile" }} />
+      <Stack.Screen name="KYC"              component={KYCScreen}              options={{ title: "Verify Identity" }} />
+      <Stack.Screen name="Earnings"         component={EarningsScreen}         options={{ headerShown: false }} />
+      <Stack.Screen name="QRCode"           component={QRCodeScreen}           options={{ title: "My QR Code" }} />
+      <Stack.Screen name="Activity"         component={ActivityScreen}         options={{ title: "My Activity" }} />
+      <Stack.Screen name="SavedExperts"     component={SavedExpertsScreen}     options={{ title: "Saved Local Experts" }} />
+      <Stack.Screen name="SavedAddresses"   component={SavedAddressesScreen}   options={{ title: "Saved Addresses" }} />
+      <Stack.Screen name="EmergencyContact" component={EmergencyContactScreen} options={{ title: "Emergency Contact" }} />
+      <Stack.Screen name="Wallet"           component={WalletScreen}           options={{ headerShown: false }} />
+
+      {/* ── Info screens ────────────────────────────────── */}
+      <Stack.Screen name="FAQ"         component={FAQScreen}         options={{ title: "Help & FAQ" }} />
+      <Stack.Screen name="Terms"       component={TermsScreen}       options={{ title: "Terms of Service" }} />
+      <Stack.Screen name="Privacy"     component={PrivacyScreen}     options={{ title: "Privacy Policy" }} />
+      <Stack.Screen name="SupportChat" component={SupportChatScreen} options={{ title: "Chat with Us" }} />
+
+      {/* ── Misc ────────────────────────────────────────── */}
+      <Stack.Screen name="PostJobFull"    component={PostJobScreen}       options={{ headerShown: false }} />
+      <Stack.Screen name="WorkerJobFeed"  component={WorkerJobFeedScreen} options={{ title: "Jobs Near You" }} />
+      <Stack.Screen name="FindWork"       component={FindWorkScreen}      options={{ title: "Find Work" }} />
       <Stack.Screen name="ContactSupport" component={ContactSupportScreen} options={{ title: "Help & Support" }} />
-      <Stack.Screen name="WorkerMyProfile" component={WorkerMyProfileScreen} options={{ title: "My Profile" }} />
-      <Stack.Screen name="CustomerProfile" component={CustomerProfileScreen} options={{ title: "My Profile" }} />
+      <Stack.Screen name="Calendar"       component={CalendarScreen}      options={{ title: "Schedule" }} />
+      <Stack.Screen name="Admin"          component={AdminScreen}         options={{ headerShown: false }} />
     </Stack.Navigator>
   );
 }
 
-export default function App() {
+export default Sentry.wrap(function App() {
   const [outfitLoaded] = useOutfit({ Outfit_700Bold, Outfit_800ExtraBold });
   const [manropeLoaded] = useManrope({
     Manrope_400Regular,
@@ -230,7 +263,7 @@ export default function App() {
   return (
     <LanguageProvider>
       <AuthProvider>
-        <NavigationContainer>
+        <NavigationContainer linking={linking}>
           <StatusBar style="light" backgroundColor="#0B1F3A" />
           <RootNavigator />
         </NavigationContainer>
@@ -242,4 +275,4 @@ export default function App() {
       </AuthProvider>
     </LanguageProvider>
   );
-}
+});
