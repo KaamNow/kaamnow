@@ -9,10 +9,37 @@ BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
 
 
+def _clean(value: Optional[str]) -> Optional[str]:
+    """Strip surrounding quotes added by Doppler --format env when read via --from-env-file."""
+    if value is None:
+        return None
+    return value.strip().strip('"').strip("'")
+
+
 def _to_bool(value: Optional[str], default: bool = False) -> bool:
     if value is None:
         return default
-    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+    return _clean(value).lower() in {"1", "true", "yes", "on"}
+
+
+def _to_int(value: Optional[str], default: int) -> int:
+    cleaned = _clean(value)
+    if not cleaned:
+        return default
+    try:
+        return int(cleaned)
+    except (ValueError, TypeError):
+        return default
+
+
+def _to_float(value: Optional[str], default: float) -> float:
+    cleaned = _clean(value)
+    if not cleaned:
+        return default
+    try:
+        return float(cleaned)
+    except (ValueError, TypeError):
+        return default
 
 
 class Settings(BaseModel):
@@ -63,32 +90,37 @@ class Settings(BaseModel):
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
 
 
+def _e(key: str, default: str = "") -> str:
+    """Get env var and strip surrounding quotes (Doppler --format env adds them)."""
+    return _clean(os.getenv(key)) or default
+
+
 settings = Settings(
-    mongo_url=os.getenv("MONGO_URL", ""),
-    db_name=os.getenv("DB_NAME", ""),
-    jwt_secret=os.getenv("JWT_SECRET", ""),
-    jwt_expiry_days=int(os.getenv("JWT_EXPIRY_DAYS", "7")),
+    mongo_url=_e("MONGO_URL"),
+    db_name=_e("DB_NAME"),
+    jwt_secret=_e("JWT_SECRET"),
+    jwt_expiry_days=_to_int(os.getenv("JWT_EXPIRY_DAYS"), 7),
     cookie_secure=_to_bool(os.getenv("COOKIE_SECURE"), False),
-    cors_origins=os.getenv("CORS_ORIGINS", "*"),
-    admin_phone=os.getenv("ADMIN_PHONE", ""),
-    admin_password=os.getenv("ADMIN_PASSWORD", ""),
-    admin_bootstrap_secret=os.getenv("ADMIN_BOOTSTRAP_SECRET", ""),
-    gupshup_api_url=os.getenv("GUPSHUP_API_URL"),
-    gupshup_api_key=os.getenv("GUPSHUP_API_KEY"),
-    gupshup_source=os.getenv("GUPSHUP_SOURCE"),
-    gupshup_app_id=os.getenv("GUPSHUP_APP_ID"),
-    gupshup_channel=os.getenv("GUPSHUP_CHANNEL", "whatsapp"),
-    gupshup_verify_token=os.getenv("GUPSHUP_VERIFY_TOKEN"),
-    gupshup_template_url=os.getenv("GUPSHUP_TEMPLATE_URL"),
-    gupshup_template_namespace=os.getenv("GUPSHUP_TEMPLATE_NAMESPACE"),
+    cors_origins=_e("CORS_ORIGINS", "*"),
+    admin_phone=_e("ADMIN_PHONE"),
+    admin_password=_e("ADMIN_PASSWORD"),
+    admin_bootstrap_secret=_e("ADMIN_BOOTSTRAP_SECRET"),
+    gupshup_api_url=_e("GUPSHUP_API_URL") or None,
+    gupshup_api_key=_e("GUPSHUP_API_KEY") or None,
+    gupshup_source=_e("GUPSHUP_SOURCE") or None,
+    gupshup_app_id=_e("GUPSHUP_APP_ID") or None,
+    gupshup_channel=_e("GUPSHUP_CHANNEL", "whatsapp"),
+    gupshup_verify_token=_e("GUPSHUP_VERIFY_TOKEN") or None,
+    gupshup_template_url=_e("GUPSHUP_TEMPLATE_URL") or None,
+    gupshup_template_namespace=_e("GUPSHUP_TEMPLATE_NAMESPACE") or None,
     gupshup_sandbox_mode=_to_bool(os.getenv("GUPSHUP_SANDBOX_MODE"), False),
     show_otp_in_response=_to_bool(os.getenv("SHOW_OTP_IN_RESPONSE"), False),
-    gemini_api_key=os.getenv("GEMINI_API_KEY", ""),
-    groq_api_key=os.getenv("GROQ_API_KEY", ""),
-    razorpay_key_id=os.getenv("RAZORPAY_KEY_ID", ""),
-    razorpay_key_secret=os.getenv("RAZORPAY_KEY_SECRET", ""),
-    posthog_api_key=os.getenv("POSTHOG_API_KEY", ""),
-    sentry_dsn=os.getenv("SENTRY_DSN", ""),
+    gemini_api_key=_e("GEMINI_API_KEY"),
+    groq_api_key=_e("GROQ_API_KEY"),
+    razorpay_key_id=_e("RAZORPAY_KEY_ID"),
+    razorpay_key_secret=_e("RAZORPAY_KEY_SECRET"),
+    posthog_api_key=_e("POSTHOG_API_KEY"),
+    sentry_dsn=_e("SENTRY_DSN"),
     feature_engagement_flow=_to_bool(os.getenv("FEATURE_ENGAGEMENT_FLOW"), False),
     feature_otp_auth=_to_bool(os.getenv("FEATURE_OTP_AUTH"), False),
     feature_whatsapp_notifications=_to_bool(os.getenv("FEATURE_WHATSAPP_NOTIFICATIONS"), False),
