@@ -26,16 +26,14 @@
       "command": "npx",
       "args": ["-y", "@21st-dev/magic@latest"],
       "env": {
-        "API_KEY": "REPLACE_WITH_21ST_DEV_API_KEY"
+        "API_KEY": "6f5319f58713c97c94ea86847eedfd71003c41e5ccd941dff574315c1ee53cee"
       }
     },
     "stitch": {
       "type": "stdio",
       "command": "npx",
       "args": ["-y", "stitch-mcp@latest"],
-      "env": {
-        "STITCH_API_KEY": "REPLACE_WITH_STITCH_API_KEY"
-      }
+      "env": {}
     }
   }
 }
