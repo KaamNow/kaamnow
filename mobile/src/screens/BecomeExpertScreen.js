@@ -5,6 +5,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as Location from "expo-location";
 import { useAuth } from "../contexts/AuthContext";
 import { useTranslation } from "../i18n";
 import { colors, fonts, spacing, radius } from "../theme";
@@ -27,6 +28,42 @@ export default function BecomeExpertScreen({ navigation }) {
   const [bio, setBio] = useState("");
   const [pincode, setPincode] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [gpsLoading, setGpsLoading] = useState(false);
+  const [lat, setLat] = useState(null);
+  const [lng, setLng] = useState(null);
+
+  const useGPS = async () => {
+    setGpsLoading(true);
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Location denied", "Allow location in Settings, or type your pincode.");
+        return;
+      }
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      const { latitude, longitude } = loc.coords;
+      setLat(latitude);
+      setLng(longitude);
+
+      // Reverse geocode → pincode via OpenStreetMap Nominatim
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
+        { headers: { "Accept-Language": "en", "User-Agent": "KaamNow/1.0" } }
+      );
+      const data = await res.json();
+      const pin = (data.address?.postcode || "").replace(/\s/g, "").slice(0, 6);
+      if (pin.length === 6) {
+        setPincode(pin);
+        Alert.alert("Location detected", `Pincode ${pin} auto-filled.`);
+      } else {
+        Alert.alert("Location set", "Could not detect pincode. Please type it.");
+      }
+    } catch {
+      Alert.alert("Could not get location", "Type your pincode manually.");
+    } finally {
+      setGpsLoading(false);
+    }
+  };
 
   const toggleSkill = (s) => {
     setSkills((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]);
@@ -53,6 +90,8 @@ export default function BecomeExpertScreen({ navigation }) {
         daily_rate: parseInt(dailyRate, 10),
         bio: bio.trim() || undefined,
         pincode: pincode.trim() || undefined,
+        lat: lat || undefined,
+        lng: lng || undefined,
       });
       await refreshUser();
       navigation.goBack();
@@ -106,6 +145,17 @@ export default function BecomeExpertScreen({ navigation }) {
               keyboardType="numeric"
               placeholderTextColor={colors.textMuted}
             />
+            {/* GPS button — auto-fills pincode from location */}
+            <TouchableOpacity style={styles.gpsBtn} onPress={useGPS} disabled={gpsLoading}>
+              {gpsLoading
+                ? <ActivityIndicator size="small" color={colors.indigo} />
+                : <Ionicons name="locate-outline" size={16} color={colors.indigo} />
+              }
+              <Text style={styles.gpsBtnText}>
+                {lat ? "Location set ✓ — update" : "Use my location (auto-fill pincode)"}
+              </Text>
+            </TouchableOpacity>
+
             <Text style={styles.inputLabel}>{t("become_expert_pincode")}</Text>
             <TextInput
               style={styles.input}
@@ -183,4 +233,6 @@ const styles = StyleSheet.create({
   footer:     { backgroundColor: "#fff", borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.sm, paddingHorizontal: spacing.md },
   nextBtn:    { backgroundColor: colors.indigo, borderRadius: radius.lg, paddingVertical: 14, alignItems: "center" },
   nextBtnText:{ fontFamily: fonts.bodyBold, fontSize: 15, color: "#fff" },
+  gpsBtn:     { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderColor: colors.indigo, borderRadius: radius.lg, paddingHorizontal: spacing.md, paddingVertical: 12, marginBottom: spacing.sm, backgroundColor: "#f0f4ff" },
+  gpsBtnText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.indigo, flex: 1 },
 });

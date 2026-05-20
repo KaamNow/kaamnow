@@ -7,6 +7,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import * as ImagePicker from "expo-image-picker";
+import { Audio } from "expo-av";
 import api, { formatApiError } from "../api";
 import { track } from "../lib/analytics";
 import AppScreen from "../components/AppScreen";
@@ -87,6 +88,8 @@ export default function PostJobScreen({ navigation }) {
   const [saving, setSaving] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
+  const [recording, setRecording] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
   const [form, setForm] = useState({
     category: null, categoryLabel: null,
     skill: null, customSkill: "",
@@ -136,37 +139,89 @@ export default function PostJobScreen({ navigation }) {
 
   const back = () => { scrollRef.current?.scrollTo({ y: 0, animated: true }); setStep(s => Math.max(s - 1, 1)); };
 
+  // GPS → reverse geocode → auto-fill pincode + village via Nominatim (free, no API key)
   const useGPS = async () => {
     setGpsLoading(true);
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") { Alert.alert("Location permission denied. Enter pincode manually."); return; }
+      if (status !== "granted") {
+        Alert.alert("Location access denied", "Please allow location in Settings, or type your pincode manually.");
+        return;
+      }
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
       const { latitude, longitude } = loc.coords;
-      // reverse geocode via postalpincode API isn't available here; just store lat/lng
-      setForm(f => ({ ...f, lat: latitude, lng: longitude }));
-      Alert.alert("Location captured", `Lat: ${latitude.toFixed(4)}, Lng: ${longitude.toFixed(4)}. Enter your pincode to complete.`);
+
+      // Reverse geocode using OpenStreetMap Nominatim — free, no API key needed
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
+        { headers: { "Accept-Language": "en", "User-Agent": "KaamNow/1.0" } }
+      );
+      const data = await res.json();
+      const pin = (data.address?.postcode || "").replace(/\s/g, "").slice(0, 6);
+      const vil = data.address?.village || data.address?.suburb || data.address?.city_district || data.address?.city || "";
+
+      if (pin.length === 6) {
+        setPincode(pin);
+        setForm(f => ({ ...f, pincode: pin, village: vil, lat: latitude, lng: longitude }));
+      } else {
+        // Store coords even if we couldn't get pincode
+        setForm(f => ({ ...f, lat: latitude, lng: longitude }));
+        Alert.alert("Location set", "Could not detect pincode automatically. Please type it.");
+      }
     } catch {
-      Alert.alert("Could not get location. Enter pincode manually.");
+      Alert.alert("Could not get location", "Check your internet and try again, or type your pincode.");
     } finally {
       setGpsLoading(false);
     }
   };
 
-  const voiceToJob = async () => {
+  // Voice recording — hold mic button → records from microphone → sends to Gemini via /ai/voice-to-job
+  const startRecording = async () => {
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Videos });
-      if (result.canceled) return;
-      setAiLoading(true);
-      const uri = result.assets[0].uri;
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== "granted") { Alert.alert("Microphone access denied", "Allow microphone in Settings."); return; }
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
+      const { recording: rec } = await Audio.Recording.createAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      setRecording(rec);
+      setIsRecording(true);
+    } catch {
+      Alert.alert("Could not start recording", "Check microphone permissions.");
+    }
+  };
+
+  const stopRecordingAndProcess = async () => {
+    if (!recording) return;
+    setIsRecording(false);
+    setAiLoading(true);
+    try {
+      await recording.stopAndUnloadAsync();
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      const uri = recording.getURI();
+      setRecording(null);
+
       const formData = new FormData();
       formData.append("file", { uri, name: "voice.m4a", type: "audio/m4a" });
       const r = await api.post("/ai/voice-to-job", formData, { headers: { "Content-Type": "multipart/form-data" } });
+
       const fields = r.data?.job_fields || {};
-      if (fields.category) setForm(f => ({ ...f, category: fields.category, categoryLabel: fields.category, skill: fields.skill || f.skill, daily_rate: String(fields.daily_rate || f.daily_rate), description: fields.description || f.description }));
-      Alert.alert("AI filled the form", r.data?.transcript ? `Heard: "${r.data.transcript}"` : "Review and confirm.");
+      if (fields.category) {
+        setForm(f => ({
+          ...f,
+          category: fields.category,
+          categoryLabel: fields.category,
+          skill: fields.skill || f.skill,
+          daily_rate: fields.daily_rate ? String(fields.daily_rate) : f.daily_rate,
+          description: fields.description || f.description,
+          urgency: fields.urgency || f.urgency,
+        }));
+        if (step === 1) setStep(2); // advance past category
+      }
+      Alert.alert(
+        "Heard you!",
+        r.data?.transcript ? `"${r.data.transcript}"\n\nForm filled — check the details.` : "Form filled — review and continue."
+      );
     } catch {
-      Alert.alert("Voice processing failed. Please fill the form manually.");
+      Alert.alert("Voice failed", "Could not process audio. Please type manually.");
     } finally {
       setAiLoading(false);
     }
@@ -258,11 +313,21 @@ export default function PostJobScreen({ navigation }) {
 
               {/* ── AI quick-fill buttons ── */}
               <View style={styles.aiRow}>
-                <TouchableOpacity style={styles.aiBtn} onPress={voiceToJob} disabled={aiLoading}>
-                  <Ionicons name="mic-outline" size={16} color={colors.indigo} />
-                  <Text style={styles.aiBtnText}>Voice</Text>
+                {/* Hold to record voice → Gemini fills form */}
+                <TouchableOpacity
+                  style={[styles.aiBtn, isRecording && styles.aiBtnRecording]}
+                  onPressIn={startRecording}
+                  onPressOut={stopRecordingAndProcess}
+                  disabled={aiLoading}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name={isRecording ? "mic" : "mic-outline"} size={16} color={isRecording ? "#fff" : colors.indigo} />
+                  <Text style={[styles.aiBtnText, isRecording && { color: "#fff" }]}>
+                    {isRecording ? "Release to send" : "Hold to speak"}
+                  </Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.aiBtn} onPress={photoToJob} disabled={aiLoading}>
+                {/* Photo → Gemini fills form */}
+                <TouchableOpacity style={styles.aiBtn} onPress={photoToJob} disabled={aiLoading || isRecording}>
                   <Ionicons name="camera-outline" size={16} color={colors.indigo} />
                   <Text style={styles.aiBtnText}>Photo</Text>
                 </TouchableOpacity>
@@ -854,8 +919,9 @@ const styles = StyleSheet.create({
 
   // ── AI quick-fill ──────────────────────────────────────────────────────
   aiRow:     { flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.md },
-  aiBtn:     { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: spacing.sm, paddingVertical: 8, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.indigo, backgroundColor: "#f0f4ff" },
-  aiBtnText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.indigo },
+  aiBtn:          { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: spacing.sm, paddingVertical: 8, borderRadius: radius.pill, borderWidth: 1, borderColor: colors.indigo, backgroundColor: "#f0f4ff" },
+  aiBtnRecording: { backgroundColor: colors.danger, borderColor: colors.danger },
+  aiBtnText:      { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.indigo },
 
   // ── Urgency / Recurrence chips ─────────────────────────────────────────
   chipRow:        { flexDirection: "row", gap: spacing.xs, marginBottom: spacing.md, flexWrap: "wrap" },
