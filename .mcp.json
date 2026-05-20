@@ -20,24 +20,6 @@
       "env": {
         "MONGODB_URI": "mongodb+srv://kaamnow-dev:KaamNowDev123@kaamnow-dev.p0wka3b.mongodb.net/?appName=KaamNow-Dev"
       }
-    },
-    "mobile": {
-      "type": "stdio",
-      "command": "npx",
-      "args": [
-        "-y",
-        "@mobilenext/mobile-mcp@latest"
-      ],
-      "env": {}
-    },
-    "appium": {
-      "type": "stdio",
-      "command": "npx",
-      "args": [
-        "-y",
-        "appium-mcp@latest"
-      ],
-      "env": {}
     }
   }
 }
