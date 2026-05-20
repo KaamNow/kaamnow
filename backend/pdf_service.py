@@ -1,6 +1,32 @@
 from io import BytesIO
 
 
+def _minimal_pdf(title: str) -> bytes:
+    text = title.replace("(", "").replace(")", "")[:80]
+    stream = f"BT /F1 18 Tf 72 720 Td ({text}) Tj ET"
+    objects = [
+        b"1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj",
+        b"2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj",
+        b"3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj",
+        b"4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj",
+        f"5 0 obj << /Length {len(stream)} >> stream\n{stream}\nendstream endobj".encode(),
+    ]
+    pdf = BytesIO()
+    pdf.write(b"%PDF-1.4\n")
+    offsets = []
+    for obj in objects:
+        offsets.append(pdf.tell())
+        pdf.write(obj + b"\n")
+    xref = pdf.tell()
+    pdf.write(f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode())
+    for offset in offsets:
+        pdf.write(f"{offset:010d} 00000 n \n".encode())
+    pdf.write(
+        f"trailer << /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode()
+    )
+    return pdf.getvalue()
+
+
 def generate_completion_certificate(engagement: dict, worker: dict, customer: dict) -> bytes:
     try:
         from reportlab.lib import colors
@@ -8,7 +34,7 @@ def generate_completion_certificate(engagement: dict, worker: dict, customer: di
         from reportlab.lib.units import inch
         from reportlab.pdfgen import canvas
     except ImportError as exc:
-        raise RuntimeError("reportlab is required to generate certificates") from exc
+        return _minimal_pdf(f"KaamNow Job Completion Certificate {engagement.get('id', '')}")
 
     buffer = BytesIO()
     pdf = canvas.Canvas(buffer, pagesize=A4)

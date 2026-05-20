@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
 from ..auth import get_current_user, is_customer, is_worker
-from ..cloudinary_service import upload_review_image
+from ..cloudinary_service import upload_job_photo, upload_review_image
 from ..db import db
 from ..engagements import (
     _notify,
@@ -235,7 +235,7 @@ async def _append_job_photo(engagement_id: str, user: dict, file: UploadFile, fi
     file_bytes = await file.read()
     if len(file_bytes) > MAX_REVIEW_IMAGE_BYTES:
         raise HTTPException(status_code=400, detail="Image must be 5MB or smaller")
-    photo_url = upload_review_image(file_bytes, f"job_{field}_{engagement_id}_{uuid.uuid4().hex}")
+    photo_url = upload_job_photo(file_bytes, f"job_{field}_{engagement_id}_{uuid.uuid4().hex}")
     photos.append(photo_url)
     await db.engagements.update_one(
         {"id": engagement_id}, {"$set": {field: photos, "updated_at": utc_now_iso()}}

@@ -9,6 +9,8 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 
 from ..auth import get_current_user, get_optional_user, is_worker
+from ..cloudinary_service import upload_cert_image, upload_portfolio_image
+from ..cloudinary_service import upload_video as upload_worker_video
 from ..db import db
 from ..qr_service import generate_profile_qr
 from ..schemas import BecomeWorkerIn, WorkerOut, WorkerProfileIn
@@ -157,22 +159,6 @@ async def _read_upload(
     if len(file_bytes) > max_bytes:
         raise HTTPException(status_code=413, detail="File is too large")
     return file_bytes
-
-
-def _upload_cloudinary(
-    file_bytes: bytes, public_id: str, folder: str, resource_type: str = "image"
-) -> str:
-    from ..cloudinary_service import _require_cloudinary, cloudinary
-
-    _require_cloudinary()
-    result = cloudinary.uploader.upload(
-        file_bytes,
-        public_id=public_id,
-        overwrite=True,
-        folder=folder,
-        resource_type=resource_type,
-    )
-    return result["secure_url"]
 
 
 def _rank_worker(
@@ -333,6 +319,7 @@ async def become_worker(body: BecomeWorkerIn, user: dict = Depends(get_current_u
         user_set["gender"] = body.gender
     await db.users.update_one({"id": user["id"]}, {"$set": user_set})
     updated_user = await db.users.find_one({"id": user["id"]}, {"_id": 0, "password_hash": 0})
+    worker_doc.pop("_id", None)
     return {"worker": worker_doc, "user": updated_user}
 
 
@@ -548,9 +535,7 @@ async def add_portfolio_item(
         raise HTTPException(status_code=400, detail="You can add up to 6 photos")
     file_bytes = await _read_upload(file, ("image/",), 5 * 1024 * 1024)
     item_id = str(uuid.uuid4())
-    image_url = _upload_cloudinary(
-        file_bytes, f"portfolio_{worker['id']}_{item_id}", "kaamnow/portfolio"
-    )
+    image_url = upload_portfolio_image(file_bytes, f"portfolio_{worker['id']}_{item_id}")
     item = {
         "id": item_id,
         "image_url": image_url,
@@ -588,9 +573,7 @@ async def add_certification(
     worker = await _current_worker(user)
     file_bytes = await _read_upload(file, ("image/", "application/pdf"), 5 * 1024 * 1024)
     cert_id = str(uuid.uuid4())
-    cert_url = _upload_cloudinary(
-        file_bytes, f"cert_{worker['id']}_{cert_id}", "kaamnow/certifications"
-    )
+    cert_url = upload_cert_image(file_bytes, f"cert_{worker['id']}_{cert_id}")
     cert = {
         "id": cert_id,
         "skill": skill[:80],
@@ -624,9 +607,7 @@ async def delete_certification(cert_id: str, user: dict = Depends(get_current_us
 async def upload_video(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
     worker = await _current_worker(user)
     file_bytes = await _read_upload(file, ("video/mp4", "video/quicktime"), 50 * 1024 * 1024)
-    video_url = _upload_cloudinary(
-        file_bytes, f"video_{worker['id']}", "kaamnow/videos", resource_type="video"
-    )
+    video_url = upload_worker_video(file_bytes, f"video_{worker['id']}")
     await db.workers.update_one({"id": worker["id"]}, {"$set": {"video_url": video_url}})
     updated_worker = await db.workers.find_one({"id": worker["id"]}, {"_id": 0})
     return _worker_media_defaults(updated_worker)

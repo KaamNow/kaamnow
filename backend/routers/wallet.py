@@ -51,7 +51,6 @@ async def credit_wallet(
         "Your KaamNow wallet has new credits.",
         "wallet_credited",
         ref_id or tx["id"],
-        deep_link="kaamnow://wallet",
     )
     tx.pop("_id", None)
     return tx

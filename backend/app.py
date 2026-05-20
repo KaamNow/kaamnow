@@ -14,6 +14,7 @@ from .db import close_client
 from .otp_service import init_otp_service
 from .routers import (
     admin_router,
+    ai_router,
     auth_router,
     bookings_router,
     chat_router,
@@ -22,6 +23,7 @@ from .routers import (
     jobs_router,
     legal_router,
     notifications_router,
+    payments_router,
     referrals_router,
     reports_router,
     stats_router,
@@ -73,6 +75,7 @@ async def csrf_cookie_guard(request: Request, call_next):
 
 
 app.include_router(admin_router)
+app.include_router(ai_router)
 app.include_router(auth_router)
 app.include_router(workers_router)
 app.include_router(jobs_router)
@@ -80,6 +83,7 @@ app.include_router(bookings_router)
 app.include_router(engagements_router)
 app.include_router(chat_router)
 app.include_router(notifications_router)
+app.include_router(payments_router)
 app.include_router(waitlist_router)
 app.include_router(stats_router)
 app.include_router(whatsapp_router)

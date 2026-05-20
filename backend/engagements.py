@@ -728,8 +728,26 @@ async def complete_engagement(engagement_id: str, user: dict) -> dict:
             if referrer:
                 from .routers.wallet import credit_wallet
 
-                await credit_wallet(referrer["id"], 100, "referral_reward", engagement_id)
-                await credit_wallet(customer["id"], 50, "referral_bonus", engagement_id)
+                existing_referrer_credit = await db.wallet_transactions.find_one(
+                    {
+                        "user_id": referrer["id"],
+                        "reason": "referral_reward",
+                        "ref_id": engagement_id,
+                    },
+                    {"_id": 0},
+                )
+                existing_referred_credit = await db.wallet_transactions.find_one(
+                    {
+                        "user_id": customer["id"],
+                        "reason": "referral_bonus",
+                        "ref_id": engagement_id,
+                    },
+                    {"_id": 0},
+                )
+                if not existing_referrer_credit:
+                    await credit_wallet(referrer["id"], 100, "referral_reward", engagement_id)
+                if not existing_referred_credit:
+                    await credit_wallet(customer["id"], 50, "referral_bonus", engagement_id)
                 await db.users.update_one(
                     {"id": customer["id"]},
                     {"$set": {"referral_rewarded": True, "referral_rewarded_at": now}},

@@ -386,7 +386,9 @@ async def check_phone(request: Request, phone: str):
 
     return {
         "exists": True,
-        "role": "admin" if user.get("role") == "admin" else "worker" if is_worker(user) else "customer",
+        "role": (
+            "admin" if user.get("role") == "admin" else "worker" if is_worker(user) else "customer"
+        ),
         "is_worker": is_worker(user),
         "is_customer": user.get("is_customer", True) is not False,
         "is_active": is_active,
@@ -641,7 +643,11 @@ async def deactivate_account(user: dict = Depends(get_current_user)):
         {
             "user_id": user["id"],
             "phone": user.get("phone_primary") or user.get("phone"),
-            "role": "admin" if user.get("role") == "admin" else "worker" if is_worker(user) else "customer",
+            "role": (
+                "admin"
+                if user.get("role") == "admin"
+                else "worker" if is_worker(user) else "customer"
+            ),
             "deactivated_at": now,
             "reactivated_at": None,
         }

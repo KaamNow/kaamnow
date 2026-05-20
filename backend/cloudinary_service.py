@@ -52,6 +52,75 @@ def upload_review_image(file_bytes: bytes, public_id: str) -> str:
     return result["secure_url"]
 
 
+def _upload_media(
+    file_bytes: bytes,
+    public_id: str,
+    folder: str,
+    resource_type: str = "image",
+    transformation: list | None = None,
+) -> str:
+    _require_cloudinary()
+    result = cloudinary.uploader.upload(
+        file_bytes,
+        public_id=public_id,
+        overwrite=True,
+        folder=folder,
+        resource_type=resource_type,
+        transformation=transformation,
+    )
+    return result["secure_url"]
+
+
+def upload_portfolio_image(file_bytes: bytes, public_id: str) -> str:
+    return _upload_media(
+        file_bytes,
+        public_id,
+        "kaamnow/portfolio",
+        transformation=[
+            {"width": 1200, "height": 1200, "crop": "limit"},
+            {"quality": "auto", "fetch_format": "auto"},
+        ],
+    )
+
+
+def upload_cert_image(file_bytes: bytes, public_id: str) -> str:
+    return _upload_media(
+        file_bytes,
+        public_id,
+        "kaamnow/certifications",
+        transformation=[
+            {"width": 1600, "height": 1600, "crop": "limit"},
+            {"quality": "auto", "fetch_format": "auto"},
+        ],
+    )
+
+
+def upload_video(file_bytes: bytes, public_id: str) -> str:
+    return _upload_media(
+        file_bytes,
+        public_id,
+        "kaamnow/videos",
+        resource_type="video",
+        transformation=[{"duration": "30"}],
+    )
+
+
+def upload_voice_clip(file_bytes: bytes, public_id: str) -> str:
+    return _upload_media(file_bytes, public_id, "kaamnow/audio", resource_type="video")
+
+
+def upload_job_photo(file_bytes: bytes, public_id: str) -> str:
+    return _upload_media(
+        file_bytes,
+        public_id,
+        "kaamnow/job-photos",
+        transformation=[
+            {"width": 1400, "height": 1400, "crop": "limit"},
+            {"quality": "auto", "fetch_format": "auto"},
+        ],
+    )
+
+
 def delete_image(photo_url: str) -> None:
     """Delete a Cloudinary image by its URL (best-effort, never raises)."""
     if not photo_url or "cloudinary.com" not in photo_url:
