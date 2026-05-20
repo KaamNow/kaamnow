@@ -20,6 +20,22 @@
       "env": {
         "MONGODB_URI": "mongodb+srv://kaamnow-dev:KaamNowDev123@kaamnow-dev.p0wka3b.mongodb.net/?appName=KaamNow-Dev"
       }
+    },
+    "21st-magic": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@21st-dev/magic@latest"],
+      "env": {
+        "API_KEY": "REPLACE_WITH_21ST_DEV_API_KEY"
+      }
+    },
+    "stitch": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "stitch-mcp@latest"],
+      "env": {
+        "STITCH_API_KEY": "REPLACE_WITH_STITCH_API_KEY"
+      }
     }
   }
 }
