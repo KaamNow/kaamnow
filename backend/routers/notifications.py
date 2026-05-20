@@ -30,9 +30,7 @@ async def create_notification(
         pass
 
 
-@router.get("")
-@router.get("/mine")
-async def my_notifications(user: dict = Depends(get_current_user)):
+async def _fetch_notifications(user: dict):
     notes = (
         await db.notifications.find({"user_id": user["id"]}, {"_id": 0})
         .sort("created_at", -1)
@@ -40,6 +38,16 @@ async def my_notifications(user: dict = Depends(get_current_user)):
         .to_list(50)
     )
     return {"items": notes, "total": len(notes)}
+
+
+@router.get("")
+async def list_notifications(user: dict = Depends(get_current_user)):
+    return await _fetch_notifications(user)
+
+
+@router.get("/mine")
+async def my_notifications(user: dict = Depends(get_current_user)):
+    return await _fetch_notifications(user)
 
 
 @router.get("/mine/unread-count")
