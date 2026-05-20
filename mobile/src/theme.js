@@ -1,22 +1,23 @@
-// Color palette: ONE primary color - Deep Teal
-// Clean, professional, zero political/religious associations.
-// Amber is reserved for money/rate display.
+// KaamNow Design System — Archetype 4: Swiss + Saffron/Indigo
+// Primary: #FF6B35 Saffron (CTAs, active states)
+// Trust:   #3F37C9 Indigo (headers, trust badges, structure)
+// Bg:      #FCFBF9 warm off-white
 export const colors = {
-  // Primary
-  primary: "#0F766E",
-  primaryDark: "#0D5F59",
-  primaryLight: "#F0FDFA",
+  // Brand — Saffron (CTAs, primary actions, high energy)
+  primary: "#FF6B35",
+  primaryDark: "#E85520",
+  primaryLight: "#FFF3EE",
 
-  // Backward-compatible aliases. Keep until screens are migrated.
-  saffron: "#0F766E",
-  saffronDark: "#0D5F59",
-  saffronTint: "#F0FDFA",
-  indigo: "#0F766E",
-  indigoDark: "#0D5F59",
-  indigoTint: "#F0FDFA",
+  // Brand — Indigo (trust, headers, structure, badges)
+  indigo: "#3F37C9",
+  indigoDark: "#2D27A8",
+  indigoLight: "#EEEEFF",
 
-  // Money (ONLY for amounts, rates, earnings)
-  money: "#B45309",
+  // Backward-compat aliases used across all screens
+  saffron: "#FF6B35",
+  saffronDark: "#E85520",
+  saffronTint: "#FFF3EE",
+  indigoTint: "#EEEEFF",
 
   // Semantic
   success: "#16A34A",
@@ -28,18 +29,18 @@ export const colors = {
   info: "#0EA5E9",
   infoLight: "#F0F9FF",
 
-  // Neutrals
-  bg: "#F8F7F4",
+  // Neutrals — warm off-white base (not cold gray)
+  bg: "#FCFBF9",
   surface: "#FFFFFF",
-  surface2: "#F3F2EF",
-  soft: "#F3F2EF",
+  surface2: "#F5F4F1",
+  soft: "#F5F4F1",
 
-  // Text
+  // Text — design_guidelines.json values
   text: "#111827",
-  textSecondary: "#374151",
+  textSecondary: "#4B5563",
   textMuted: "#6B7280",
 
-  // Borders
+  // Borders — flat design, 1px structural lines
   border: "#E5E7EB",
   borderStrong: "#D1D5DB",
 

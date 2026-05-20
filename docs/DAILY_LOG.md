@@ -98,6 +98,100 @@
 
 ---
 
+## May 21, 2026 — Day 2 (Phases 1–4 Implementation + Deploy Fix)
+
+**Phase:** All 4 phases completed
+**Commits:** 7 commits pushed to `ui-ux` branch
+
+### Done Today
+
+#### Phase 1 — Backend Foundation ✅
+- ✅ Dual-role schema: `is_worker` / `is_customer` replaces hard `role` field
+- ✅ 7 new MongoDB collections: messages, reports, payments, wallet_transactions, worker_waitlist, faqs, legal_docs
+- ✅ All new routers: chat, wallet, reports, legal, faq, referrals, ai, payments
+- ✅ `backend/i18n/` — notification copy in EN + HI + BHO + MAI
+- ✅ Full security hardening: max_length validators, rate limits, CSRF header checks
+- ✅ `backend/routers/auth.py` — gender, referral_code, saved_workers, addresses, emergency contact, accept-terms
+- ✅ `backend/routers/workers.py` — become-worker, portfolio, certifications, available-now, KYC, QR code
+- ✅ `backend/routers/jobs.py` — anyone can post (no role gate), templates, urgency/recurrence/anonymous
+- ✅ `backend/routers/engagements.py` — OTP job start, GPS checkin, progress updates, before/after photos, re-hire, certificate PDF
+- ✅ Phase 1 sign-off: `tests/v2/PHASE1_SIGNOFF.md` (5/5 tests pass, 148 routes)
+
+#### Phase 2 — AI + Payments + Background Jobs ✅
+- ✅ `backend/ai_service.py` — Gemini 1.5 Flash + Groq Whisper clients (dev fallbacks when keys absent)
+- ✅ `backend/routers/ai.py` — 6 endpoints: voice-to-job, generate-job, generate-bio, describe-cert, photo-to-job, suggest-price
+- ✅ `backend/payment_service.py` + `backend/routers/payments.py` — Razorpay create-order + HMAC verify
+- ✅ `backend/pdf_service.py` — ReportLab completion certificate
+- ✅ `backend/qr_service.py` — QR code PNG generation
+- ✅ `backend/cloudinary_service.py` — portfolio, cert, video, audio, job-photo uploads → `kaamnow-dev/*` folders
+- ✅ Background jobs: expire wallet credits (midnight IST), expire available-now (hourly), nudge notifications (10am IST), seasonal suggestions (1st of month)
+- ✅ Cloudinary keys wired: cloud=dztrzwvee, folder=kaamnow-dev
+- ✅ Gemini API key wired: AIzaSyAy...
+- ✅ Phase 2 sign-off: `tests/v2/PHASE2_SIGNOFF.md` (157 routes, wallet flow proven, PDF + QR generated)
+
+#### Phase 3 — Mobile App ✅
+- ✅ `mobile/src/i18n/translations.js` — 1650+ lines, 4 languages (EN/HI/BHO/MAI), 200+ keys
+- ✅ `mobile/App.js` — unified single tab bar (Home/FindWork/PostJob/Activity/Profile), deep links `kaamnow://`, Sentry init
+- ✅ `mobile/src/contexts/AuthContext.js` — `isWorker`/`isCustomer` helpers, analytics identify/reset
+- ✅ `LoginScreen.js` — role step removed, optional gender selector, navigates to Tabs
+- ✅ 5 stale screens deleted: RoleSelection, CustomerOnboarding, WorkerOnboarding, CustomerProfile, WorkerMyProfile
+- ✅ 21 new screens: Profile, EngagementDetail, Chat, Notifications, Earnings, Wallet, FAQ, Terms, Privacy, SupportChat, Map, QRCode, Activity, SavedExperts, SavedAddresses, EmergencyContact, EditPhoto, BecomeExpert, Portfolio, Certifications, VideoProfile, KYC
+- ✅ `DashboardScreen` — role checks → `is_worker`, loads both jobs + engagements for everyone
+- ✅ `PostJobScreen` — role guard removed, urgency/recurrence/anonymous/GPS/AI voice+photo added
+- ✅ `WorkerJobFeedScreen` — "Become a Local Expert" banner + CTA for non-workers
+- ✅ `MarketplaceScreen` — GPS near-me button, Map button
+- ✅ `AppHeader` — 4-language toggle pill (EN → हिं → भोज → मैथ cycles on tap)
+- ✅ `OnboardingWalkthrough` — 3-slide Lottie-style walkthrough shown once on first open
+- ✅ Offline cache — `expo-file-system` cache for job feed + worker list (30-min TTL)
+- ✅ PostHog analytics wrapper — tracks: signup, become_local_expert, post_job, apply_for_job, accept_booking, chat_message_sent, referral_shared, certificate_downloaded
+- ✅ Skill badges display in ProfileScreen worker section
+- ✅ Zero `user.role` references across all 35 screen files
+- ✅ Phase 3 sign-off: `tests/v2/PHASE3_SIGNOFF.md`
+
+#### Phase 4 — Admin Dashboard + Cleanup ✅
+- ✅ `AdminDashboard.jsx` — 6 new tabs: Reports (resolve/dismiss), Users (flag/ban), FAQ CRUD, Legal publish, Wallet Audit, Referrals
+- ✅ Deleted `WorkerSetup.jsx`, `Strategy.jsx` + removed routes
+- ✅ 11 frontend files: `user.role === "worker"` → `user.is_worker` everywhere
+- ✅ Phase 4 sign-off: `tests/v2/PHASE4_SIGNOFF.md`
+
+#### Deploy Fixes (3 crash bugs squashed)
+- ✅ **Bug 1:** Double `@router.get()` decorators on same function → FastAPI schema crash → split into separate functions
+- ✅ **Bug 2:** `@router.get("")` empty string path → invalid FastAPI route → replaced with `@router.get("/")`
+- ✅ **Bug 3 (root cause):** `ValueError: invalid literal for int() for '"30"'` — Doppler `--format env` wraps ALL values in double quotes (`JWT_EXPIRY_DAYS="30"`), `kubectl --from-env-file` keeps quotes as literal value, `int('"30"')` crashes at startup → Fixed with `_clean()` + `_to_int()` helpers in `config.py` that strip surrounding quotes
+- ✅ Added `kubectl logs` + `describe pod` printing on rollout failure in `deploy-dev.sh`
+- ✅ `SKIP_SEED=1` in Doppler dev — seed skipped on pod restarts
+- ✅ Readiness probe: `initialDelaySeconds` 15→30s, `failureThreshold` 1→6, memory 512→768Mi
+
+### Blockers Resolved
+- Fly.io required credit card → switched to EC2 SSH deploy ✅
+- Dev HTTPS without GoDaddy API → cert-manager on prod cluster + dev-cluster-proxy ✅
+- Doppler quote wrapping `JWT_EXPIRY_DAYS="30"` crashing pod → `_clean()` in config.py ✅
+
+### Current Live State
+| | URL | Status |
+|---|---|---|
+| Dev API | `https://dev.kaamnow.com/api/stats` | ✅ Running |
+| Dev Frontend | `https://dev.kaamnow.com` | ✅ Running |
+| Mobile (Expo) | LAN QR scan | ✅ Running locally |
+
+### Open Items (Not Blocking Launch)
+- ❌ Groq API key not yet created (voice transcription uses fallback)
+- ❌ Razorpay keys not yet created (`FEATURE_PAYMENTS=false`)
+- ❌ PostHog + Sentry keys not yet created (analytics/monitoring optional)
+- ❌ EAS Android APK build not yet run
+- ❌ Mobile UI/UX needs polish to match `design_guidelines.json` (Archetype 4 — Swiss + Saffron/Indigo)
+- ❌ Chatwoot self-hosted not yet deployed (SupportChatScreen shows fallback URL)
+- ❌ End-to-end QA flow (signup → job → hire → complete → certificate)
+
+### Tomorrow (Day 3) — UI/UX Polish
+1. Rebuild mobile screens to match design_guidelines.json (Cabinet Grotesk / Outfit headings, Manrope body, #FF6B35 saffron, #3F37C9 indigo, flat cards with 1px borders)
+2. LandingScreen — asymmetric hero, strong typography, real Pexels images from design_guidelines
+3. ProfileScreen, MarketplaceScreen — Swiss/high-contrast layout
+4. WorkerCard + JobCard components — flat border, trust badge, no generic shadows
+5. Groq + Sentry + PostHog keys setup
+
+---
+
 <!-- TEMPLATE FOR NEW DAYS — copy this block and fill in -->
 <!--
 ## [Date] — Day [N] ([Day of Week])
@@ -129,14 +223,19 @@
 
 | Metric | Value |
 |---|---|
-| Days elapsed | 1 of 26 |
-| Days remaining | 25 |
-| Infra issues closed | 8 / 8 (#47–#54) |
-| Phase 1 tasks done | 0 / 47 (starts Day 2) |
-| Phase 2 tasks done | 0 / 65 |
-| Phase 3 tasks done | 0 / 61 |
-| Phase 4 tasks done | 0 / 29 |
-| Total impl done | 0 / 202 |
+| Days elapsed | 2 of 26 |
+| Days remaining | 24 |
+| Phase 1 | ✅ Complete (147 routes, 5/5 tests) |
+| Phase 2 | ✅ Complete (157 routes, PDF + QR + wallet) |
+| Phase 3 | ✅ Complete (35 screens, 4 languages, GPS + AI + offline) |
+| Phase 4 | ✅ Complete (admin 13 tabs, role cleanup) |
+| Backend routes | 162 registered |
+| Mobile screens | 35 total (21 new) |
+| Languages | EN + HI + BHO + MAI |
+| API keys done | Cloudinary ✅, Gemini ✅, Groq ❌, Razorpay ❌, Sentry ❌, PostHog ❌ |
+| Deploy crashes fixed | 3 (double decorator, empty path, Doppler quote wrapping) |
 | Dev cluster | ✅ https://dev.kaamnow.com |
 | Prod cluster | ✅ https://kaamnow.com |
+| Mobile Expo | ✅ Running on LAN |
 | Launch date | June 15, 2026 |
+| **Remaining blockers** | UI polish, Groq/Sentry/PostHog keys, EAS build, E2E QA |
