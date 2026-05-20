@@ -1,0 +1,18 @@
+# All notification text in Hindi — respectful, simple language.
+
+BOOKING_REQUEST_TITLE = "नई रिक्वेस्ट: {job_title}"
+BOOKING_REQUEST_BODY = "{name} आपके काम के लिए आवेदन करना चाहते हैं। देखने के लिए टैप करें।"
+BOOKING_ACCEPTED_TITLE = "रिक्वेस्ट स्वीकार हुई ✓"
+BOOKING_ACCEPTED_BODY = "{name} ने स्वीकार किया। उनका नंबर: {phone}"
+BOOKING_REJECTED_TITLE = "रिक्वेस्ट स्वीकार नहीं हुई"
+BOOKING_REJECTED_BODY = "{name} इस काम के लिए उपलब्ध नहीं हैं।"
+BOOKING_COMPLETED_TITLE = "काम पूरा हुआ — {job_title}"
+BOOKING_COMPLETED_BODY = "{name} को रिव्यू दें।"
+JOB_ALERT_TITLE = "आपके पास नया काम"
+JOB_ALERT_BODY = "{job_title}, {village} में — ₹{daily_rate}/दिन"
+NEW_MESSAGE_TITLE = "{name} का संदेश"
+NEW_MESSAGE_BODY = "{text}"
+PAYMENT_RECEIVED_TITLE = "भुगतान मिला ✓"
+PAYMENT_RECEIVED_BODY = "{job_title} के लिए ₹{amount} मिले"
+TIER_UPGRADED_TITLE = "आप अब {tier} वर्कर हैं! 🌟"
+TIER_UPGRADED_BODY = "बहुत अच्छा काम कर रहे हैं।"

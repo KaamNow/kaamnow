@@ -5,7 +5,7 @@ from typing import List, Optional, Union
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ..auth import get_current_user
+from ..auth import get_current_user, get_optional_user, is_worker
 from ..db import db
 from ..engagements import _notify, create_engagement_request
 from ..schemas import JobIn, JobOut
@@ -150,8 +150,6 @@ def _enrich_job_for_feed(
 
 @router.post("", response_model=JobOut)
 async def create_job(body: JobIn, user: dict = Depends(get_current_user)):
-    if user.get("role") != "customer":
-        raise HTTPException(status_code=403, detail="Only customers can post jobs")
     job_id = str(uuid.uuid4())
     job_payload = body.model_dump()
     job_payload["address"] = _legacy_address(job_payload)
@@ -165,6 +163,8 @@ async def create_job(body: JobIn, user: dict = Depends(get_current_user)):
         "status": "open",
         "filled_count": 0,
         "accepted_worker_ids": [],
+        "is_template": job_payload.get("is_template", False),
+        "template_name": job_payload.get("template_name"),
         "created_at": utc_now_iso(),
     }
     await db.jobs.insert_one(job_doc)
@@ -310,7 +310,7 @@ async def _alert_matching_workers(job: dict) -> None:
 
 @router.get("", response_model=List[JobOut])
 async def list_jobs(category: Optional[str] = None, status: Optional[str] = None):
-    query = {}
+    query = {"is_template": {"$ne": True}}
     if category:
         query["category"] = category
     if status:
@@ -334,14 +334,15 @@ async def job_feed(
     pincode: Optional[str] = None,
     skills: Optional[str] = None,
     category: Optional[str] = None,
-    user: dict = Depends(get_current_user),
+    user: Optional[dict] = Depends(get_optional_user),
 ):
+    user = user or {}
     selected_pincode = pincode or (user.get("address") or {}).get("pincode")
     selected_skills = _split_skills(skills)
     worker_lat: Optional[float] = None
     worker_lng: Optional[float] = None
 
-    if user["role"] == "worker":
+    if is_worker(user):
         worker = await db.workers.find_one({"user_id": user["id"]}, {"_id": 0})
         if worker:
             selected_pincode = selected_pincode or (worker.get("address") or {}).get("pincode")
@@ -356,7 +357,11 @@ async def job_feed(
             except (TypeError, ValueError):
                 pass
 
-    query: dict = {"status": "open", "$expr": {"$lt": ["$filled_count", "$workers_needed"]}}
+    query: dict = {
+        "status": "open",
+        "is_template": {"$ne": True},
+        "$expr": {"$lt": ["$filled_count", "$workers_needed"]},
+    }
     if category:
         query["category"] = category
 
@@ -442,6 +447,100 @@ async def list_public_jobs(
     return [_safe(j) for j in raw]
 
 
+@router.get("/templates")
+async def list_templates(user: dict = Depends(get_current_user)):
+    return (
+        await db.jobs.find(
+            {"customer_id": user["id"], "is_template": True},
+            {"_id": 0},
+        )
+        .sort("created_at", -1)
+        .to_list(100)
+    )
+
+
+@router.post("/templates")
+async def create_template(body: dict, user: dict = Depends(get_current_user)):
+    now = utc_now_iso()
+    template_id = str(uuid.uuid4())
+    payload = dict(body)
+    payload.setdefault("workers_needed", 1)
+    payload.setdefault("daily_rate", 0)
+    payload.setdefault("village", ((payload.get("address") or {}).get("village") or ""))
+    payload.setdefault("lat", 0.0)
+    payload.setdefault("lng", 0.0)
+    payload["address"] = _legacy_address(payload)
+    payload["required_skills"] = _legacy_required_skills(payload)
+    template_doc = {
+        "id": template_id,
+        "customer_id": user["id"],
+        "customer_name": user["name"],
+        "title": (payload.get("title") or payload.get("template_name") or "Job template")[:120],
+        "category": payload.get("category") or "other",
+        "description": (payload.get("description") or "")[:1000],
+        "workers_needed": payload["workers_needed"],
+        "daily_rate": payload["daily_rate"],
+        "job_date": payload.get("job_date") or now[:10],
+        "village": payload["address"].get("village") or payload["village"],
+        "lat": payload["lat"],
+        "lng": payload["lng"],
+        "required_skills": payload["required_skills"],
+        "address": payload["address"],
+        "urgency": payload.get("urgency") or "normal",
+        "recurrence": payload.get("recurrence") or "once",
+        "photo_url": payload.get("photo_url"),
+        "ai_generated": bool(payload.get("ai_generated", False)),
+        "is_anonymous": bool(payload.get("is_anonymous", False)),
+        "status": "template",
+        "filled_count": 0,
+        "accepted_worker_ids": [],
+        "is_template": True,
+        "template_name": (payload.get("template_name") or payload.get("title") or "Template")[:60],
+        "created_at": now,
+    }
+    await db.jobs.insert_one(template_doc)
+    return template_doc
+
+
+@router.delete("/templates/{template_id}")
+async def delete_template(template_id: str, user: dict = Depends(get_current_user)):
+    result = await db.jobs.delete_one(
+        {"id": template_id, "customer_id": user["id"], "is_template": True}
+    )
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Template not found")
+    return {"ok": True}
+
+
+@router.post("/from-template/{template_id}", response_model=JobOut)
+async def create_from_template(
+    template_id: str, body: dict, user: dict = Depends(get_current_user)
+):
+    template = await db.jobs.find_one(
+        {"id": template_id, "customer_id": user["id"], "is_template": True},
+        {"_id": 0},
+    )
+    if not template:
+        raise HTTPException(status_code=404, detail="Template not found")
+    job_date = body.get("job_date")
+    if not job_date:
+        raise HTTPException(status_code=400, detail="Choose a job date")
+    job_doc = {
+        **template,
+        "id": str(uuid.uuid4()),
+        "job_date": job_date,
+        "status": "open",
+        "is_template": False,
+        "template_name": template.get("template_name"),
+        "filled_count": 0,
+        "accepted_worker_ids": [],
+        "created_at": utc_now_iso(),
+    }
+    await db.jobs.insert_one(job_doc)
+    asyncio.create_task(_alert_matching_workers(job_doc))
+    return {k: job_doc.get(k) for k in JobOut.model_fields.keys()}
+
+
 @router.get("/{job_id}", response_model=JobOut)
 async def get_job(job_id: str):
     job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
@@ -452,8 +551,8 @@ async def get_job(job_id: str):
 
 @router.post("/{job_id}/interest")
 async def express_interest(job_id: str, user: dict = Depends(get_current_user)):
-    if user["role"] != "worker":
-        raise HTTPException(status_code=403, detail="Only workers can express interest")
+    if not is_worker(user):
+        raise HTTPException(status_code=403, detail="Activate worker profile first")
     worker = await db.workers.find_one({"user_id": user["id"]}, {"_id": 0})
     if not worker:
         raise HTTPException(status_code=404, detail="Worker profile not found")

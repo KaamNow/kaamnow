@@ -5,9 +5,10 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 
-from ..auth import get_current_user
+from ..auth import create_token, get_current_user, verify_password
 from ..config import settings
 from ..db import db
+from ..engagements import _notify
 from ..utils import utc_now_iso
 from ..whatsapp_notify import _send as wa_send
 
@@ -38,6 +39,29 @@ async def audit(admin: dict, action: str, target: str = "", detail: str = ""):
         )
     except Exception as e:
         logger.warning("audit write failed: %s", e)
+
+
+@router.post("/login")
+async def admin_login(body: dict):
+    identifier = (body.get("identifier") or "").strip()
+    password = body.get("password") or ""
+    if not identifier or not password:
+        raise HTTPException(status_code=400, detail="identifier and password required")
+
+    if "@" in identifier:
+        query = {"email": identifier.lower(), "role": "admin"}
+    else:
+        digits = "".join(c for c in identifier if c.isdigit())
+        query = {"phone_primary": {"$regex": digits[-10:]}, "role": "admin"}
+
+    admin = await db.users.find_one(query)
+    if not admin or not admin.get("password_hash"):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    if not verify_password(password, admin["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    token = create_token(admin["id"], admin.get("phone_primary", ""))
+    return {"access_token": token, "token_type": "bearer"}
 
 
 # ---------------------------------------------------------------------------
@@ -91,7 +115,7 @@ async def bootstrap_admin(body: dict, x_bootstrap_secret: Optional[str] = Header
 @router.get("/stats")
 async def get_stats(admin: dict = Depends(get_admin_user)):
     total_workers = await db.workers.count_documents({})
-    total_customers = await db.users.count_documents({"role": "customer"})
+    total_customers = await db.users.count_documents({"is_customer": {"$ne": False}})
     total_jobs = await db.jobs.count_documents({})
     active_jobs = await db.jobs.count_documents({"status": "open"})
 
@@ -373,7 +397,7 @@ async def list_customers(
     skip: int = 0,
     admin: dict = Depends(get_admin_user),
 ):
-    query: dict = {"role": "customer"}
+    query: dict = {"is_customer": {"$ne": False}}
     if status:
         query["status"] = status
     if search:
@@ -555,9 +579,14 @@ async def broadcast_whatsapp(body: dict, admin: dict = Depends(get_admin_user)):
         raise HTTPException(status_code=400, detail="audience must be 'workers' or 'customers'")
 
     if audience == "workers":
-        users = await db.users.find({"role": "worker"}, {"phone_primary": 1}).to_list(2000)
+        users = await db.users.find(
+            {"$or": [{"is_worker": True}, {"has_worker_profile": True}, {"role": "worker"}]},
+            {"phone_primary": 1},
+        ).to_list(2000)
     else:
-        users = await db.users.find({"role": "customer"}, {"phone_primary": 1}).to_list(2000)
+        users = await db.users.find({"is_customer": {"$ne": False}}, {"phone_primary": 1}).to_list(
+            2000
+        )
 
     import threading
 
@@ -594,6 +623,245 @@ async def get_audit_log(limit: int = 50, skip: int = 0, admin: dict = Depends(ge
     )
     total = await db.admin_logs.count_documents({})
     return {"items": logs, "total": total}
+
+
+# ---------------------------------------------------------------------------
+# Reports, FAQ, legal, wallet, referrals
+# ---------------------------------------------------------------------------
+
+
+@router.get("/reports")
+async def list_reports(
+    status: str = "pending",
+    limit: int = 50,
+    skip: int = 0,
+    admin: dict = Depends(get_admin_user),
+):
+    query = {} if status == "all" else {"status": status}
+    items = (
+        await db.reports.find(query, {"_id": 0})
+        .skip(skip)
+        .limit(limit)
+        .sort("created_at", -1)
+        .to_list(limit)
+    )
+    total = await db.reports.count_documents(query)
+    return {"items": items, "total": total}
+
+
+async def _close_report(report_id: str, status: str, body: dict, admin: dict) -> dict:
+    now = utc_now_iso()
+    res = await db.reports.update_one(
+        {"id": report_id},
+        {
+            "$set": {
+                "status": status,
+                "admin_note": (body.get("admin_note") or "").strip(),
+                "resolved_by": admin["id"],
+                "resolved_at": now,
+                "updated_at": now,
+            }
+        },
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Report not found")
+    await audit(admin, f"report.{status}", report_id)
+    return {"ok": True}
+
+
+@router.post("/reports/{report_id}/resolve")
+async def resolve_report(report_id: str, body: dict, admin: dict = Depends(get_admin_user)):
+    return await _close_report(report_id, "resolved", body, admin)
+
+
+@router.post("/reports/{report_id}/dismiss")
+async def dismiss_report(report_id: str, body: dict, admin: dict = Depends(get_admin_user)):
+    return await _close_report(report_id, "dismissed", body, admin)
+
+
+@router.get("/faq")
+async def admin_list_faq(admin: dict = Depends(get_admin_user)):
+    items = await db.faqs.find({}, {"_id": 0}).sort([("category", 1), ("order", 1)]).to_list(500)
+    return {"items": items}
+
+
+@router.post("/faq")
+async def admin_create_faq(body: dict, admin: dict = Depends(get_admin_user)):
+    now = utc_now_iso()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "question_en": (body.get("question_en") or "").strip(),
+        "question_hi": (body.get("question_hi") or "").strip(),
+        "answer_en": (body.get("answer_en") or "").strip(),
+        "answer_hi": (body.get("answer_hi") or "").strip(),
+        "category": (body.get("category") or "general").strip(),
+        "order": int(body.get("order") or 0),
+        "is_active": True,
+        "created_at": now,
+        "updated_at": now,
+    }
+    if not doc["question_en"] or not doc["answer_en"]:
+        raise HTTPException(status_code=400, detail="question_en and answer_en required")
+    await db.faqs.insert_one(doc)
+    await audit(admin, "faq.created", doc["id"])
+    doc.pop("_id", None)
+    return doc
+
+
+@router.patch("/faq/{faq_id}")
+async def admin_update_faq(faq_id: str, body: dict, admin: dict = Depends(get_admin_user)):
+    allowed = {
+        "question_en",
+        "question_hi",
+        "answer_en",
+        "answer_hi",
+        "category",
+        "order",
+        "is_active",
+    }
+    update = {k: body[k] for k in allowed if k in body}
+    if not update:
+        raise HTTPException(status_code=400, detail="No valid fields")
+    if "order" in update:
+        update["order"] = int(update["order"])
+    update["updated_at"] = utc_now_iso()
+    res = await db.faqs.update_one({"id": faq_id}, {"$set": update})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="FAQ not found")
+    await audit(admin, "faq.updated", faq_id)
+    return {"ok": True}
+
+
+@router.delete("/faq/{faq_id}")
+async def admin_delete_faq(faq_id: str, admin: dict = Depends(get_admin_user)):
+    res = await db.faqs.update_one(
+        {"id": faq_id}, {"$set": {"is_active": False, "updated_at": utc_now_iso()}}
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="FAQ not found")
+    await audit(admin, "faq.deactivated", faq_id)
+    return {"ok": True}
+
+
+@router.post("/faq/{faq_id}/reorder")
+async def admin_reorder_faq(faq_id: str, body: dict, admin: dict = Depends(get_admin_user)):
+    res = await db.faqs.update_one(
+        {"id": faq_id},
+        {"$set": {"order": int(body.get("order") or 0), "updated_at": utc_now_iso()}},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="FAQ not found")
+    await audit(admin, "faq.reordered", faq_id)
+    return {"ok": True}
+
+
+@router.get("/legal")
+async def admin_list_legal(admin: dict = Depends(get_admin_user)):
+    items = await db.legal_docs.find({}, {"_id": 0}).sort("effective_date", -1).to_list(100)
+    return {"items": items}
+
+
+@router.post("/legal")
+async def admin_publish_legal(body: dict, admin: dict = Depends(get_admin_user)):
+    doc_type = body.get("doc_type")
+    if doc_type not in {"terms", "privacy"}:
+        raise HTTPException(status_code=400, detail="doc_type must be terms or privacy")
+    now = utc_now_iso()
+    await db.legal_docs.update_many({"doc_type": doc_type}, {"$set": {"is_current": False}})
+    doc = {
+        "id": str(uuid.uuid4()),
+        "doc_type": doc_type,
+        "version": (body.get("version") or "1.0").strip(),
+        "content_en": body.get("content_en") or "",
+        "content_hi": body.get("content_hi") or "",
+        "effective_date": body.get("effective_date") or now,
+        "is_current": True,
+        "published_by": admin["id"],
+        "created_at": now,
+    }
+    await db.legal_docs.insert_one(doc)
+    await audit(admin, "legal.published", doc_type, doc["version"])
+    doc.pop("_id", None)
+    return doc
+
+
+@router.get("/wallet")
+async def admin_wallet_stats(admin: dict = Depends(get_admin_user)):
+    users_balance = await db.users.aggregate(
+        [{"$group": {"_id": None, "total": {"$sum": "$wallet_balance"}}}]
+    ).to_list(1)
+    credits = await db.wallet_transactions.count_documents({"type": "credit"})
+    debits = await db.wallet_transactions.count_documents({"type": "debit"})
+    return {
+        "total_credits_outstanding": int(users_balance[0]["total"]) if users_balance else 0,
+        "credit_transactions": credits,
+        "debit_transactions": debits,
+    }
+
+
+@router.get("/referrals")
+async def admin_referrals(admin: dict = Depends(get_admin_user), limit: int = 100):
+    items = (
+        await db.users.find(
+            {"referred_by": {"$exists": True, "$ne": None}},
+            {"_id": 0, "id": 1, "name": 1, "phone_primary": 1, "referred_by": 1, "created_at": 1},
+        )
+        .sort("created_at", -1)
+        .limit(limit)
+        .to_list(limit)
+    )
+    return {"items": items}
+
+
+@router.post("/broadcast")
+async def admin_broadcast(body: dict, admin: dict = Depends(get_admin_user)):
+    title = (body.get("title") or "").strip()
+    message = (body.get("body") or "").strip()
+    if not title or not message:
+        raise HTTPException(status_code=400, detail="title and body required")
+    query = {}
+    if body.get("pincode"):
+        query["saved_addresses.pincode"] = body["pincode"]
+    users = await db.users.find(query, {"_id": 0, "id": 1}).limit(2000).to_list(2000)
+    for target in users:
+        await _notify(target["id"], title, message, "admin_broadcast", None)
+    await audit(admin, "broadcast.sent", "", f"count={len(users)}")
+    return {"ok": True, "sent": len(users)}
+
+
+@router.post("/workers/{worker_id}/verify-cert/{cert_id}")
+async def verify_worker_cert(
+    worker_id: str, cert_id: str, body: dict, admin: dict = Depends(get_admin_user)
+):
+    worker = await db.workers.find_one({"id": worker_id}, {"_id": 0, "certifications": 1})
+    if not worker:
+        raise HTTPException(status_code=404, detail="Worker not found")
+    certs = worker.get("certifications") or []
+    found = False
+    for cert in certs:
+        if cert.get("id") == cert_id:
+            cert["verified"] = True
+            cert["verified_at"] = utc_now_iso()
+            cert["verified_by"] = admin["id"]
+            cert["verification_note"] = body.get("note") or ""
+            found = True
+            break
+    if not found:
+        raise HTTPException(status_code=404, detail="Certification not found")
+    await db.workers.update_one({"id": worker_id}, {"$set": {"certifications": certs}})
+    await audit(admin, "worker.cert_verified", worker_id, cert_id)
+    return {"ok": True}
+
+
+@router.get("/waitlist")
+async def admin_waitlist(admin: dict = Depends(get_admin_user), limit: int = 100):
+    items = (
+        await db.worker_waitlist.find({}, {"_id": 0})
+        .sort("created_at", -1)
+        .limit(limit)
+        .to_list(limit)
+    )
+    return {"items": items}
 
 
 # ---------------------------------------------------------------------------

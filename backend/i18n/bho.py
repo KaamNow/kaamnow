@@ -1,0 +1,18 @@
+# All notification text in Bhojpuri — respectful, simple language.
+
+BOOKING_REQUEST_TITLE = "नया रिक्वेस्ट: {job_title}"
+BOOKING_REQUEST_BODY = "{name} रउरा काम पर काम करे चाहत बाड़ें। देखे खातिर टैप करीं।"
+BOOKING_ACCEPTED_TITLE = "रिक्वेस्ट मान लिहल गइल ✓"
+BOOKING_ACCEPTED_BODY = "{name} मान लिहलें। उनकर नंबर: {phone}"
+BOOKING_REJECTED_TITLE = "रिक्वेस्ट ना मानल गइल"
+BOOKING_REJECTED_BODY = "{name} एह काम खातिर खाली नइखन।"
+BOOKING_COMPLETED_TITLE = "काम पूरा भइल — {job_title}"
+BOOKING_COMPLETED_BODY = "{name} के रिव्यू दीं।"
+JOB_ALERT_TITLE = "रउरा लगे नया काम"
+JOB_ALERT_BODY = "{job_title}, {village} में — ₹{daily_rate}/दिन"
+NEW_MESSAGE_TITLE = "{name} के मैसेज"
+NEW_MESSAGE_BODY = "{text}"
+PAYMENT_RECEIVED_TITLE = "भुगतान मिलल ✓"
+PAYMENT_RECEIVED_BODY = "{job_title} खातिर ₹{amount} मिलल"
+TIER_UPGRADED_TITLE = "अब रउरा {tier} Worker बानी! 🌟"
+TIER_UPGRADED_BODY = "बहुत बढ़िया काम करत बानी।"

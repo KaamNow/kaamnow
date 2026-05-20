@@ -1,6 +1,7 @@
 import logging
 import os
 import random
+import secrets
 import uuid
 from typing import Optional
 
@@ -13,6 +14,7 @@ from ..auth import (
     create_token,
     get_current_user,
     hash_password,
+    is_worker,
     set_auth_cookie,
     verify_temp_token,
 )
@@ -41,6 +43,10 @@ USER_OUT_FIELDS = [
     "phone_verified",
     "name",
     "role",
+    "is_worker",
+    "is_customer",
+    "has_worker_profile",
+    "gender",
     "pincode",
     "village",
     "address",
@@ -48,11 +54,48 @@ USER_OUT_FIELDS = [
     "preferred_language",
     "avatar_color",
     "created_at",
+    "is_active",
+    "deleted_at",
+    "migration_status",
+    "push_token",
+    "saved_workers",
+    "referral_code",
+    "referred_by",
+    "referral_count",
+    "wallet_balance",
+    "saved_addresses",
+    "emergency_contact",
+    "tc_accepted_at",
+    "tc_version",
+    "selfie_verified",
+    "posthog_id",
 ]
 
 
 def _user_out(user_doc: dict) -> dict:
-    return {k: user_doc.get(k) for k in USER_OUT_FIELDS}
+    out = {k: user_doc.get(k) for k in USER_OUT_FIELDS}
+    worker = is_worker(user_doc)
+    out["is_worker"] = worker
+    out["is_customer"] = user_doc.get("is_customer", True) is not False
+    out["has_worker_profile"] = worker
+    out["role"] = "admin" if user_doc.get("role") == "admin" else "worker" if worker else "customer"
+    out["saved_workers"] = out.get("saved_workers") or []
+    out["referral_count"] = out.get("referral_count") or 0
+    out["wallet_balance"] = out.get("wallet_balance") or 0
+    out["saved_addresses"] = out.get("saved_addresses") or []
+    out["tc_version"] = out.get("tc_version") or "1.0"
+    out["selfie_verified"] = bool(out.get("selfie_verified"))
+    return out
+
+
+async def _generate_referral_code() -> str:
+    for _ in range(8):
+        code = secrets.token_urlsafe(6).replace("-", "").replace("_", "").upper()[:8]
+        if len(code) < 8:
+            code = f"{code}{secrets.token_hex(4).upper()}"[:8]
+        if not await db.users.find_one({"referral_code": code}, {"_id": 1}):
+            return code
+    return uuid.uuid4().hex[:8].upper()
 
 
 @router.post("/logout")
@@ -83,6 +126,20 @@ async def update_me(body: dict, user: dict = Depends(get_current_user)):
         update_data["name"] = body["name"]
     if "village" in body:
         update_data["village"] = body["village"]
+    if "gender" in body:
+        update_data["gender"] = body["gender"]
+    if "saved_workers" in body and isinstance(body["saved_workers"], list):
+        update_data["saved_workers"] = body["saved_workers"]
+    if body.get("save_worker_id"):
+        update_data["saved_workers"] = list(
+            {*(user.get("saved_workers") or []), body["save_worker_id"]}
+        )
+    if body.get("remove_worker_id"):
+        update_data["saved_workers"] = [
+            worker_id
+            for worker_id in (user.get("saved_workers") or [])
+            if worker_id != body["remove_worker_id"]
+        ]
     unset_data = {}
     if "phone_primary" in body:
         if body["phone_primary"]:
@@ -115,7 +172,7 @@ async def update_me(body: dict, user: dict = Depends(get_current_user)):
 
             delete_image(user.get("photo_url"))
             update_data["photo_url"] = None
-        if user.get("role") == "worker":
+        if is_worker(user):
             await db.workers.update_one(
                 {"user_id": user["id"]}, {"$set": {"photo_url": body.get("photo_url")}}
             )
@@ -132,15 +189,150 @@ async def update_me(body: dict, user: dict = Depends(get_current_user)):
     updated_user = await db.users.find_one({"id": user["id"]})
 
     # Also update workers collection if user is a worker
-    if user["role"] == "worker":
+    if is_worker(user):
         worker_update = {}
         if "name" in body:
             worker_update["name"] = body["name"]
         if "village" in body:
             worker_update["village"] = body["village"]
+        if "gender" in body:
+            worker_update["gender"] = body["gender"]
         if worker_update:
             await db.workers.update_one({"user_id": user["id"]}, {"$set": worker_update})
 
+    return _user_out(updated_user)
+
+
+@router.post("/me/save-worker/{worker_id}", response_model=UserOut)
+async def toggle_saved_worker(worker_id: str, user: dict = Depends(get_current_user)):
+    saved_workers = list(user.get("saved_workers") or [])
+    if worker_id in saved_workers:
+        saved_workers = [saved_id for saved_id in saved_workers if saved_id != worker_id]
+    else:
+        saved_workers.append(worker_id)
+    await db.users.update_one({"id": user["id"]}, {"$set": {"saved_workers": saved_workers}})
+    updated_user = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    return _user_out(updated_user)
+
+
+@router.get("/me/saved-workers")
+async def saved_workers(user: dict = Depends(get_current_user)):
+    saved_ids = user.get("saved_workers") or []
+    if not saved_ids:
+        return []
+    return await db.workers.find({"id": {"$in": saved_ids}}, {"_id": 0}).to_list(100)
+
+
+@router.get("/me/addresses")
+async def list_addresses(user: dict = Depends(get_current_user)):
+    return user.get("saved_addresses") or []
+
+
+@router.post("/me/addresses", response_model=UserOut)
+async def add_address(body: dict, user: dict = Depends(get_current_user)):
+    address_doc = {
+        "id": str(uuid.uuid4()),
+        "label": (body.get("label") or "Home")[:40],
+        "address": body.get("address") or {},
+        "lat": body.get("lat"),
+        "lng": body.get("lng"),
+        "is_default": bool(body.get("is_default", False)),
+    }
+    saved_addresses = list(user.get("saved_addresses") or [])
+    if address_doc["is_default"]:
+        saved_addresses = [{**item, "is_default": False} for item in saved_addresses]
+    saved_addresses.append(address_doc)
+    await db.users.update_one({"id": user["id"]}, {"$set": {"saved_addresses": saved_addresses}})
+    updated_user = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    return _user_out(updated_user)
+
+
+@router.patch("/me/addresses/{address_id}", response_model=UserOut)
+async def update_address(address_id: str, body: dict, user: dict = Depends(get_current_user)):
+    saved_addresses = list(user.get("saved_addresses") or [])
+    found = False
+    updated_addresses = []
+    for item in saved_addresses:
+        if item.get("id") == address_id:
+            found = True
+            next_item = {
+                **item,
+                **{
+                    k: v
+                    for k, v in body.items()
+                    if k in {"label", "address", "lat", "lng", "is_default"}
+                },
+            }
+            updated_addresses.append(next_item)
+        else:
+            updated_addresses.append(item)
+    if not found:
+        raise HTTPException(status_code=404, detail="Address not found")
+    if any(item.get("id") == address_id and item.get("is_default") for item in updated_addresses):
+        updated_addresses = [
+            {**item, "is_default": item.get("id") == address_id} for item in updated_addresses
+        ]
+    await db.users.update_one({"id": user["id"]}, {"$set": {"saved_addresses": updated_addresses}})
+    updated_user = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    return _user_out(updated_user)
+
+
+@router.delete("/me/addresses/{address_id}", response_model=UserOut)
+async def delete_address(address_id: str, user: dict = Depends(get_current_user)):
+    saved_addresses = [
+        item for item in (user.get("saved_addresses") or []) if item.get("id") != address_id
+    ]
+    await db.users.update_one({"id": user["id"]}, {"$set": {"saved_addresses": saved_addresses}})
+    updated_user = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    return _user_out(updated_user)
+
+
+@router.put("/me/emergency-contact", response_model=UserOut)
+async def set_emergency_contact(body: dict, user: dict = Depends(get_current_user)):
+    contact = {
+        "name": (body.get("name") or "").strip()[:100],
+        "phone": (body.get("phone") or "").strip(),
+    }
+    if len(contact["name"]) < 2 or not contact["phone"].startswith("+91"):
+        raise HTTPException(status_code=400, detail="Enter a valid emergency contact")
+    await db.users.update_one({"id": user["id"]}, {"$set": {"emergency_contact": contact}})
+    updated_user = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    return _user_out(updated_user)
+
+
+@router.delete("/me/emergency-contact", response_model=UserOut)
+async def delete_emergency_contact(user: dict = Depends(get_current_user)):
+    await db.users.update_one({"id": user["id"]}, {"$unset": {"emergency_contact": ""}})
+    updated_user = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    return _user_out(updated_user)
+
+
+@router.post("/accept-terms", response_model=UserOut)
+async def accept_terms(body: dict, user: dict = Depends(get_current_user)):
+    await db.users.update_one(
+        {"id": user["id"]},
+        {
+            "$set": {
+                "tc_accepted_at": utc_now_iso(),
+                "tc_version": body.get("version") or "1.0",
+            }
+        },
+    )
+    updated_user = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    return _user_out(updated_user)
+
+
+@router.post("/verify-selfie", response_model=UserOut)
+async def verify_selfie(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+    if file.content_type and not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Upload an image file")
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail="Image file is empty")
+    if len(file_bytes) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Image must be 5MB or smaller")
+    await db.users.update_one({"id": user["id"]}, {"$set": {"selfie_verified": True}})
+    updated_user = await db.users.find_one({"id": user["id"]}, {"_id": 0})
     return _user_out(updated_user)
 
 
@@ -158,10 +350,27 @@ async def check_phone(request: Request, phone: str):
     phone_10 = phone_digits[-10:] if len(phone_digits) >= 10 else phone_digits
     user = await db.users.find_one(
         {"phone_primary": {"$regex": phone_10, "$options": "i"}},
-        {"_id": 0, "role": 1, "id": 1, "is_active": 1, "deleted_at": 1, "permanently_deleted": 1},
+        {
+            "_id": 0,
+            "role": 1,
+            "id": 1,
+            "is_worker": 1,
+            "is_customer": 1,
+            "has_worker_profile": 1,
+            "is_active": 1,
+            "deleted_at": 1,
+            "permanently_deleted": 1,
+        },
     )
     if not user:
-        return {"exists": False, "role": None, "is_active": None, "expired": False}
+        return {
+            "exists": False,
+            "role": None,
+            "is_worker": False,
+            "is_customer": False,
+            "is_active": None,
+            "expired": False,
+        }
 
     is_active = user.get("is_active", True)
     permanently_deleted = user.get("permanently_deleted", False)
@@ -177,7 +386,9 @@ async def check_phone(request: Request, phone: str):
 
     return {
         "exists": True,
-        "role": user.get("role"),
+        "role": "admin" if user.get("role") == "admin" else "worker" if is_worker(user) else "customer",
+        "is_worker": is_worker(user),
+        "is_customer": user.get("is_customer", True) is not False,
         "is_active": is_active,
         "expired": expired,
     }
@@ -324,9 +535,12 @@ async def verify_otp(request: Request, body: VerifyOTPRequest):
 @router.post("/signup-complete", response_model=AuthResponse)
 @limiter.limit("5/minute")
 async def signup_complete(
-    request: Request, body: SignupCompleteRequest, authorization: Optional[str] = Header(None)
+    request: Request,
+    body: SignupCompleteRequest,
+    authorization: Optional[str] = Header(None),
+    referred_by: Optional[str] = None,
 ):
-    """Step 3: Complete signup with name + role, create user account"""
+    """Step 3: Complete signup with name, create unified user account."""
 
     # Validate Authorization header
     if not authorization or not authorization.startswith("Bearer "):
@@ -338,8 +552,6 @@ async def signup_complete(
     # Validate request body
     if not 2 <= len(body.name) <= 100:
         raise HTTPException(status_code=400, detail="Name must be 2-100 characters")
-    if body.role not in ["worker", "customer"]:
-        raise HTTPException(status_code=400, detail="Invalid role")
     if body.password and len(body.password) < 8:
         raise HTTPException(status_code=400, detail="Password must be 8+ characters")
 
@@ -352,25 +564,48 @@ async def signup_complete(
 
     # Create user document
     user_id = str(uuid.uuid4())
+    referrer = None
+    if referred_by:
+        referrer = await db.users.find_one(
+            {"$or": [{"referral_code": referred_by}, {"id": referred_by}]}, {"_id": 0}
+        )
     user_doc = {
         "id": user_id,
         "phone_primary": phone,
         "phone_verified": True,
         "name": body.name,
-        "role": body.role,
+        "role": "customer",
+        "is_worker": False,
+        "is_customer": True,
+        "has_worker_profile": False,
+        "gender": body.gender,
         "password_hash": hash_password(body.password) if body.password else None,
         "pincode": None,
         "village": None,
         "address": None,
         "photo_url": None,
-        "preferred_language": body.preferred_language or "en",
+        "preferred_language": body.preferred_language or "hi",
         "avatar_color": _generate_avatar_color(body.name),
         "created_at": utc_now_iso(),
         "migration_status": "phone_primary",
+        "is_active": True,
+        "saved_workers": [],
+        "referral_code": await _generate_referral_code(),
+        "referred_by": referrer.get("id") if referrer else None,
+        "referral_count": 0,
+        "wallet_balance": 0,
+        "saved_addresses": [],
+        "emergency_contact": None,
+        "tc_accepted_at": None,
+        "tc_version": "1.0",
+        "selfie_verified": False,
+        "posthog_id": None,
     }
 
     # Insert into users collection
     await db.users.insert_one(user_doc)
+    if referrer:
+        await db.users.update_one({"id": referrer["id"]}, {"$inc": {"referral_count": 1}})
 
     # Create access token
     access_token = create_token(user_id, phone)
@@ -378,7 +613,7 @@ async def signup_complete(
     # Clean up OTP record
     await db.otps.delete_one({"phone": phone})
 
-    logger.info(f"User created: {user_id} ({body.role}) via phone signup")
+    logger.info(f"User created: {user_id} (unified) via phone signup")
 
     return {"user": _user_out(user_doc), "access_token": access_token, "refresh_token": None}
 
@@ -390,7 +625,7 @@ async def deactivate_account(user: dict = Depends(get_current_user)):
 
     now = utc_now_iso()
     await db.users.update_one({"id": user["id"]}, {"$set": {"is_active": False, "deleted_at": now}})
-    if user.get("role") == "worker":
+    if is_worker(user):
         await db.workers.update_one(
             {"user_id": user["id"]},
             {
@@ -406,7 +641,7 @@ async def deactivate_account(user: dict = Depends(get_current_user)):
         {
             "user_id": user["id"],
             "phone": user.get("phone_primary") or user.get("phone"),
-            "role": user.get("role"),
+            "role": "admin" if user.get("role") == "admin" else "worker" if is_worker(user) else "customer",
             "deactivated_at": now,
             "reactivated_at": None,
         }
@@ -422,7 +657,13 @@ async def upload_user_photo(file: UploadFile = File(...), user: dict = Depends(g
     """Upload profile photo — stored on Cloudinary CDN."""
     from ..cloudinary_service import delete_image, upload_image
 
+    if file.content_type and not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="Only image uploads are supported")
     file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail="Image file is empty")
+    if len(file_bytes) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Image must be 5MB or smaller")
     public_id = f"user_{user['id']}"
 
     # Delete old photo from Cloudinary if it exists
@@ -432,7 +673,7 @@ async def upload_user_photo(file: UploadFile = File(...), user: dict = Depends(g
 
     photo_url = upload_image(file_bytes, public_id)
     await db.users.update_one({"id": user["id"]}, {"$set": {"photo_url": photo_url}})
-    if user.get("role") == "worker":
+    if is_worker(user):
         await db.workers.update_one({"user_id": user["id"]}, {"$set": {"photo_url": photo_url}})
     return {"ok": True, "photo_url": photo_url}
 
@@ -499,7 +740,7 @@ async def login_complete(request: Request, authorization: Optional[str] = Header
         await db.users.update_one(
             {"id": user["id"]}, {"$set": {"is_active": True, "deleted_at": None}}
         )
-        if user.get("role") == "worker":
+        if is_worker(user):
             await db.workers.update_one(
                 {"user_id": user["id"]},
                 {
@@ -518,7 +759,7 @@ async def login_complete(request: Request, authorization: Optional[str] = Header
         user = await db.users.find_one({"phone_primary": phone})
 
     access_token = create_token(user["id"], phone)
-    logger.info(f"Phone login complete for {phone} ({user['role']})")
+    logger.info(f"Phone login complete for {phone} ({'worker' if is_worker(user) else 'customer'})")
 
     return {
         "user": _user_out(user),

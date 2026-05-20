@@ -38,9 +38,20 @@ class Settings(BaseModel):
     gupshup_sandbox_mode: bool = False
     show_otp_in_response: bool = False
 
+    gemini_api_key: str = ""
+    groq_api_key: str = ""
+    razorpay_key_id: str = ""
+    razorpay_key_secret: str = ""
+    posthog_api_key: str = ""
+    sentry_dsn: str = ""
+
     feature_engagement_flow: bool = False
     feature_otp_auth: bool = False
     feature_whatsapp_notifications: bool = False
+    feature_ai: bool = False
+    feature_chat: bool = False
+    feature_payments: bool = False
+    feature_voice: bool = False
 
     class Config:
         extra = "ignore"
@@ -72,7 +83,17 @@ settings = Settings(
     gupshup_template_namespace=os.getenv("GUPSHUP_TEMPLATE_NAMESPACE"),
     gupshup_sandbox_mode=_to_bool(os.getenv("GUPSHUP_SANDBOX_MODE"), False),
     show_otp_in_response=_to_bool(os.getenv("SHOW_OTP_IN_RESPONSE"), False),
+    gemini_api_key=os.getenv("GEMINI_API_KEY", ""),
+    groq_api_key=os.getenv("GROQ_API_KEY", ""),
+    razorpay_key_id=os.getenv("RAZORPAY_KEY_ID", ""),
+    razorpay_key_secret=os.getenv("RAZORPAY_KEY_SECRET", ""),
+    posthog_api_key=os.getenv("POSTHOG_API_KEY", ""),
+    sentry_dsn=os.getenv("SENTRY_DSN", ""),
     feature_engagement_flow=_to_bool(os.getenv("FEATURE_ENGAGEMENT_FLOW"), False),
     feature_otp_auth=_to_bool(os.getenv("FEATURE_OTP_AUTH"), False),
     feature_whatsapp_notifications=_to_bool(os.getenv("FEATURE_WHATSAPP_NOTIFICATIONS"), False),
+    feature_ai=_to_bool(os.getenv("FEATURE_AI"), False),
+    feature_chat=_to_bool(os.getenv("FEATURE_CHAT"), False),
+    feature_payments=_to_bool(os.getenv("FEATURE_PAYMENTS"), False),
+    feature_voice=_to_bool(os.getenv("FEATURE_VOICE"), False),
 )

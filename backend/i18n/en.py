@@ -1,0 +1,18 @@
+# All notification text in English — plain, respectful language.
+
+BOOKING_REQUEST_TITLE = "New request for: {job_title}"
+BOOKING_REQUEST_BODY = "{name} wants to work on your job. Tap to review."
+BOOKING_ACCEPTED_TITLE = "Request accepted ✓"
+BOOKING_ACCEPTED_BODY = "{name} accepted. Here is their number: {phone}"
+BOOKING_REJECTED_TITLE = "Request not accepted"
+BOOKING_REJECTED_BODY = "{name} is not available for this job."
+BOOKING_COMPLETED_TITLE = "Job finished — {job_title}"
+BOOKING_COMPLETED_BODY = "Please leave a review for {name}."
+JOB_ALERT_TITLE = "New job near you"
+JOB_ALERT_BODY = "{job_title} in {village} — ₹{daily_rate}/day"
+NEW_MESSAGE_TITLE = "Message from {name}"
+NEW_MESSAGE_BODY = "{text}"
+PAYMENT_RECEIVED_TITLE = "Payment received ✓"
+PAYMENT_RECEIVED_BODY = "₹{amount} received for {job_title}"
+TIER_UPGRADED_TITLE = "You are now a {tier} Worker! 🌟"
+TIER_UPGRADED_BODY = "Keep up the great work."

@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -95,6 +96,7 @@ async def get_current_user(request: Request) -> dict:
 
 
 def set_auth_cookie(response: Response, token: str) -> None:
+    csrf_token = secrets.token_urlsafe(32)
     response.set_cookie(
         key="access_token",
         value=token,
@@ -104,3 +106,26 @@ def set_auth_cookie(response: Response, token: str) -> None:
         max_age=settings.jwt_expiry_days * 24 * 3600,
         path="/",
     )
+    response.set_cookie(
+        key="csrf_token",
+        value=csrf_token,
+        httponly=False,
+        secure=settings.cookie_secure,
+        samesite="none" if settings.cookie_secure else "lax",
+        max_age=settings.jwt_expiry_days * 24 * 3600,
+        path="/",
+    )
+
+
+def is_worker(user: Optional[dict]) -> bool:
+    if not user:
+        return False
+    return bool(
+        user.get("is_worker") or user.get("has_worker_profile") or user.get("role") == "worker"
+    )
+
+
+def is_customer(user: Optional[dict]) -> bool:
+    if not user:
+        return False
+    return user.get("is_customer", True) is not False

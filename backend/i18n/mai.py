@@ -1,0 +1,18 @@
+# All notification text in Maithili — respectful, simple language.
+
+BOOKING_REQUEST_TITLE = "नव अनुरोध: {job_title}"
+BOOKING_REQUEST_BODY = "{name} अहां केर काज पर काम करय चाहैत छथि। देखबाक लेल टैप करू।"
+BOOKING_ACCEPTED_TITLE = "अनुरोध स्वीकार भेल ✓"
+BOOKING_ACCEPTED_BODY = "{name} स्वीकार कयलनि। हुनकर नंबर: {phone}"
+BOOKING_REJECTED_TITLE = "अनुरोध स्वीकार नहि भेल"
+BOOKING_REJECTED_BODY = "{name} एहि काज लेल उपलब्ध नहि छथि।"
+BOOKING_COMPLETED_TITLE = "काज पूरा भेल — {job_title}"
+BOOKING_COMPLETED_BODY = "{name} के रिव्यू दिअ।"
+JOB_ALERT_TITLE = "अहां लग नव काज"
+JOB_ALERT_BODY = "{job_title}, {village} में — ₹{daily_rate}/दिन"
+NEW_MESSAGE_TITLE = "{name} केर संदेश"
+NEW_MESSAGE_BODY = "{text}"
+PAYMENT_RECEIVED_TITLE = "भुगतान भेटल ✓"
+PAYMENT_RECEIVED_BODY = "{job_title} लेल ₹{amount} भेटल"
+TIER_UPGRADED_TITLE = "अहां आब {tier} Worker छी! 🌟"
+TIER_UPGRADED_BODY = "बहुत नीक काज कऽ रहल छी।"

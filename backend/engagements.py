@@ -1,9 +1,11 @@
 import threading
 import uuid
+from datetime import datetime
 from typing import Literal, Optional
 
 from fastapi import HTTPException
 
+from .auth import is_customer, is_worker
 from .db import db
 from .utils import utc_now_iso
 from .whatsapp_notify import (
@@ -22,6 +24,7 @@ async def _notify(user_id: str, title: str, body: str, kind: str, ref_id: str = 
         return
 
     try:
+        deep_link = f"kaamnow://engagement/{ref_id}" if ref_id else None
         await db.notifications.insert_one(
             {
                 "id": str(uuid.uuid4()),
@@ -30,6 +33,7 @@ async def _notify(user_id: str, title: str, body: str, kind: str, ref_id: str = 
                 "body": body,
                 "kind": kind,
                 "ref_id": ref_id,
+                "deep_link": deep_link,
                 "read": False,
                 "created_at": utc_now_iso(),
             }
@@ -69,9 +73,10 @@ async def _notify(user_id: str, title: str, body: str, kind: str, ref_id: str = 
 
                     from .push_service import send_push
 
-                    asyncio.create_task(
-                        send_push(push_token, title, body, {"kind": kind, "ref_id": ref_id or ""})
-                    )
+                    payload = {"kind": kind, "ref_id": ref_id or ""}
+                    if ref_id:
+                        payload["deep_link"] = f"kaamnow://engagement/{ref_id}"
+                    asyncio.create_task(send_push(push_token, title, body, payload))
 
                 # WhatsApp (rich message with details)
                 phone = _notification_phone(user)
@@ -289,14 +294,14 @@ async def create_engagement_request(
         raise HTTPException(status_code=400, detail="Job is not open for requests")
 
     if source == "customer_booking":
-        if user["role"] != "customer":
+        if not is_customer(user):
             raise HTTPException(status_code=403, detail="Only customers can book workers")
         if job["customer_id"] != user["id"]:
             raise HTTPException(
                 status_code=403, detail="You can only book workers for your own jobs"
             )
     elif source == "worker_interest":
-        if user["role"] != "worker":
+        if not is_worker(user):
             raise HTTPException(status_code=403, detail="Only workers can express interest")
         if worker.get("user_id") != user["id"]:
             raise HTTPException(
@@ -328,6 +333,17 @@ async def create_engagement_request(
         "created_by": user["id"],
         "created_at": now,
         "updated_at": now,
+        "chat_enabled": False,
+        "payment_status": "unpaid",
+        "payment_id": None,
+        "payment_amount": None,
+        "before_photos": [],
+        "after_photos": [],
+        "start_otp": None,
+        "otp_verified_at": None,
+        "checkin_lat": None,
+        "checkin_lng": None,
+        "progress_updates": [],
     }
     await db.engagements.insert_one(engagement)
     engagement.pop("_id", None)
@@ -358,9 +374,9 @@ async def get_engagement_for_user(engagement_id: str, user: dict) -> dict:
     if not engagement:
         raise HTTPException(status_code=404, detail="Engagement not found")
 
-    if user["role"] == "customer" and engagement["customer_id"] == user["id"]:
+    if is_customer(user) and engagement["customer_id"] == user["id"]:
         return engagement
-    if user["role"] == "worker":
+    if is_worker(user):
         worker = await db.workers.find_one({"user_id": user["id"]}, {"_id": 0})
         if worker and worker["id"] == engagement["worker_id"]:
             return engagement
@@ -369,12 +385,15 @@ async def get_engagement_for_user(engagement_id: str, user: dict) -> dict:
 
 
 async def list_engagements_for_user(user: dict) -> list[dict]:
-    if user["role"] == "worker":
+    if is_worker(user):
         worker = await db.workers.find_one({"user_id": user["id"]}, {"_id": 0})
         if not worker:
-            return []
+            worker = None
+        worker_query = {"worker_id": worker["id"]} if worker else {"worker_id": "__none__"}
         return (
-            await db.engagements.find({"worker_id": worker["id"]}, {"_id": 0})
+            await db.engagements.find(
+                {"$or": [{"customer_id": user["id"]}, worker_query]}, {"_id": 0}
+            )
             .sort("created_at", -1)
             .to_list(100)
         )
@@ -388,13 +407,9 @@ async def list_engagements_for_user(user: dict) -> list[dict]:
 
 def _can_decide_engagement(engagement: dict, user: dict, worker: Optional[dict]) -> bool:
     if engagement["source"] == "worker_interest":
-        return user["role"] == "customer" and engagement["customer_id"] == user["id"]
+        return is_customer(user) and engagement["customer_id"] == user["id"]
     if engagement["source"] == "customer_booking":
-        return (
-            user["role"] == "worker"
-            and worker is not None
-            and worker["id"] == engagement["worker_id"]
-        )
+        return is_worker(user) and worker is not None and worker["id"] == engagement["worker_id"]
     return False
 
 
@@ -404,7 +419,7 @@ async def accept_engagement(engagement_id: str, user: dict) -> dict:
         raise HTTPException(status_code=404, detail="Engagement not found")
 
     worker = None
-    if user["role"] == "worker":
+    if is_worker(user):
         worker = await db.workers.find_one({"user_id": user["id"]})
     if not _can_decide_engagement(engagement, user, worker):
         raise HTTPException(status_code=403, detail="You cannot accept this request")
@@ -442,6 +457,8 @@ async def accept_engagement(engagement_id: str, user: dict) -> dict:
                 "status": "accepted",
                 "accepted_at": now,
                 "updated_at": now,
+                "chat_enabled": True,
+                "payment_amount": engagement.get("daily_rate"),
                 "worker_phone": worker_user.get("phone_primary") if worker_user else None,
                 "customer_phone": customer_phone,
                 "customer_village": customer_village,
@@ -468,6 +485,21 @@ async def accept_engagement(engagement_id: str, user: dict) -> dict:
             }
         },
     )
+
+    try:
+        created_at = datetime.fromisoformat(str(engagement["created_at"]).replace("Z", "+00:00"))
+        accepted_at = datetime.fromisoformat(now.replace("Z", "+00:00"))
+        delta_minutes = max(0, int((accepted_at - created_at).total_seconds() // 60))
+        old_avg = float(engagement_worker.get("response_time_minutes") or delta_minutes)
+        old_count = int(engagement_worker.get("response_time_count") or 0)
+        count = min(old_count + 1, 10)
+        new_avg = round(((old_avg * min(old_count, 9)) + delta_minutes) / count)
+        await db.workers.update_one(
+            {"id": engagement["worker_id"]},
+            {"$set": {"response_time_minutes": new_avg}, "$inc": {"response_time_count": 1}},
+        )
+    except Exception:
+        pass
 
     if engagement.get("source") == "worker_interest":
         await _notify(
@@ -499,7 +531,7 @@ async def reject_engagement(engagement_id: str, user: dict) -> dict:
         raise HTTPException(status_code=404, detail="Engagement not found")
 
     worker = None
-    if user["role"] == "worker":
+    if is_worker(user):
         worker = await db.workers.find_one({"user_id": user["id"]})
     if not _can_decide_engagement(engagement, user, worker):
         raise HTTPException(status_code=403, detail="You cannot reject this request")
@@ -545,7 +577,7 @@ async def cancel_engagement(engagement_id: str, user: dict) -> dict:
     )
 
     # If worker is cancelling, notify customer; if customer cancels, notify worker
-    if user["role"] == "worker":
+    if is_worker(user):
         worker_name = engagement.get("worker_name", "A worker")
         was_accepted = engagement["status"] == "accepted"
         if was_accepted:
@@ -627,7 +659,7 @@ async def cancel_engagement(engagement_id: str, user: dict) -> dict:
                 "booking_rejected",
                 engagement_id,
             )
-    elif user["role"] == "customer":
+    elif is_customer(user):
         eng_worker = await db.workers.find_one({"id": engagement["worker_id"]}, {"_id": 0})
         if eng_worker:
             await _notify(
@@ -650,9 +682,9 @@ async def complete_engagement(engagement_id: str, user: dict) -> dict:
     worker_doc = await db.workers.find_one(
         {"id": engagement["worker_id"]}, {"_id": 0, "user_id": 1}
     )
-    is_worker = user["role"] == "worker" and worker_doc and worker_doc.get("user_id") == user["id"]
+    is_assigned_worker = is_worker(user) and worker_doc and worker_doc.get("user_id") == user["id"]
 
-    if not is_worker:
+    if not is_assigned_worker:
         raise HTTPException(
             status_code=403, detail="Only the assigned worker can mark a job as complete"
         )
@@ -683,6 +715,25 @@ async def complete_engagement(engagement_id: str, user: dict) -> dict:
 
     # Mark the parent job as completed
     await db.jobs.update_one({"id": engagement["job_id"]}, {"$set": {"status": "completed"}})
+
+    customer = await db.users.find_one({"id": engagement["customer_id"]}, {"_id": 0})
+    if customer and customer.get("referred_by") and not customer.get("referral_rewarded"):
+        completed_by_customer = await db.engagements.count_documents(
+            {"customer_id": engagement["customer_id"], "status": "completed"}
+        )
+        if completed_by_customer == 1:
+            referrer = await db.users.find_one(
+                {"referral_code": customer.get("referred_by")}, {"_id": 0, "id": 1}
+            )
+            if referrer:
+                from .routers.wallet import credit_wallet
+
+                await credit_wallet(referrer["id"], 100, "referral_reward", engagement_id)
+                await credit_wallet(customer["id"], 50, "referral_bonus", engagement_id)
+                await db.users.update_one(
+                    {"id": customer["id"]},
+                    {"$set": {"referral_rewarded": True, "referral_rewarded_at": now}},
+                )
 
     # Notify customer that work is done — rate the worker
     await _notify(
@@ -767,7 +818,7 @@ async def rate_engagement(
         "reviewer_user_id": user["id"],
         "created_at": now,
     }
-    if user["role"] == "customer":
+    if is_customer(user) and engagement["customer_id"] == user["id"]:
         if engagement["customer_id"] != user["id"]:
             raise HTTPException(status_code=403, detail="You can only rate your own hires")
 
@@ -870,7 +921,7 @@ async def rate_engagement(
             # Check tier upgrade/downgrade after every rating
             await _check_tier(engagement["worker_id"], worker_doc["user_id"])
 
-    elif user["role"] == "worker":
+    elif is_worker(user):
         worker = await db.workers.find_one({"user_id": user["id"]})
         if not worker or worker["id"] != engagement["worker_id"]:
             raise HTTPException(status_code=403, detail="You can only rate your own jobs")
