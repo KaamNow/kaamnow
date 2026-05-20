@@ -389,10 +389,17 @@ async def on_startup() -> None:
     wa_live = "LIVE (Gupshup)" if settings.gupshup_api_key else "mocked"
     logger.info(f"OTP service initialized — WhatsApp: {wa_live}")
 
-    await seed_data()
-    logger.info("Seed data loaded.")
-    await _ensure_indexes()
-    logger.info("Phase 1 indexes ensured.")
+    if not os.getenv("SKIP_SEED"):
+        try:
+            await seed_data()
+            logger.info("Seed data loaded.")
+        except Exception as exc:
+            logger.warning(f"seed_data() failed (non-fatal): {exc}")
+    try:
+        await _ensure_indexes()
+        logger.info("Phase 1 indexes ensured.")
+    except Exception as exc:
+        logger.warning(f"_ensure_indexes() failed (non-fatal): {exc}")
 
     import asyncio
 

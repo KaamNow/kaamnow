@@ -156,7 +156,25 @@ kubectl --kubeconfig "$KUBECONFIG_PATH" \
 kubectl --kubeconfig "$KUBECONFIG_PATH" \
   rollout status deployment/backend \
   --namespace "$NAMESPACE" \
-  --timeout=90s
+  --timeout=90s || {
+    log "❌ Backend rollout failed — printing pod logs for diagnosis:"
+    kubectl --kubeconfig "$KUBECONFIG_PATH" get pods -n "$NAMESPACE"
+    POD=$(kubectl --kubeconfig "$KUBECONFIG_PATH" get pod -n "$NAMESPACE" \
+      -l app=backend --sort-by=.metadata.creationTimestamp \
+      -o jsonpath='{.items[-1].metadata.name}' 2>/dev/null)
+    if [ -n "$POD" ]; then
+      log "--- Logs for $POD ---"
+      kubectl --kubeconfig "$KUBECONFIG_PATH" logs "$POD" \
+        -n "$NAMESPACE" --tail=60 2>&1 || true
+      log "--- Previous container logs ---"
+      kubectl --kubeconfig "$KUBECONFIG_PATH" logs "$POD" \
+        -n "$NAMESPACE" --previous --tail=60 2>&1 || true
+      log "--- Pod describe ---"
+      kubectl --kubeconfig "$KUBECONFIG_PATH" describe pod "$POD" \
+        -n "$NAMESPACE" 2>&1 | tail -30 || true
+    fi
+    exit 1
+  }
 
 # ── Done ──────────────────────────────────────────────────────────────────────
 SERVER_IP=$(curl -s ifconfig.me)
