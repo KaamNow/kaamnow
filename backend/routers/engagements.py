@@ -75,6 +75,16 @@ async def my_engagements(user: dict = Depends(get_current_user)):
     return await list_engagements_for_user(user)
 
 
+@router.get("/{engagement_id}")
+async def get_engagement(engagement_id: str, user: dict = Depends(get_current_user)):
+    eng = await db.engagements.find_one({"id": engagement_id}, {"_id": 0})
+    if not eng:
+        raise HTTPException(status_code=404, detail="Engagement not found")
+    if user["id"] not in (eng.get("worker_id"), eng.get("customer_id"), eng.get("worker_user_id")):
+        raise HTTPException(status_code=403, detail="Not your engagement")
+    return eng
+
+
 @router.post("/{engagement_id}/accept")
 async def accept(engagement_id: str, user: dict = Depends(get_current_user)):
     return await accept_engagement(engagement_id, user)
