@@ -58,7 +58,7 @@ export default function MapScreen({ navigation }) {
             <View style={styles.pin}>
               <Ionicons name="person" size={12} color="#fff" />
             </View>
-            <Callout onPress={() => navigation.navigate("WorkerProfile", { workerId: w.id })}>
+            <Callout onPress={() => navigation.navigate("WorkerProfile", { id: w.id })}>
               <View style={styles.callout}>
                 <Text style={styles.calloutName}>{w.name}</Text>
                 <Text style={styles.calloutSkill}>{(w.skills || []).join(", ")}</Text>

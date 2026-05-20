@@ -26,7 +26,7 @@ export default function SavedExpertsScreen({ navigation }) {
   const renderItem = ({ item }) => (
     <TouchableOpacity
       style={styles.row}
-      onPress={() => navigation.navigate("WorkerProfile", { workerId: item.id })}
+      onPress={() => navigation.navigate("WorkerProfile", { id: item.id })}
       activeOpacity={0.8}
     >
       <View style={styles.avatar}>

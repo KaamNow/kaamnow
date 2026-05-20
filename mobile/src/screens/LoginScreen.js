@@ -156,7 +156,7 @@ export default function LoginScreen() {
           <Pressable style={s.backBtn} onPress={() => {
             if (step > 1) resetOTPFlow();
             else if (navigation.canGoBack()) navigation.goBack();
-            else navigation.navigate("Home");
+            else navigation.navigate("Tabs");
           }}>
             <Ionicons name="arrow-back" size={22} color={colors.primary} />
           </Pressable>

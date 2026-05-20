@@ -304,7 +304,7 @@ export default function LandingScreen({ navigation }) {
 
         {/* ── Two main paths ─────────────────────────────────────── */}
         <View style={s.guestPathStack}>
-          <Pressable style={({ pressed }) => [s.primaryPathCard, pressed && s.pressed]} onPress={() => navigation.navigate("Tabs", { screen: "Workers" })}>
+          <Pressable style={({ pressed }) => [s.primaryPathCard, pressed && s.pressed]} onPress={() => navigation.navigate("Tabs", { screen: "FindWork" })}>
             <View style={s.pathCopy}>
               <View style={s.pathIconPrimary}>
                 <Ionicons name="search-outline" size={22} color={colors.primary} />
@@ -319,7 +319,7 @@ export default function LandingScreen({ navigation }) {
             </View>
           </Pressable>
 
-          <Pressable style={({ pressed }) => [s.secondaryPathCard, pressed && s.pressed]} onPress={() => navigation.navigate("Tabs", { screen: "Jobs" })}>
+          <Pressable style={({ pressed }) => [s.secondaryPathCard, pressed && s.pressed]} onPress={() => navigation.navigate("Tabs", { screen: "FindWork" })}>
             <View style={s.pathCopy}>
               <View style={s.pathIconSecondary}>
                 <Ionicons name="briefcase-outline" size={22} color={colors.primary} />
@@ -343,7 +343,7 @@ export default function LandingScreen({ navigation }) {
               size="chip"
               label={cat.label[lang] || cat.label.en}
               icon={cat.icon}
-              onPress={() => navigation.navigate("Tabs", { screen: "Workers" })}>
+              onPress={() => navigation.navigate("Tabs", { screen: "FindWork" })}>
             </ServiceCategoryCard>
           ))}
         </ScrollView>
@@ -367,7 +367,7 @@ export default function LandingScreen({ navigation }) {
           <View style={s.guestSection}>
             <View style={s.guestSectionHeadRow}>
               <Text style={s.guestSectionHead}>Available near you</Text>
-              <Pressable onPress={() => navigation.navigate("Tabs", { screen: "Workers" })}>
+              <Pressable onPress={() => navigation.navigate("Tabs", { screen: "FindWork" })}>
                 <Text style={s.guestSeeAllTxt}>See all workers →</Text>
               </Pressable>
             </View>
@@ -380,7 +380,7 @@ export default function LandingScreen({ navigation }) {
                 onPress={() => navigation.navigate("WorkerProfile", { id: w.id })}
               />
             ))}
-            <Pressable style={s.guestSeeAllBtn} onPress={() => navigation.navigate("Tabs", { screen: "Workers" })}>
+            <Pressable style={s.guestSeeAllBtn} onPress={() => navigation.navigate("Tabs", { screen: "FindWork" })}>
               <Text style={s.guestSeeAllTxt}>{lang === "hi" ? "सभी कारीगर देखो →" : "See all workers →"}</Text>
             </Pressable>
           </View>
@@ -453,7 +453,7 @@ export default function LandingScreen({ navigation }) {
           onLangToggle={() => setLang(lang === "hi" ? "en" : "hi")}
           showNotifBell={engagements.length > 0}
           notifCount={engagements.length}
-          onNotifPress={() => navigation.navigate("Tabs", { screen: "Account" })}
+          onNotifPress={() => navigation.navigate("Tabs", { screen: "Profile" })}
           style={s.workerPremiumHeader}
         />
 
@@ -507,15 +507,15 @@ export default function LandingScreen({ navigation }) {
 
         {workerProfile && (
           <View style={s.workerPremiumStatsRow}>
-            <Pressable style={({ pressed }) => [s.workerPremiumStatCard, pressed && s.pressed]} onPress={() => navigation.navigate("Tabs", { screen: "Account" })}>
+            <Pressable style={({ pressed }) => [s.workerPremiumStatCard, pressed && s.pressed]} onPress={() => navigation.navigate("Tabs", { screen: "Profile" })}>
               <Text style={s.workerPremiumStatValue}>{(workerProfile.avg_rating || 0).toFixed(1)}</Text>
               <Text style={s.workerPremiumStatLabel}>Rating</Text>
             </Pressable>
-            <Pressable style={({ pressed }) => [s.workerPremiumStatCard, pressed && s.pressed]} onPress={() => navigation.navigate("Tabs", { screen: "Account" })}>
+            <Pressable style={({ pressed }) => [s.workerPremiumStatCard, pressed && s.pressed]} onPress={() => navigation.navigate("Tabs", { screen: "Profile" })}>
               <Text style={s.workerPremiumStatValue}>{workerProfile.total_jobs || 0}</Text>
               <Text style={s.workerPremiumStatLabel}>{lang === "hi" ? "Jobs Done" : "Jobs Done"}</Text>
             </Pressable>
-            <Pressable style={({ pressed }) => [s.workerPremiumStatCard, pressed && s.pressed]} onPress={() => navigation.navigate("Tabs", { screen: "Account" })}>
+            <Pressable style={({ pressed }) => [s.workerPremiumStatCard, pressed && s.pressed]} onPress={() => navigation.navigate("Tabs", { screen: "Profile" })}>
               <Text style={[s.workerPremiumStatValue, { color: colors.money }]}>₹{workerProfile.daily_rate || 0}</Text>
               <Text style={s.workerPremiumStatLabel}>{lang === "hi" ? "Per Day" : "Per Day"}</Text>
             </Pressable>
@@ -525,7 +525,7 @@ export default function LandingScreen({ navigation }) {
         {needsProfileNudge && (
           <Pressable
             style={({ pressed }) => [s.workerProfileNudgeCard, pressed && s.pressed]}
-            onPress={() => navigation.navigate("Tabs", { screen: "Account" })}
+            onPress={() => navigation.navigate("Tabs", { screen: "Profile" })}
           >
             <View style={s.workerProfileNudgeIcon}>
               <Ionicons name="shield-checkmark-outline" size={19} color={colors.warning} />
@@ -545,7 +545,7 @@ export default function LandingScreen({ navigation }) {
 
         <Pressable
           style={({ pressed }) => [s.workerFindJobsCard, pressed && s.pressed]}
-          onPress={() => navigation.navigate("Tabs", { screen: "Jobs" })}
+          onPress={() => navigation.navigate("Tabs", { screen: "FindWork" })}
         >
           <LinearGradient colors={[colors.primary, colors.primaryDark]} start={{ x:0, y:0 }} end={{ x:1, y:1 }} style={s.workerFindJobsGradient}>
             <View style={s.workerFindJobsCopy}>
@@ -567,7 +567,7 @@ export default function LandingScreen({ navigation }) {
               size="chip"
               label={cat.label[lang] || cat.label.en}
               icon={cat.icon}
-              onPress={() => navigation.navigate("Tabs", { screen: "Jobs" })}
+              onPress={() => navigation.navigate("Tabs", { screen: "FindWork" })}
             />
           ))}
         </ScrollView>
@@ -576,7 +576,7 @@ export default function LandingScreen({ navigation }) {
           <View style={s.workerPremiumSection}>
             <View style={s.workerSectionHeadRow}>
               <Text style={s.workerSectionHead}>{lang === "hi" ? "Chal rahe kaam" : "Active jobs"}</Text>
-              <Pressable onPress={() => navigation.navigate("Tabs", { screen: "Account" })} style={({ pressed }) => [s.workerSeeAllBtn, pressed && s.pressed]}>
+              <Pressable onPress={() => navigation.navigate("Tabs", { screen: "Profile" })} style={({ pressed }) => [s.workerSeeAllBtn, pressed && s.pressed]}>
                 <Text style={s.workerSeeAllText}>Dashboard →</Text>
               </Pressable>
             </View>
@@ -584,7 +584,7 @@ export default function LandingScreen({ navigation }) {
               <Pressable
                 key={e.id}
                 style={({ pressed }) => [s.workerActiveJobCard, pressed && s.pressed]}
-                onPress={() => navigation.navigate("Tabs", { screen: "Account" })}
+                onPress={() => navigation.navigate("Tabs", { screen: "Profile" })}
               >
                 <View style={[s.workerActiveStatusDot, { backgroundColor: (e.engagement_status||e.status) === "accepted" ? colors.success : colors.warning }]} />
                 <View style={s.workerActiveJobCopy}>
@@ -608,7 +608,7 @@ export default function LandingScreen({ navigation }) {
                   {previewJobs.length} {lang === "hi" ? "matching jobs" : "matching jobs"}
                 </Text>
               </View>
-              <Pressable onPress={() => navigation.navigate("Tabs", { screen: "Jobs" })} style={({ pressed }) => [s.workerSeeAllBtn, pressed && s.pressed]}>
+              <Pressable onPress={() => navigation.navigate("Tabs", { screen: "FindWork" })} style={({ pressed }) => [s.workerSeeAllBtn, pressed && s.pressed]}>
                 <Text style={s.workerSeeAllText}>See all →</Text>
               </Pressable>
             </View>
@@ -618,7 +618,7 @@ export default function LandingScreen({ navigation }) {
                 job={j}
                 compact
                 lang={lang}
-                onPress={() => navigation.navigate("Tabs", { screen: "Jobs" })}
+                onPress={() => navigation.navigate("Tabs", { screen: "FindWork" })}
               />
             ))}
           </View>
@@ -658,7 +658,7 @@ export default function LandingScreen({ navigation }) {
           onLangToggle={() => setLang(lang === "hi" ? "en" : "hi")}
           showNotifBell
           notifCount={engagements.length}
-          onNotifPress={() => navigation.navigate("Tabs", { screen: "Account", params: { initialTab: "pending" } })}
+          onNotifPress={() => navigation.navigate("Tabs", { screen: "Profile", params: { initialTab: "pending" } })}
           style={s.customerHeader}
         />
 
@@ -686,7 +686,7 @@ export default function LandingScreen({ navigation }) {
             </Text>
           </View>
           <Pressable
-            onPress={() => navigation.navigate("Profile")}
+            onPress={() => navigation.navigate("Tabs", { screen: "Profile" })}
             style={({ pressed }) => [s.customerProfileButton, pressed && s.pressed]}
           >
             <Ionicons name="person-circle-outline" size={26} color={colors.primary} />
@@ -696,7 +696,7 @@ export default function LandingScreen({ navigation }) {
         {engagements.length > 0 && (
           <Pressable
             style={({ pressed }) => [s.customerAlertCard, pressed && s.pressed]}
-            onPress={() => navigation.navigate("Tabs", { screen: "Account", params: { initialTab: "pending" } })}
+            onPress={() => navigation.navigate("Tabs", { screen: "Profile", params: { initialTab: "pending" } })}
           >
             <View style={s.customerAlertIcon}>
               <Ionicons name="people-outline" size={19} color={colors.warning} />
@@ -716,21 +716,21 @@ export default function LandingScreen({ navigation }) {
         <View style={s.customerStatsRow}>
           <Pressable
             style={({ pressed }) => [s.customerStatCard, pressed && s.pressed]}
-            onPress={() => navigation.navigate("Tabs", { screen: "Account", params: { initialTab: "jobs" } })}
+            onPress={() => navigation.navigate("Tabs", { screen: "Profile", params: { initialTab: "jobs" } })}
           >
             <Text style={s.customerStatValue}>{myJobs.length}</Text>
             <Text style={s.customerStatLabel}>{lang === "hi" ? "Open Jobs" : "Open Jobs"}</Text>
           </Pressable>
           <Pressable
             style={({ pressed }) => [s.customerStatCard, pressed && s.pressed]}
-            onPress={() => navigation.navigate("Tabs", { screen: "Account", params: { initialTab: "pending" } })}
+            onPress={() => navigation.navigate("Tabs", { screen: "Profile", params: { initialTab: "pending" } })}
           >
             <Text style={[s.customerStatValue, engagements.length > 0 && { color: colors.money }]}>{engagements.length}</Text>
             <Text style={s.customerStatLabel}>Responses</Text>
           </Pressable>
           <Pressable
             style={({ pressed }) => [s.customerStatCard, pressed && s.pressed]}
-            onPress={() => navigation.navigate("Tabs", { screen: "Workers", params: { filterPincode } })}
+            onPress={() => navigation.navigate("Tabs", { screen: "FindWork", params: { filterPincode } })}
           >
             <Text style={s.customerStatValue}>{nearWorkers ?? "—"}</Text>
             <Text style={s.customerStatLabel}>{lang === "hi" ? "Workers Near" : "Workers Near"}</Text>
@@ -739,7 +739,7 @@ export default function LandingScreen({ navigation }) {
 
         <Pressable
           style={({ pressed }) => [s.customerPostCard, pressed && s.pressed]}
-          onPress={() => navigation.navigate("PostJob")}
+          onPress={() => navigation.navigate("Tabs", { screen: "PostJob" })}
         >
           <LinearGradient colors={[colors.primary, colors.primaryDark]} start={{ x:0, y:0 }} end={{ x:1, y:1 }} style={s.customerPostGradient}>
             <View style={s.customerPostCopy}>
@@ -761,7 +761,7 @@ export default function LandingScreen({ navigation }) {
               size="chip"
               label={cat.label[lang] || cat.label.en}
               icon={cat.icon}
-              onPress={() => navigation.navigate("Tabs", { screen: "Workers" })}
+              onPress={() => navigation.navigate("Tabs", { screen: "FindWork" })}
             />
           ))}
         </ScrollView>
@@ -771,7 +771,7 @@ export default function LandingScreen({ navigation }) {
             <View style={s.customerSectionHeadRow}>
               <Text style={s.customerSectionHead}>{lang === "hi" ? "Available near you" : "Available near you"}</Text>
               <Pressable
-                onPress={() => navigation.navigate("Tabs", { screen: "Workers", params: { filterPincode } })}
+                onPress={() => navigation.navigate("Tabs", { screen: "FindWork", params: { filterPincode } })}
                 style={({ pressed }) => [s.customerSeeAllBtn, pressed && s.pressed]}
               >
                 <Text style={s.customerSeeAllText}>{lang === "hi" ? "See all →" : "See all →"}</Text>
@@ -794,7 +794,7 @@ export default function LandingScreen({ navigation }) {
             <Text style={s.customerSectionHead}>{lang === "hi" ? "Your open jobs" : "Your open jobs"}</Text>
             {myJobs.length > 0 ? (
               <Pressable
-                onPress={() => navigation.navigate("Tabs", { screen: "Account", params: { initialTab: "jobs" } })}
+                onPress={() => navigation.navigate("Tabs", { screen: "Profile", params: { initialTab: "jobs" } })}
                 style={({ pressed }) => [s.customerSeeAllBtn, pressed && s.pressed]}
               >
                 <Text style={s.customerSeeAllText}>Dashboard →</Text>
@@ -807,7 +807,7 @@ export default function LandingScreen({ navigation }) {
               <Pressable
                 key={j.id}
                 style={({ pressed }) => [s.customerJobCard, pressed && s.pressed]}
-                onPress={() => navigation.navigate("Tabs", { screen: "Account", params: { initialTab: "jobs" } })}
+                onPress={() => navigation.navigate("Tabs", { screen: "Profile", params: { initialTab: "jobs" } })}
               >
                 <View style={s.customerJobIcon}>
                   <Ionicons name={j.category === "farm" ? "leaf-outline" : j.category === "construction" ? "construct-outline" : "briefcase-outline"} size={20} color={colors.primary} />
@@ -824,7 +824,7 @@ export default function LandingScreen({ navigation }) {
           ) : (
             <Pressable
               style={({ pressed }) => [s.customerEmptyJobCard, pressed && s.pressed]}
-              onPress={() => navigation.navigate("PostJob")}
+              onPress={() => navigation.navigate("Tabs", { screen: "PostJob" })}
             >
               <View style={s.customerEmptyIcon}>
                 <Ionicons name="add-outline" size={21} color={colors.primary} />

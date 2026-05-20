@@ -52,7 +52,7 @@ export default function WorkerProfileScreen({ route, navigation }) {
         lang === "hi" ? "Booking भेजी!" : "Booking sent!",
         lang === "hi" ? "कारीगर जल्द ही जवाब देगा।" : "Worker will respond shortly."
       );
-      navigation.navigate("Dashboard");
+      navigation.navigate("Tabs", { screen: "Activity" });
     } catch (err) {
       Alert.alert(lang === "hi" ? "Booking नहीं हुई" : "Booking failed", formatApiError(err));
     } finally {
@@ -234,7 +234,7 @@ export default function WorkerProfileScreen({ route, navigation }) {
                     </Text>
                     <PrimaryButton
                       title={lang === "hi" ? "Post a Job" : "Post a Job"}
-                      onPress={() => navigation.navigate("PostJob")}
+                      onPress={() => navigation.navigate("Tabs", { screen: "PostJob" })}
                     />
                   </>
                 ) : (

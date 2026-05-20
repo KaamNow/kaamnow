@@ -8,7 +8,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../contexts/AuthContext";
 import { useTranslation } from "../i18n";
 import { colors, fonts, spacing, radius } from "../theme";
-import api from "../lib/api";
+import api, { API_URL } from "../api";
 
 export default function QRCodeScreen() {
   const { user } = useAuth();
@@ -20,10 +20,8 @@ export default function QRCodeScreen() {
   useEffect(() => {
     (async () => {
       try {
-        const r = await api.get("/workers/me/qr-code", { responseType: "blob" });
-        // React Native: store the URL to fetch the image
-        const base = api.defaults.baseURL?.replace("/api", "") || "";
-        setQrUri(`${base}/api/workers/me/qr-code`);
+        await api.get("/workers/me/qr-code");
+        setQrUri(`${API_URL}/api/workers/me/qr-code`);
       } catch {}
       finally { setLoading(false); }
     })();
@@ -48,7 +46,7 @@ export default function QRCodeScreen() {
         <Text style={styles.name}>{user?.name}</Text>
         {qrUri ? (
           <Image
-            source={{ uri: qrUri, headers: { Authorization: api.defaults.headers?.common?.Authorization } }}
+            source={{ uri: qrUri }}
             style={styles.qr}
             resizeMode="contain"
           />

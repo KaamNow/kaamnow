@@ -228,7 +228,7 @@ export default function DashboardScreen({ navigation, route }) {
       [
         { text: "Cancel", style: "cancel" },
         { text: "Log out", style: "destructive", onPress: async () => {
-          try { navigation?.navigate?.("Home"); } catch {}
+          try { navigation.navigate("Tabs"); } catch {}
           await logout();
         }},
       ]
@@ -287,7 +287,7 @@ export default function DashboardScreen({ navigation, route }) {
             <PrimaryButton
               title="Post Job"
               fullWidth={false}
-              onPress={() => navigation.navigate("PostJob")}
+              onPress={() => navigation.navigate("Tabs", { screen: "PostJob" })}
               icon={<Ionicons name="add" size={16} color="#fff" />}
               style={styles.customerPostBtn}
             />
@@ -320,7 +320,7 @@ export default function DashboardScreen({ navigation, route }) {
                 title="Abhi koi job post nahi hai"
                 subtitle="Post Job karke nearby workers se response paayein"
                 actionLabel="Post a Job"
-                onAction={() => navigation.navigate("PostJob")}
+                onAction={() => navigation.navigate("Tabs", { screen: "PostJob" })}
               />
             </View>
           ) : (
@@ -371,7 +371,7 @@ export default function DashboardScreen({ navigation, route }) {
               )}
 
               <View style={styles.customerSection}>
-                <CustomerSectionHeader title="Open Jobs" actionLabel="Post Job" onAction={() => navigation.navigate("PostJob")} />
+                <CustomerSectionHeader title="Open Jobs" actionLabel="Post Job" onAction={() => navigation.navigate("Tabs", { screen: "PostJob" })} />
                 {openJobs.length === 0 ? (
                   <View style={styles.customerMiniEmpty}>
                     <Text style={styles.customerMiniEmptyTitle}>No open jobs right now</Text>
@@ -387,7 +387,7 @@ export default function DashboardScreen({ navigation, route }) {
                       const response = workerAppliedEngs.find(e => e.job_id === j.id);
                       response ? setDetailItem(response) : setDetailItem(j);
                     }}
-                    onFindWorkers={() => navigation.navigate("Tabs", { screen: "Workers" })}
+                    onFindWorkers={() => navigation.navigate("Tabs", { screen: "FindWork" })}
                   />
                 ))}
               </View>
@@ -629,7 +629,7 @@ export default function DashboardScreen({ navigation, route }) {
           </View>
           <Pressable
             style={({ pressed }) => [styles.workerBrowseBtn, pressed && styles.pressed]}
-            onPress={() => navigation.navigate("Tabs", { screen: "Jobs" })}
+            onPress={() => navigation.navigate("Tabs", { screen: "FindWork" })}
           >
             <Ionicons name="search-outline" size={14} color={colors.primary} />
             <Text style={styles.workerBrowseBtnTxt}>Browse Jobs</Text>
@@ -656,7 +656,7 @@ export default function DashboardScreen({ navigation, route }) {
               title="Abhi koi kaam nahi"
               subtitle="Nearby jobs browse karke apply karein"
               actionLabel="Browse Jobs"
-              onAction={() => navigation.navigate("Tabs", { screen: "Jobs" })}
+              onAction={() => navigation.navigate("Tabs", { screen: "FindWork" })}
             />
           </View>
         ) : (
@@ -699,7 +699,7 @@ export default function DashboardScreen({ navigation, route }) {
             {/* ── Find more jobs CTA ── */}
             <Pressable
               style={({ pressed }) => [styles.workerFindCtaCard, pressed && { opacity: 0.9 }]}
-              onPress={() => navigation.navigate("Tabs", { screen: "Jobs" })}
+              onPress={() => navigation.navigate("Tabs", { screen: "FindWork" })}
             >
               <LinearGradient
                 colors={[colors.primary, "#0D5F59"]}
