@@ -71,7 +71,7 @@ export default function WorkerCard({
 
       <View style={styles.content}>
         <View style={styles.nameRow}>
-          <Text style={styles.name} numberOfLines={1}>{worker.name || "Worker"}</Text>
+          <Text style={styles.name} numberOfLines={1}>{worker.name || "Local Expert"}</Text>
           {rate ? (
             <Text style={styles.rate}>₹{rate}<Text style={styles.rateUnit}>/day</Text></Text>
           ) : null}
@@ -104,14 +104,14 @@ export default function WorkerCard({
 
         {location ? (
           <View style={styles.locationRow}>
-            <Ionicons name="location-outline" size={12} color={colors.textMuted} />
+            <Ionicons name="location-outline" size={12} color={colors.outline} />
             <Text style={styles.locationText} numberOfLines={1}>{location}</Text>
           </View>
         ) : null}
       </View>
 
       {showChevron ? (
-        <Ionicons name="chevron-forward" size={17} color={colors.borderStrong} style={styles.chevron} />
+        <Ionicons name="chevron-forward" size={17} color={colors.outlineVariant} style={styles.chevron} />
       ) : null}
     </Pressable>
   );
@@ -122,13 +122,13 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceCard,
+    borderRadius: radius.xxl,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderSubtle,
     padding: spacing.lg,
     marginBottom: 10,
-    ...shadow.xs,
+    ...shadow.sm,
   },
   compactCard: {
     padding: 14,
@@ -143,8 +143,8 @@ const styles = StyleSheet.create({
   photo: {
     width: 80,
     height: 80,
-    borderRadius: radius.md,
-    backgroundColor: colors.surface2,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceContainerLow,
   },
   compactPhoto: {
     width: 66,
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
   photoFallback: {
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.primaryFixed,
   },
   initials: {
     fontFamily: fonts.display,
@@ -171,9 +171,9 @@ const styles = StyleSheet.create({
     width: 13,
     height: 13,
     borderRadius: 7,
-    backgroundColor: colors.success,
+    backgroundColor: colors.statusSuccess,
     borderWidth: 2,
-    borderColor: colors.surface,
+    borderColor: colors.surfaceCard,
   },
   content: {
     flex: 1,
@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: fonts.bodySemi,
     fontSize: 15,
-    color: colors.text,
+    color: colors.textHeading,
   },
   rate: {
     fontFamily: fonts.displayBold,
@@ -199,7 +199,7 @@ const styles = StyleSheet.create({
   rateUnit: {
     fontFamily: fonts.body,
     fontSize: 11,
-    color: colors.textMuted,
+    color: colors.outline,
   },
   skillRow: {
     flexDirection: "row",
@@ -212,14 +212,14 @@ const styles = StyleSheet.create({
   skillChip: {
     maxWidth: 92,
     borderRadius: radius.pill,
-    backgroundColor: colors.surface2,
+    backgroundColor: colors.surfaceContainer,
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
   skillChipText: {
     fontFamily: fonts.bodySemi,
     fontSize: 11,
-    color: colors.textSecondary,
+    color: colors.textBody,
   },
   moreSkills: {
     fontFamily: fonts.bodyBold,
@@ -229,7 +229,7 @@ const styles = StyleSheet.create({
   noSkills: {
     fontFamily: fonts.body,
     fontSize: 12,
-    color: colors.textMuted,
+    color: colors.outline,
   },
   locationRow: {
     flexDirection: "row",
@@ -241,7 +241,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontFamily: fonts.body,
     fontSize: 12,
-    color: colors.textMuted,
+    color: colors.outline,
   },
   chevron: {
     alignSelf: "center",

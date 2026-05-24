@@ -2,7 +2,7 @@ name: Deploy — Dev (EC2, isolated cluster)
 
 on:
   push:
-    branches: [main, ui-ux]
+    branches: [main, ui-ux, user_to_user_flow]
 
 concurrency:
   group: deploy-dev

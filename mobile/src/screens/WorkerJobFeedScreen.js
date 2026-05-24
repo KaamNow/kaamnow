@@ -15,6 +15,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import AppScreen from "../components/AppScreen";
 import EmptyState from "../components/EmptyState";
 import JobCard from "../components/JobCard";
@@ -26,6 +27,9 @@ import { track } from "../lib/analytics";
 import { useAuth } from "../contexts/AuthContext";
 import { useLanguage } from "../contexts/LanguageContext";
 import { colors, fonts, radius, shadow, spacing } from "../theme";
+
+const INDIGO = colors.primary;
+const INDIGO_DARK = colors.primaryDark;
 
 const CATEGORIES = [
   { v: "", l: { en: "All", hi: "सभी" }, icon: "briefcase-outline" },
@@ -61,8 +65,8 @@ export default function WorkerJobFeedScreen({ navigation }) {
   const [applied, setApplied] = useState({ category: "", skill: "", pincode: "", query: "" });
 
   useEffect(() => {
-    if (!user?.is_worker) return;
-    api.get("/workers/me/profile")
+    if (!user?.has_service_profile) return;
+    api.get("/service-profiles/mine")
       .then((res) => {
         const pc = res.data?.address?.pincode || res.data?.pincode || "";
         if (pc) {
@@ -87,7 +91,7 @@ export default function WorkerJobFeedScreen({ navigation }) {
           const cached = await getCache("job_feed");
           return { data: cached || [], _fromCache: true };
         }),
-        api.get("/engagements/mine").catch(() => ({ data: [] })),
+        api.get("/work-requests/mine").catch(() => ({ data: [] })),
       ]);
       const jobs = Array.isArray(feed.data) ? feed.data : [];
       setJobs(jobs);
@@ -129,7 +133,7 @@ export default function WorkerJobFeedScreen({ navigation }) {
           style: "destructive",
           onPress: async () => {
             try {
-              await api.post(`/engagements/${engagementId}/cancel`);
+              await api.post(`/work-requests/${engagementId}/cancel`);
               load();
             } catch (err) {
               Alert.alert("Failed", formatApiError(err));
@@ -156,7 +160,7 @@ export default function WorkerJobFeedScreen({ navigation }) {
     setApplied({ category: "", skill: "", pincode: workerPincode, query: "" });
   };
 
-  const isWorker = user?.is_worker === true;
+  const isWorker = user?.has_service_profile === true;
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
@@ -168,22 +172,22 @@ export default function WorkerJobFeedScreen({ navigation }) {
               <Text style={styles.becomeExpertTitle}>Want to earn from these jobs?</Text>
               <Text style={styles.becomeExpertSub}>Become a Local Expert to apply →</Text>
             </View>
-            <Ionicons name="arrow-forward-circle" size={28} color={colors.saffron} />
+            <Ionicons name="arrow-forward-circle" size={28} color={colors.primary} />
           </Pressable>
         )}
         <View style={styles.header}>
-          <View style={styles.titleRow}>
-            <View style={styles.titleTextBlock}>
-              <Text style={styles.title}>Jobs Near You</Text>
-              <Text style={styles.subtitle}>Browse and apply for nearby work</Text>
+          <LinearGradient colors={[INDIGO, INDIGO_DARK]} start={{ x:0,y:0 }} end={{ x:1,y:1 }} style={styles.topBar}>
+            <View>
+              <Text style={styles.overline}>FIND JOBS</Text>
+              <Text style={styles.screenTitle}>Job Board</Text>
             </View>
-            {activeFilterCount > 0 ? (
+            {activeFilterCount > 0 && (
               <Pressable onPress={clearAll} style={styles.resetPill}>
-                <Ionicons name="refresh-outline" size={13} color={colors.primary} />
+                <Ionicons name="refresh-outline" size={13} color="#fff" />
                 <Text style={styles.resetPillText}>Reset</Text>
               </Pressable>
-            ) : null}
-          </View>
+            )}
+          </LinearGradient>
 
           <LocationBar
             pincode={applied.pincode || pincode || workerPincode}
@@ -195,13 +199,13 @@ export default function WorkerJobFeedScreen({ navigation }) {
 
           {/* ── Search box ── */}
           <View style={[styles.searchBox, searchFocused && styles.searchBoxFocused]}>
-            <Ionicons name="search-outline" size={16} color={colors.textMuted} />
+            <Ionicons name="search-outline" size={16} color={colors.outline} />
             <TextInput
               style={styles.searchInput}
               value={query}
               onChangeText={setQuery}
               placeholder={lang === "hi" ? "Kaam, skill search karein…" : "Search job or skill…"}
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor={colors.outline}
               returnKeyType="search"
               onFocus={() => setSearchFocused(true)}
               onBlur={() => setSearchFocused(false)}
@@ -214,7 +218,7 @@ export default function WorkerJobFeedScreen({ navigation }) {
                 onPress={() => { setQuery(""); setApplied((prev) => ({ ...prev, query: "" })); }}
                 hitSlop={8}
               >
-                <Ionicons name="close-circle" size={17} color={colors.textMuted} />
+                <Ionicons name="close-circle" size={17} color={colors.outline} />
               </Pressable>
             ) : null}
           </View>
@@ -222,17 +226,15 @@ export default function WorkerJobFeedScreen({ navigation }) {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoryScroller}>
             <View style={styles.chipRow}>
               {CATEGORIES.map((item) => (
-                <ServiceCategoryCard
+                <Pressable
                   key={item.v || "all"}
-                  size="chip"
-                  label={item.l[lang] || item.l.en}
-                  icon={item.icon}
-                  selected={category === item.v}
-                  onPress={() => {
-                    setCategory(item.v);
-                    setApplied((prev) => ({ ...prev, category: item.v }));
-                  }}
-                />
+                  style={[styles.chip, category === item.v && styles.chipActive]}
+                  onPress={() => { setCategory(item.v); setApplied((prev) => ({ ...prev, category: item.v })); }}
+                >
+                  <Text style={[styles.chipTxt, category === item.v && styles.chipTxtActive]}>
+                    {item.l[lang] || item.l.en}
+                  </Text>
+                </Pressable>
               ))}
             </View>
           </ScrollView>
@@ -281,7 +283,7 @@ export default function WorkerJobFeedScreen({ navigation }) {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => { setRefreshing(true); load(); }}
-              tintColor={colors.primary}
+              tintColor={INDIGO}
             />
           }
           renderItem={({ item }) => {
@@ -339,14 +341,14 @@ export default function WorkerJobFeedScreen({ navigation }) {
                   value={tempPincode}
                   onChangeText={(v) => setTempPincode(v.replace(/\D/g, "").slice(0, 6))}
                   placeholder={lang === "hi" ? "6-अंक pincode" : "6-digit pincode"}
-                  placeholderTextColor={colors.textMuted}
+                  placeholderTextColor={colors.outline}
                   keyboardType="number-pad"
                   maxLength={6}
                   autoFocus
                 />
                 {tempPincode.length > 0 ? (
                   <Pressable onPress={() => setTempPincode("")} hitSlop={8}>
-                    <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+                    <Ionicons name="close-circle" size={18} color={colors.outline} />
                   </Pressable>
                 ) : null}
               </View>
@@ -390,136 +392,71 @@ export default function WorkerJobFeedScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1, backgroundColor: colors.background },
   becomeExpertBanner: {
     flexDirection: "row", alignItems: "center",
-    backgroundColor: colors.indigo, paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+    backgroundColor: colors.primary, paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
     gap: spacing.sm,
   },
-  becomeExpertTitle: { fontFamily: fonts.bodyBold, fontSize: 13, color: "#fff" },
+  becomeExpertTitle: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.onPrimary },
   becomeExpertSub:   { fontFamily: fonts.body, fontSize: 12, color: "rgba(255,255,255,0.75)" },
-  header: {
-    backgroundColor: colors.bg,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.md,
+  header: { borderBottomWidth: 1, borderBottomColor: colors.borderSubtle },
+  topBar: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingHorizontal: spacing.lg, paddingTop: 14, paddingBottom: 16,
   },
-  titleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: spacing.md,
-    marginBottom: spacing.md,
-  },
-  titleTextBlock: { flex: 1 },
-  title: {
-    fontFamily: fonts.display,
-    fontSize: 26,
-    lineHeight: 31,
-    color: colors.text,
-  },
-  subtitle: {
-    marginTop: 2,
-    fontFamily: fonts.body,
-    fontSize: 13,
-    lineHeight: 19,
-    color: colors.textSecondary,
-  },
-  resetPill: {
-    minHeight: 36,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    backgroundColor: colors.primaryLight,
-    paddingHorizontal: 11,
-  },
-  resetPillText: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.primary },
-  locationBar: { marginBottom: spacing.sm },
+  overline:    { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1.5, color: "rgba(255,255,255,0.6)" },
+  screenTitle: { fontFamily: fonts.display, fontSize: 22, color: colors.onPrimary, marginTop: 2, letterSpacing: -0.3 },
+  resetPill:   { flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.15)" },
+  resetPillText: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.onPrimary },
+  locationBar: { marginHorizontal: spacing.lg, marginTop: 6, marginBottom: 4 },
 
-  // Search box
   searchBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    marginBottom: spacing.sm,
-    ...shadow.xs,
+    flexDirection: "row", alignItems: "center", gap: 8,
+    marginHorizontal: spacing.lg, marginBottom: 6,
+    backgroundColor: colors.surfaceContainerLow, borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 9,
+    borderWidth: 1.5, borderColor: colors.borderSubtle,
   },
-  searchBoxFocused: { borderColor: colors.primary },
-  searchInput: {
-    flex: 1,
-    fontFamily: fonts.body,
-    fontSize: 13,
-    color: colors.text,
-    padding: 0,
-  },
+  searchBoxFocused: { borderColor: INDIGO, backgroundColor: colors.surfaceCard },
+  searchInput: { flex: 1, fontFamily: fonts.body, fontSize: 13, color: colors.textHeading, padding: 0 },
 
-  // Applied filters row
   appliedRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    flexWrap: "wrap",
-    gap: 6,
-    paddingVertical: 6,
-    backgroundColor: colors.primaryLight,
-    borderRadius: radius.md,
-    paddingHorizontal: 10,
-    marginBottom: spacing.sm,
+    flexDirection: "row", alignItems: "center", flexWrap: "wrap",
+    gap: 6, paddingHorizontal: spacing.lg, paddingVertical: 8,
+    backgroundColor: colors.primaryFixed,
   },
-  appliedLabel: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.textMuted },
+  appliedLabel: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.outline },
   appliedTag: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.surface,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.primary + "50",
+    flexDirection: "row", alignItems: "center", backgroundColor: colors.surfaceCard,
+    paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999,
+    borderWidth: 1, borderColor: INDIGO + "40",
   },
-  appliedTagTxt: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.primary },
+  appliedTagTxt: { fontFamily: fonts.bodyBold, fontSize: 11, color: INDIGO },
 
-  categoryScroller: { marginTop: spacing.xs },
-  chipRow: { flexDirection: "row", gap: 8, paddingBottom: 5 },
+  categoryScroller: { height: 50, backgroundColor: colors.surfaceCard },
+  chipRow: { flexDirection: "row", gap: 8, paddingHorizontal: spacing.lg, paddingVertical: 6 },
+  chip: {
+    paddingHorizontal: 16, paddingVertical: 8, borderRadius: 999,
+    backgroundColor: colors.surfaceContainerLow, borderWidth: 1.5, borderColor: colors.borderSubtle,
+  },
+  chipActive:    { backgroundColor: INDIGO, borderColor: INDIGO },
+  chipTxt:       { fontFamily: fonts.bodySemi, fontSize: 13, color: colors.textBody },
+  chipTxtActive: { color: colors.onPrimary },
 
-  // Location modal
   locModalBg: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
-  locModalSheet: { backgroundColor: colors.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: spacing.xl, paddingBottom: 40 },
-  locModalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: colors.border, alignSelf: "center", marginBottom: 20 },
-  locModalTitle: { fontFamily: fonts.display, fontSize: 22, color: colors.text, marginBottom: 4 },
-  locModalSub: { fontFamily: fonts.body, fontSize: 13, color: colors.textSecondary, marginBottom: 20, lineHeight: 18 },
-  locModalInputWrap: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.surface2, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.primary, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 20 },
-  locModalInput: { flex: 1, fontFamily: fonts.body, fontSize: 18, color: colors.text, letterSpacing: 2 },
+  locModalSheet: { backgroundColor: colors.surfaceCard, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, paddingBottom: 40 },
+  locModalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: colors.borderSubtle, alignSelf: "center", marginBottom: 20 },
+  locModalTitle: { fontFamily: fonts.display, fontSize: 22, color: colors.textHeading, marginBottom: 4 },
+  locModalSub: { fontFamily: fonts.body, fontSize: 13, color: colors.textBody, marginBottom: 20, lineHeight: 18 },
+  locModalInputWrap: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.surfaceContainerLow, borderRadius: 12, borderWidth: 1.5, borderColor: INDIGO, paddingHorizontal: 14, paddingVertical: 12, marginBottom: 20 },
+  locModalInput: { flex: 1, fontFamily: fonts.body, fontSize: 18, color: colors.textHeading, letterSpacing: 2 },
   locModalBtns: { flexDirection: "row", gap: 10 },
-  locModalClear: { paddingVertical: 14, paddingHorizontal: 16, borderRadius: radius.md, borderWidth: 1.5, borderColor: colors.border, justifyContent: "center", minHeight: 50 },
-  locModalClearText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.textSecondary },
-  locModalApply: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.primary, paddingVertical: 14, borderRadius: radius.md, minHeight: 50 },
-  locModalApplyText: { fontFamily: fonts.bodyBold, fontSize: 15, color: "#fff" },
-  countRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: spacing.md,
-    marginTop: spacing.sm,
-  },
-  countText: {
-    flex: 1,
-    fontFamily: fonts.bodySemi,
-    fontSize: 13,
-    color: colors.textSecondary,
-  },
-  listContent: {
-    padding: spacing.lg,
-    paddingBottom: 100,
-  },
+  locModalClear: { paddingVertical: 14, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1.5, borderColor: colors.borderSubtle, justifyContent: "center", minHeight: 50 },
+  locModalClearText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.textBody },
+  locModalApply: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: INDIGO, paddingVertical: 14, borderRadius: 12, minHeight: 50 },
+  locModalApplyText: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.onPrimary },
+  countRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md, paddingHorizontal: spacing.lg, paddingVertical: 8, backgroundColor: colors.surfaceCard },
+  countText: { flex: 1, fontFamily: fonts.bodySemi, fontSize: 13, color: colors.textBody },
+  listContent: { padding: spacing.lg, paddingBottom: 100 },
 });

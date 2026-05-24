@@ -16,8 +16,8 @@ export default function SavedExpertsScreen({ navigation }) {
   useEffect(() => {
     (async () => {
       try {
-        const r = await api.get("/auth/me/saved-workers");
-        setWorkers(r.data?.workers || r.data || []);
+        const r = await api.get("/auth/me/saved-users");
+        setWorkers(r.data?.profiles || r.data || []);
       } catch {}
       finally { setLoading(false); }
     })();
@@ -30,10 +30,10 @@ export default function SavedExpertsScreen({ navigation }) {
       activeOpacity={0.8}
     >
       <View style={styles.avatar}>
-        <Text style={styles.avatarText}>{(item.name || "?")[0].toUpperCase()}</Text>
+        <Text style={styles.avatarText}>{(item.display_name || item.name || "?")[0].toUpperCase()}</Text>
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={styles.name}>{item.name}</Text>
+        <Text style={styles.name}>{item.display_name || item.name}</Text>
         <Text style={styles.skills}>{(item.skills || []).slice(0, 3).join(" · ")}</Text>
         {item.daily_rate ? <Text style={styles.rate}>₹{item.daily_rate}/day</Text> : null}
       </View>
@@ -41,7 +41,7 @@ export default function SavedExpertsScreen({ navigation }) {
   );
 
   if (loading) {
-    return <View style={styles.center}><ActivityIndicator color={colors.saffron} /></View>;
+    return <View style={styles.center}><ActivityIndicator color={colors.primary} /></View>;
   }
 
   return (
@@ -61,12 +61,12 @@ export default function SavedExpertsScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   center:   { flex: 1, justifyContent: "center", alignItems: "center" },
-  row:      { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", paddingHorizontal: spacing.md, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border, gap: spacing.sm },
-  avatar:   { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.saffron, justifyContent: "center", alignItems: "center" },
-  avatarText: { color: "#fff", fontFamily: fonts.bodyBold, fontSize: 18 },
-  name:     { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.text },
-  skills:   { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted },
-  rate:     { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.success },
+  row:      { flexDirection: "row", alignItems: "center", backgroundColor: colors.surfaceCard, paddingHorizontal: spacing.md, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.borderSubtle, gap: spacing.sm },
+  avatar:   { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary, justifyContent: "center", alignItems: "center" },
+  avatarText: { color: colors.onPrimary, fontFamily: fonts.bodyBold, fontSize: 18 },
+  name:     { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.textHeading },
+  skills:   { fontFamily: fonts.body, fontSize: 12, color: colors.outline },
+  rate:     { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.statusSuccess },
   empty:    { alignItems: "center", marginTop: 80 },
-  emptyText:{ fontFamily: fonts.body, fontSize: 14, color: colors.textMuted },
+  emptyText:{ fontFamily: fonts.body, fontSize: 14, color: colors.outline },
 });

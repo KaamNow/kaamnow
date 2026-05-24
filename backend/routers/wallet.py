@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ..auth import get_current_user
 from ..db import db
-from ..engagements import _notify
 from ..security import wallet_read_limit
 from ..utils import utc_now_iso
 
@@ -45,12 +44,17 @@ async def credit_wallet(
     }
     await db.wallet_transactions.insert_one(tx)
     await db.users.update_one({"id": user_id}, {"$inc": {"wallet_balance": int(amount)}})
-    await _notify(
-        user_id,
-        f"Wallet credited: Rs {amount}",
-        "Your KaamNow wallet has new credits.",
-        "wallet_credited",
-        ref_id or tx["id"],
+    await db.notifications.insert_one(
+        {
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "title": f"Wallet credited: Rs {amount}",
+            "body": "Your KaamNow wallet has new credits.",
+            "type": "wallet_credited",
+            "ref_id": ref_id or tx["id"],
+            "read": False,
+            "created_at": now,
+        }
     )
     tx.pop("_id", None)
     return tx

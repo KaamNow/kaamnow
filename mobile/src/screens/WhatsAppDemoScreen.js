@@ -117,7 +117,7 @@ export default function WhatsAppDemoScreen() {
                 m.from === "user" ? styles.bubbleUser : styles.bubbleBot,
               ]}
             >
-              <Text style={[styles.bubbleText, m.from === "user" && { color: "#fff" }]}>{m.text}</Text>
+              <Text style={[styles.bubbleText, m.from === "user" && { color: colors.onPrimary }]}>{m.text}</Text>
             </View>
           ))}
           {sending && (
@@ -133,7 +133,7 @@ export default function WhatsAppDemoScreen() {
             value={input}
             onChangeText={setInput}
             placeholder="Type a message…"
-            placeholderTextColor={colors.textMuted}
+            placeholderTextColor={colors.outline}
             style={styles.chatInput}
             onSubmitEditing={() => send()}
             returnKeyType="send"
@@ -148,22 +148,22 @@ export default function WhatsAppDemoScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1, backgroundColor: colors.background },
   head: { padding: spacing.lg, paddingBottom: 8 },
-  h1: { fontFamily: fonts.display, fontSize: 24, color: colors.text, marginTop: 6 },
-  lead: { fontFamily: fonts.body, fontSize: 13, color: colors.textSecondary, marginTop: 6, lineHeight: 18 },
+  h1: { fontFamily: fonts.display, fontSize: 24, color: colors.textHeading, marginTop: 6 },
+  lead: { fontFamily: fonts.body, fontSize: 13, color: colors.textBody, marginTop: 6, lineHeight: 18 },
   code: { fontFamily: "Courier", backgroundColor: "#F3F4F6", paddingHorizontal: 4, fontSize: 12 },
-  chatHeader: { flexDirection: "row", alignItems: "center", gap: 10, padding: 14, backgroundColor: colors.indigo },
+  chatHeader: { flexDirection: "row", alignItems: "center", gap: 10, padding: 14, backgroundColor: colors.primary },
   botAvatar: { width: 40, height: 40, borderRadius: 20 },
-  botName: { fontFamily: fonts.bodyBold, fontSize: 14, color: "#fff" },
+  botName: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.onPrimary },
   botStatus: { fontFamily: fonts.body, fontSize: 11, color: "rgba(255,255,255,0.8)" },
-  resetText: { color: "#fff", fontFamily: fonts.bodyBold, fontSize: 12, textDecorationLine: "underline" },
+  resetText: { color: colors.onPrimary, fontFamily: fonts.bodyBold, fontSize: 12, textDecorationLine: "underline" },
   chatBg: { flex: 1, backgroundColor: "#F5F4EF" },
   bubble: { maxWidth: "80%", paddingVertical: 10, paddingHorizontal: 14, borderRadius: 16 },
   bubbleBot: { backgroundColor: "#F3F4F6", alignSelf: "flex-start", borderBottomLeftRadius: 4 },
-  bubbleUser: { backgroundColor: colors.saffron, alignSelf: "flex-end", borderBottomRightRadius: 4 },
-  bubbleText: { fontFamily: fonts.body, fontSize: 14, color: colors.text, lineHeight: 20 },
-  inputRow: { flexDirection: "row", padding: 10, gap: 8, backgroundColor: "#fff", borderTopWidth: 1, borderTopColor: colors.border },
-  chatInput: { flex: 1, backgroundColor: "#F3F4F6", borderRadius: radius.pill, paddingHorizontal: 16, paddingVertical: 10, fontFamily: fonts.body, fontSize: 14, color: colors.text },
-  sendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.saffron, alignItems: "center", justifyContent: "center" },
+  bubbleUser: { backgroundColor: colors.primary, alignSelf: "flex-end", borderBottomRightRadius: 4 },
+  bubbleText: { fontFamily: fonts.body, fontSize: 14, color: colors.textHeading, lineHeight: 20 },
+  inputRow: { flexDirection: "row", padding: 10, gap: 8, backgroundColor: colors.surfaceCard, borderTopWidth: 1, borderTopColor: colors.borderSubtle },
+  chatInput: { flex: 1, backgroundColor: "#F3F4F6", borderRadius: radius.pill, paddingHorizontal: 16, paddingVertical: 10, fontFamily: fonts.body, fontSize: 14, color: colors.textHeading },
+  sendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
 });

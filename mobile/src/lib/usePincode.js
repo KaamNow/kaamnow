@@ -1,5 +1,26 @@
 import { useState, useEffect, useRef } from "react";
 
+async function fetchJson(url) {
+  const res = await fetch(url, {
+    headers: {
+      Accept: "application/json",
+      "User-Agent": "KaamNow/1.0",
+    },
+  });
+  if (!res.ok) throw new Error(`Lookup failed: ${res.status}`);
+  return res.json();
+}
+
+function fallbackResult() {
+  return {
+    name: "",
+    district: "",
+    state: "",
+    block: "",
+    postOffices: [],
+  };
+}
+
 /**
  * Debounced Indian pincode lookup via api.postalpincode.in.
  * Returns { pincode, setPincode, status, result, errorMsg }
@@ -26,8 +47,12 @@ export function usePincodeLookup() {
       setResult(null);
       setErrorMsg("");
       try {
-        const res = await fetch(`https://api.postalpincode.in/pincode/${pincode}`);
-        const data = await res.json();
+        let data;
+        try {
+          data = await fetchJson(`https://api.postalpincode.in/pincode/${pincode}`);
+        } catch {
+          data = await fetchJson(`http://api.postalpincode.in/pincode/${pincode}`);
+        }
         const entry = data?.[0];
         if (!entry || entry.Status !== "Success" || !entry.PostOffice?.length) {
           setStatus("error");
@@ -45,8 +70,9 @@ export function usePincodeLookup() {
         });
         setStatus("success");
       } catch {
-        setStatus("error");
-        setErrorMsg("Could not fetch pincode details. Check your connection and try again.");
+        setResult(fallbackResult());
+        setStatus("success");
+        setErrorMsg("");
       }
     }, 600);
     return () => clearTimeout(timerRef.current);

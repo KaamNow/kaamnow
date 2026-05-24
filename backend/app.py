@@ -16,9 +16,7 @@ from .routers import (
     admin_router,
     ai_router,
     auth_router,
-    bookings_router,
     chat_router,
-    engagements_router,
     faq_router,
     jobs_router,
     legal_router,
@@ -26,11 +24,12 @@ from .routers import (
     payments_router,
     referrals_router,
     reports_router,
+    service_profiles_router,
     stats_router,
     waitlist_router,
     wallet_router,
     whatsapp_router,
-    workers_router,
+    work_requests_router,
 )
 from .seed import seed_data
 
@@ -77,10 +76,9 @@ async def csrf_cookie_guard(request: Request, call_next):
 app.include_router(admin_router)
 app.include_router(ai_router)
 app.include_router(auth_router)
-app.include_router(workers_router)
+app.include_router(service_profiles_router)
+app.include_router(work_requests_router)
 app.include_router(jobs_router)
-app.include_router(bookings_router)
-app.include_router(engagements_router)
 app.include_router(chat_router)
 app.include_router(notifications_router)
 app.include_router(payments_router)
@@ -102,66 +100,55 @@ app.add_middleware(
 )
 
 
-async def _expire_old_engagements() -> None:
-    """Background loop: auto-cancel requested engagements older than 24h, every hour."""
+async def _expire_old_requests() -> None:
+    """Background loop: auto-cancel stale pending work_requests older than 24h, every hour."""
     import asyncio
     from datetime import datetime, timedelta
 
     from .db import db as _db
     from .utils import utc_now_iso
 
-    await asyncio.sleep(60)  # wait for DB to be ready
+    await asyncio.sleep(60)
     while True:
         try:
             cutoff = (datetime.utcnow() - timedelta(hours=24)).isoformat()
-            old = await _db.engagements.find(
+            now = utc_now_iso()
+            cancel_set = {
+                "status": "cancelled",
+                "cancelled_at": now,
+                "updated_at": now,
+                "cancel_reason": "auto_expired_24h",
+            }
+
+            stale = await _db.work_requests.find(
                 {"status": "requested", "created_at": {"$lt": cutoff}},
                 {"_id": 0},
             ).to_list(200)
-
-            if old:
-                now = utc_now_iso()
-                ids = [e["id"] for e in old]
-                await _db.engagements.update_many(
-                    {"id": {"$in": ids}},
-                    {
-                        "$set": {
-                            "status": "cancelled",
-                            "cancelled_at": now,
-                            "updated_at": now,
-                            "cancel_reason": "auto_expired_24h",
-                        }
-                    },
+            if stale:
+                await _db.work_requests.update_many(
+                    {"id": {"$in": [r["id"] for r in stale]}},
+                    {"$set": cancel_set},
                 )
-                logger.info(f"[Expiry] Auto-cancelled {len(old)} stale engagements")
-
-                # Notify both parties
-                from .engagements import _notify
-
-                for e in old:
-                    # Notify customer: their request expired
-                    await _notify(
-                        e["customer_id"],
-                        f"Request expired: {e.get('job_title', 'Job')}",
-                        "No worker responded in 24 hours. Post again to find workers.",
-                        "booking_rejected",
-                        e["id"],
-                    )
-                    # Notify worker: their application expired
-                    worker = await _db.workers.find_one(
-                        {"id": e["worker_id"]}, {"_id": 0, "user_id": 1}
-                    )
-                    if worker and worker.get("user_id"):
-                        await _notify(
-                            worker["user_id"],
-                            f"Interest expired: {e.get('job_title', 'Job')}",
-                            "Customer didn't respond in 24 hours. Browse other jobs.",
-                            "booking_rejected",
-                            e["id"],
-                        )
+                logger.info(f"[Expiry] Auto-cancelled {len(stale)} stale work_requests")
+                for r in stale:
+                    title = r.get("job_title") or "Request"
+                    for uid in [r.get("requested_by_user_id"), r.get("requested_to_user_id")]:
+                        if uid:
+                            await _db.notifications.insert_one(
+                                {
+                                    "id": str(__import__("uuid").uuid4()),
+                                    "user_id": uid,
+                                    "title": f"Request expired: {title}",
+                                    "body": "No response in 24 hours. Try again.",
+                                    "kind": "request_expired",
+                                    "ref_id": r["id"],
+                                    "read": False,
+                                    "created_at": now,
+                                }
+                            )
         except Exception as exc:
             logger.error(f"[Expiry] Task error: {exc}")
-        await asyncio.sleep(3600)  # run every hour
+        await asyncio.sleep(3600)
 
 
 async def _weekly_analytics() -> None:
@@ -191,20 +178,15 @@ async def _weekly_analytics() -> None:
 
             # Gather last 7 days stats
             week_ago = (datetime.utcnow() - timedelta(days=7)).isoformat()
-            new_workers = await _db.users.count_documents(
-                {
-                    "$or": [{"is_worker": True}, {"has_worker_profile": True}, {"role": "worker"}],
-                    "created_at": {"$gte": week_ago},
-                }
+            new_experts = await _db.service_profiles.count_documents(
+                {"created_at": {"$gte": week_ago}}
             )
-            new_customers = await _db.users.count_documents(
-                {"is_customer": {"$ne": False}, "created_at": {"$gte": week_ago}}
-            )
+            new_users = await _db.users.count_documents({"created_at": {"$gte": week_ago}})
             new_jobs = await _db.jobs.count_documents({"created_at": {"$gte": week_ago}})
-            completed = await _db.engagements.count_documents(
+            completed = await _db.work_requests.count_documents(
                 {"status": "completed", "created_at": {"$gte": week_ago}}
             )
-            requests = await _db.engagements.count_documents(
+            requests = await _db.work_requests.count_documents(
                 {"status": {"$ne": "cancelled"}, "created_at": {"$gte": week_ago}}
             )
 
@@ -212,25 +194,25 @@ async def _weekly_analytics() -> None:
                 {"$match": {"status": "completed", "created_at": {"$gte": week_ago}}},
                 {"$group": {"_id": None, "total": {"$sum": "$daily_rate"}}},
             ]
-            gmv_docs = await _db.engagements.aggregate(gmv_pipe).to_list(1)
+            gmv_docs = await _db.work_requests.aggregate(gmv_pipe).to_list(1)
             gmv = gmv_docs[0]["total"] if gmv_docs else 0
 
-            total_workers = await _db.workers.count_documents({})
-            total_customers = await _db.users.count_documents({"is_customer": {"$ne": False}})
+            total_experts = await _db.service_profiles.count_documents({})
+            total_users = await _db.users.count_documents({})
 
             msg = (
                 f"📊 *KaamNow Weekly Report*\n"
                 f"Week of {now.strftime('%d %b %Y')}\n\n"
                 f"🆕 New Signups\n"
-                f"  Workers: +{new_workers}\n"
-                f"  Customers: +{new_customers}\n\n"
+                f"  Users: +{new_users}\n"
+                f"  New Experts: +{new_experts}\n\n"
                 f"💼 Jobs Posted: {new_jobs}\n"
-                f"🤝 Engagements: {requests}\n"
+                f"🤝 Work Requests: {requests}\n"
                 f"✅ Completed: {completed}\n"
                 f"💰 GMV: ₹{gmv:,}\n\n"
                 f"📈 Total\n"
-                f"  Workers: {total_workers}\n"
-                f"  Customers: {total_customers}\n\n"
+                f"  Users: {total_users}\n"
+                f"  Experts: {total_experts}\n\n"
                 f"kaamnow.com/admin"
             )
 
@@ -276,30 +258,32 @@ async def _expire_available_now() -> None:
     while True:
         try:
             now = datetime.now(timezone.utc).isoformat()
-            result = await _db.workers.update_many(
+            result = await _db.service_profiles.update_many(
                 {"is_available_now": True, "available_now_expires_at": {"$lt": now}},
                 {"$set": {"is_available_now": False, "available_now_expires_at": None}},
             )
             if result.modified_count:
                 logger.info(
-                    "[Workers] Cleared %s expired available-now flags", result.modified_count
+                    "[ServiceProfiles] Cleared %s expired available-now flags",
+                    result.modified_count,
                 )
         except Exception as exc:
-            logger.error("[Workers] Available-now expiry error: %s", exc)
+            logger.error("[ServiceProfiles] Available-now expiry error: %s", exc)
         await asyncio.sleep(3600)
 
 
 async def _send_nudge_notifications() -> None:
     import asyncio
+    import uuid
     from datetime import datetime, timedelta
 
     from .db import db as _db
-    from .engagements import _notify
 
     await asyncio.sleep(120)
     while True:
         try:
             cutoff = (datetime.utcnow() - timedelta(days=7)).isoformat()
+            now_iso = datetime.utcnow().isoformat()
             users = (
                 await _db.users.find(
                     {"last_nudge_at": {"$lt": cutoff}},
@@ -309,16 +293,21 @@ async def _send_nudge_notifications() -> None:
                 .to_list(200)
             )
             for user in users:
-                await _notify(
-                    user["id"],
-                    "KaamNow par naye kaam dekhein",
-                    "Aapke area mein naye Local Experts aur jobs mil sakte hain.",
-                    "nudge",
-                    None,
+                await _db.notifications.insert_one(
+                    {
+                        "id": str(uuid.uuid4()),
+                        "user_id": user["id"],
+                        "title": "KaamNow par naye kaam dekhein",
+                        "body": "Aapke area mein naye Local Experts aur jobs mil sakte hain.",
+                        "kind": "nudge",
+                        "ref_id": None,
+                        "read": False,
+                        "created_at": now_iso,
+                    }
                 )
                 await _db.users.update_one(
                     {"id": user["id"]},
-                    {"$set": {"last_nudge_at": datetime.utcnow().isoformat()}},
+                    {"$set": {"last_nudge_at": now_iso}},
                 )
         except Exception as exc:
             logger.error("[Nudge] Task error: %s", exc)
@@ -327,28 +316,30 @@ async def _send_nudge_notifications() -> None:
 
 async def _send_seasonal_suggestions() -> None:
     import asyncio
+    import uuid
     from datetime import datetime
 
     from .db import db as _db
-    from .engagements import _notify
 
     await asyncio.sleep(150)
     while True:
         try:
             now = datetime.utcnow()
             if now.day == 1:
-                users = (
-                    await _db.users.find({"is_customer": {"$ne": False}}, {"_id": 0, "id": 1})
-                    .limit(500)
-                    .to_list(500)
-                )
+                now_iso = now.isoformat()
+                users = await _db.users.find({}, {"_id": 0, "id": 1}).limit(500).to_list(500)
                 for user in users:
-                    await _notify(
-                        user["id"],
-                        "Seasonal kaam plan karein",
-                        "Ghar aur khet ke seasonal kaam ke liye template se job post karein.",
-                        "seasonal_suggestion",
-                        None,
+                    await _db.notifications.insert_one(
+                        {
+                            "id": str(uuid.uuid4()),
+                            "user_id": user["id"],
+                            "title": "Seasonal kaam plan karein",
+                            "body": "Ghar aur khet ke seasonal kaam ke liye template se job post karein.",
+                            "kind": "seasonal_suggestion",
+                            "ref_id": None,
+                            "read": False,
+                            "created_at": now_iso,
+                        }
                     )
         except Exception as exc:
             logger.error("[Seasonal] Task error: %s", exc)
@@ -359,10 +350,20 @@ async def _ensure_indexes() -> None:
     from .db import db as _db
 
     await _db.users.create_index("referral_code", unique=True, sparse=True)
-    await _db.messages.create_index([("engagement_id", 1), ("created_at", 1)])
+    await _db.users.create_index("phone_primary", unique=True, sparse=True)
+    await _db.service_profiles.create_index("user_id", unique=True)
+    await _db.service_profiles.create_index("pincode")
+    await _db.service_profiles.create_index("skills")
+    await _db.jobs.create_index("posted_by_user_id")
+    await _db.jobs.create_index("status")
+    await _db.work_requests.create_index("requested_by_user_id")
+    await _db.work_requests.create_index("requested_to_user_id")
+    await _db.work_requests.create_index("job_id")
+    await _db.messages.create_index([("work_request_id", 1), ("created_at", 1)])
     await _db.messages.create_index([("receiver_id", 1), ("read", 1)])
     await _db.reports.create_index("reported_user_id")
     await _db.reports.create_index([("status", 1), ("created_at", -1)])
+    await _db.notifications.create_index([("user_id", 1), ("created_at", -1)])
     await _db.wallet_transactions.create_index([("user_id", 1), ("created_at", -1)])
     await _db.wallet_transactions.create_index([("expires_at", 1), ("expired", 1)])
     await _db.faqs.create_index([("category", 1), ("order", 1)])
@@ -388,6 +389,16 @@ async def on_startup() -> None:
     )
     wa_live = "LIVE (Gupshup)" if settings.gupshup_api_key else "mocked"
     logger.info(f"OTP service initialized — WhatsApp: {wa_live}")
+    wa_notif = (
+        "ENABLED"
+        if settings.feature_whatsapp_notifications
+        else "DISABLED (set FEATURE_WHATSAPP_NOTIFICATIONS=true)"
+    )
+    logger.info(f"WhatsApp engagement notifications: {wa_notif}")
+    if settings.feature_whatsapp_notifications and settings.gupshup_sandbox_mode:
+        logger.warning(
+            "⚠️  Gupshup SANDBOX mode ON — only opted-in numbers will receive WhatsApp messages"
+        )
 
     if not os.getenv("SKIP_SEED"):
         try:
@@ -403,8 +414,8 @@ async def on_startup() -> None:
 
     import asyncio
 
-    asyncio.create_task(_expire_old_engagements())
-    logger.info("Engagement expiry background task started.")
+    asyncio.create_task(_expire_old_requests())
+    logger.info("Work request expiry background task started.")
     asyncio.create_task(_weekly_analytics())
     logger.info("Weekly analytics background task started.")
     asyncio.create_task(_expire_wallet_credits())

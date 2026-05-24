@@ -8,27 +8,19 @@ import Landing from "@/pages/Landing";
 import Login from "@/pages/Login";
 import PhoneSignup from "@/pages/PhoneSignup";
 import CustomerOnboarding from "@/pages/CustomerOnboarding";
-import Marketplace from "@/pages/Marketplace";
-import WorkerProfile from "@/pages/WorkerProfile";
-import WorkerOnboarding from "@/pages/WorkerOnboarding";
-import WorkerDashboard from "@/pages/WorkerDashboard";
-import WorkerJobFeed from "@/pages/WorkerJobFeed";
-import Dashboard from "@/pages/Dashboard";
 import PostJob from "@/pages/PostJob";
 import WhatsAppDemo from "@/pages/WhatsAppDemo";
-import FindWork from "@/pages/FindWork";
-import AdminDashboard from "@/pages/AdminDashboard";
 import ContactSupport from "@/pages/ContactSupport";
+import AdminLogin from "@/pages/AdminLogin";
+import AdminDashboard from "@/pages/AdminDashboard";
 import "@/App.css";
 
 function Protected({ children, adminOnly = false }) {
   const { user } = useAuth();
   if (user === undefined)
-    return (
-      <div className="p-12 text-center text-gray-500">Loading…</div>
-    );
-  if (!user) return <Navigate to="/login" replace />;
-  if (adminOnly && user.role !== "admin") return <Navigate to="/dashboard" replace />;
+    return <div className="p-12 text-center text-gray-500">Loading…</div>;
+  if (!user) return <Navigate to={adminOnly ? "/admin/login" : "/login"} replace />;
+  if (adminOnly && user.role !== "admin") return <Navigate to="/" replace />;
   return children;
 }
 
@@ -61,7 +53,7 @@ function App() {
             path="/marketplace"
             element={
               <Layout>
-                <Marketplace />
+                <Landing />
               </Layout>
             }
           />
@@ -69,7 +61,7 @@ function App() {
             path="/worker/:id"
             element={
               <Layout>
-                <WorkerProfile />
+                <Navigate to="/marketplace" replace />
               </Layout>
             }
           />
@@ -79,7 +71,7 @@ function App() {
             path="/worker/onboarding"
             element={
               <Protected>
-                <WorkerOnboarding />
+                <Navigate to="/dashboard" replace />
               </Protected>
             }
           />
@@ -89,7 +81,7 @@ function App() {
             element={
               <Protected>
                 <Layout>
-                  <WorkerDashboard />
+                  <Landing />
                 </Layout>
               </Protected>
             }
@@ -100,7 +92,7 @@ function App() {
             element={
               <Protected>
                 <Layout>
-                  <WorkerJobFeed />
+                  <Landing />
                 </Layout>
               </Protected>
             }
@@ -109,7 +101,7 @@ function App() {
             path="/find-work"
             element={
               <Layout>
-                <FindWork />
+                <Landing />
               </Layout>
             }
           />
@@ -136,7 +128,7 @@ function App() {
             element={
               <Protected>
                 <Layout>
-                  <Dashboard />
+                  <Landing />
                 </Layout>
               </Protected>
             }
@@ -151,6 +143,7 @@ function App() {
               </Protected>
             }
           />
+          <Route path="/admin/login" element={<AdminLogin />} />
           <Route
             path="/admin"
             element={

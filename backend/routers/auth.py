@@ -14,7 +14,6 @@ from ..auth import (
     create_token,
     get_current_user,
     hash_password,
-    is_worker,
     set_auth_cookie,
     verify_temp_token,
 )
@@ -42,10 +41,6 @@ USER_OUT_FIELDS = [
     "phone_primary",
     "phone_verified",
     "name",
-    "role",
-    "is_worker",
-    "is_customer",
-    "has_worker_profile",
     "gender",
     "pincode",
     "village",
@@ -55,10 +50,9 @@ USER_OUT_FIELDS = [
     "avatar_color",
     "created_at",
     "is_active",
-    "deleted_at",
-    "migration_status",
     "push_token",
-    "saved_workers",
+    "saved_users",
+    "saved_jobs",
     "referral_code",
     "referred_by",
     "referral_count",
@@ -68,18 +62,18 @@ USER_OUT_FIELDS = [
     "tc_accepted_at",
     "tc_version",
     "selfie_verified",
-    "posthog_id",
+    "has_service_profile",
+    "bio",
+    "role",
+    "email",
 ]
 
 
 def _user_out(user_doc: dict) -> dict:
     out = {k: user_doc.get(k) for k in USER_OUT_FIELDS}
-    worker = is_worker(user_doc)
-    out["is_worker"] = worker
-    out["is_customer"] = user_doc.get("is_customer", True) is not False
-    out["has_worker_profile"] = worker
-    out["role"] = "admin" if user_doc.get("role") == "admin" else "worker" if worker else "customer"
-    out["saved_workers"] = out.get("saved_workers") or []
+    out["has_service_profile"] = bool(user_doc.get("has_service_profile"))
+    out["saved_users"] = out.get("saved_users") or []
+    out["saved_jobs"] = out.get("saved_jobs") or []
     out["referral_count"] = out.get("referral_count") or 0
     out["wallet_balance"] = out.get("wallet_balance") or 0
     out["saved_addresses"] = out.get("saved_addresses") or []
@@ -128,17 +122,13 @@ async def update_me(body: dict, user: dict = Depends(get_current_user)):
         update_data["village"] = body["village"]
     if "gender" in body:
         update_data["gender"] = body["gender"]
-    if "saved_workers" in body and isinstance(body["saved_workers"], list):
-        update_data["saved_workers"] = body["saved_workers"]
-    if body.get("save_worker_id"):
-        update_data["saved_workers"] = list(
-            {*(user.get("saved_workers") or []), body["save_worker_id"]}
-        )
-    if body.get("remove_worker_id"):
-        update_data["saved_workers"] = [
-            worker_id
-            for worker_id in (user.get("saved_workers") or [])
-            if worker_id != body["remove_worker_id"]
+    if "saved_users" in body and isinstance(body["saved_users"], list):
+        update_data["saved_users"] = body["saved_users"]
+    if body.get("save_user_id"):
+        update_data["saved_users"] = list({*(user.get("saved_users") or []), body["save_user_id"]})
+    if body.get("remove_user_id"):
+        update_data["saved_users"] = [
+            uid for uid in (user.get("saved_users") or []) if uid != body["remove_user_id"]
         ]
     unset_data = {}
     if "phone_primary" in body:
@@ -167,15 +157,26 @@ async def update_me(body: dict, user: dict = Depends(get_current_user)):
         if body["photo_url"]:
             update_data["photo_url"] = body["photo_url"]
         else:
-            # Delete from Cloudinary before clearing
             from ..cloudinary_service import delete_image
 
             delete_image(user.get("photo_url"))
             update_data["photo_url"] = None
-        if is_worker(user):
-            await db.workers.update_one(
-                {"user_id": user["id"]}, {"$set": {"photo_url": body.get("photo_url")}}
-            )
+
+    if "bio" in body:
+        update_data["bio"] = str(body["bio"]).strip()[:300] if body["bio"] else ""
+
+    if "emergency_contact" in body:
+        ec = body["emergency_contact"]
+        if ec and isinstance(ec, dict):
+            raw_phone = str(ec.get("phone") or "").strip()
+            digits = raw_phone.replace("+91", "").replace(" ", "").replace("-", "")
+            normalized = f"+91{digits}" if len(digits) == 10 else raw_phone
+            update_data["emergency_contact"] = {
+                "name": str(ec.get("name") or "").strip(),
+                "phone": normalized,
+            }
+        else:
+            update_data["emergency_contact"] = None
 
     if not update_data and not unset_data:
         return _user_out(user)
@@ -186,41 +187,53 @@ async def update_me(body: dict, user: dict = Depends(get_current_user)):
     if unset_data:
         mongo_op["$unset"] = unset_data
     await db.users.update_one({"id": user["id"]}, mongo_op)
+
+    # Mirror name/village/gender to service profile if user has one
+    sp_update = {
+        k: v
+        for k, v in body.items()
+        if k in {"name", "village", "gender", "photo_url"} and k in update_data
+    }
+    if sp_update:
+        sp_update["display_name"] = sp_update.pop("name", None) or update_data.get("name")
+        sp_update = {k: v for k, v in sp_update.items() if v is not None}
+        if sp_update:
+            await db.service_profiles.update_one({"user_id": user["id"]}, {"$set": sp_update})
+
     updated_user = await db.users.find_one({"id": user["id"]})
-
-    # Also update workers collection if user is a worker
-    if is_worker(user):
-        worker_update = {}
-        if "name" in body:
-            worker_update["name"] = body["name"]
-        if "village" in body:
-            worker_update["village"] = body["village"]
-        if "gender" in body:
-            worker_update["gender"] = body["gender"]
-        if worker_update:
-            await db.workers.update_one({"user_id": user["id"]}, {"$set": worker_update})
-
     return _user_out(updated_user)
 
 
-@router.post("/me/save-worker/{worker_id}", response_model=UserOut)
-async def toggle_saved_worker(worker_id: str, user: dict = Depends(get_current_user)):
-    saved_workers = list(user.get("saved_workers") or [])
-    if worker_id in saved_workers:
-        saved_workers = [saved_id for saved_id in saved_workers if saved_id != worker_id]
+@router.post("/me/save-user/{target_user_id}", response_model=UserOut)
+async def toggle_saved_user(target_user_id: str, user: dict = Depends(get_current_user)):
+    saved = list(user.get("saved_users") or [])
+    if target_user_id in saved:
+        saved = [uid for uid in saved if uid != target_user_id]
     else:
-        saved_workers.append(worker_id)
-    await db.users.update_one({"id": user["id"]}, {"$set": {"saved_workers": saved_workers}})
+        saved.append(target_user_id)
+    await db.users.update_one({"id": user["id"]}, {"$set": {"saved_users": saved}})
     updated_user = await db.users.find_one({"id": user["id"]}, {"_id": 0})
     return _user_out(updated_user)
 
 
-@router.get("/me/saved-workers")
-async def saved_workers(user: dict = Depends(get_current_user)):
-    saved_ids = user.get("saved_workers") or []
+@router.get("/me/saved-users")
+async def get_saved_users(user: dict = Depends(get_current_user)):
+    saved_ids = user.get("saved_users") or []
     if not saved_ids:
         return []
-    return await db.workers.find({"id": {"$in": saved_ids}}, {"_id": 0}).to_list(100)
+    return await db.service_profiles.find({"user_id": {"$in": saved_ids}}, {"_id": 0}).to_list(100)
+
+
+@router.post("/me/save-job/{job_id}", response_model=UserOut)
+async def toggle_saved_job(job_id: str, user: dict = Depends(get_current_user)):
+    saved = list(user.get("saved_jobs") or [])
+    if job_id in saved:
+        saved = [jid for jid in saved if jid != job_id]
+    else:
+        saved.append(job_id)
+    await db.users.update_one({"id": user["id"]}, {"$set": {"saved_jobs": saved}})
+    updated_user = await db.users.find_one({"id": user["id"]}, {"_id": 0})
+    return _user_out(updated_user)
 
 
 @router.get("/me/addresses")
@@ -289,12 +302,13 @@ async def delete_address(address_id: str, user: dict = Depends(get_current_user)
 
 @router.put("/me/emergency-contact", response_model=UserOut)
 async def set_emergency_contact(body: dict, user: dict = Depends(get_current_user)):
-    contact = {
-        "name": (body.get("name") or "").strip()[:100],
-        "phone": (body.get("phone") or "").strip(),
-    }
-    if len(contact["name"]) < 2 or not contact["phone"].startswith("+91"):
-        raise HTTPException(status_code=400, detail="Enter a valid emergency contact")
+    name = (body.get("name") or "").strip()[:100]
+    raw_phone = (body.get("phone") or "").strip()
+    digits = raw_phone.replace("+91", "").replace(" ", "").replace("-", "")
+    phone = f"+91{digits}" if len(digits) == 10 else raw_phone
+    if len(name) < 2 or len(digits) != 10:
+        raise HTTPException(status_code=400, detail="Enter a valid name and 10-digit phone number")
+    contact = {"name": name, "phone": phone}
     await db.users.update_one({"id": user["id"]}, {"$set": {"emergency_contact": contact}})
     updated_user = await db.users.find_one({"id": user["id"]}, {"_id": 0})
     return _user_out(updated_user)
@@ -354,28 +368,18 @@ async def check_phone(request: Request, phone: str):
             "_id": 0,
             "role": 1,
             "id": 1,
-            "is_worker": 1,
-            "is_customer": 1,
-            "has_worker_profile": 1,
+            "has_service_profile": 1,
             "is_active": 1,
             "deleted_at": 1,
             "permanently_deleted": 1,
         },
     )
     if not user:
-        return {
-            "exists": False,
-            "role": None,
-            "is_worker": False,
-            "is_customer": False,
-            "is_active": None,
-            "expired": False,
-        }
+        return {"exists": False, "is_active": None, "expired": False}
 
     is_active = user.get("is_active", True)
     permanently_deleted = user.get("permanently_deleted", False)
 
-    # Check if 30-day window expired
     expired = permanently_deleted
     if not is_active and not expired and user.get("deleted_at"):
         try:
@@ -386,13 +390,9 @@ async def check_phone(request: Request, phone: str):
 
     return {
         "exists": True,
-        "role": (
-            "admin" if user.get("role") == "admin" else "worker" if is_worker(user) else "customer"
-        ),
-        "is_worker": is_worker(user),
-        "is_customer": user.get("is_customer", True) is not False,
         "is_active": is_active,
         "expired": expired,
+        "has_service_profile": bool(user.get("has_service_profile")),
     }
 
 
@@ -576,10 +576,6 @@ async def signup_complete(
         "phone_primary": phone,
         "phone_verified": True,
         "name": body.name,
-        "role": "customer",
-        "is_worker": False,
-        "is_customer": True,
-        "has_worker_profile": False,
         "gender": body.gender,
         "password_hash": hash_password(body.password) if body.password else None,
         "pincode": None,
@@ -589,9 +585,9 @@ async def signup_complete(
         "preferred_language": body.preferred_language or "hi",
         "avatar_color": _generate_avatar_color(body.name),
         "created_at": utc_now_iso(),
-        "migration_status": "phone_primary",
         "is_active": True,
-        "saved_workers": [],
+        "has_service_profile": False,
+        "saved_users": [],
         "referral_code": await _generate_referral_code(),
         "referred_by": referrer.get("id") if referrer else None,
         "referral_count": 0,
@@ -601,7 +597,6 @@ async def signup_complete(
         "tc_accepted_at": None,
         "tc_version": "1.0",
         "selfie_verified": False,
-        "posthog_id": None,
     }
 
     # Insert into users collection
@@ -623,31 +618,15 @@ async def signup_complete(
 @router.delete("/me")
 async def deactivate_account(user: dict = Depends(get_current_user)):
     """Soft-delete: deactivates account. Reactivate by logging in within 30 days."""
-    from ..utils import utc_now_iso
-
     now = utc_now_iso()
     await db.users.update_one({"id": user["id"]}, {"$set": {"is_active": False, "deleted_at": now}})
-    if is_worker(user):
-        await db.workers.update_one(
-            {"user_id": user["id"]},
-            {
-                "$set": {
-                    "available": False,
-                    "availability_status": "not_available",
-                    "is_active": False,
-                }
-            },
-        )
-    # Log deactivation for future analytics
+    await db.service_profiles.update_one(
+        {"user_id": user["id"]}, {"$set": {"availability": False, "is_active": False}}
+    )
     await db.deactivation_log.insert_one(
         {
             "user_id": user["id"],
-            "phone": user.get("phone_primary") or user.get("phone"),
-            "role": (
-                "admin"
-                if user.get("role") == "admin"
-                else "worker" if is_worker(user) else "customer"
-            ),
+            "phone": user.get("phone_primary"),
             "deactivated_at": now,
             "reactivated_at": None,
         }
@@ -679,8 +658,9 @@ async def upload_user_photo(file: UploadFile = File(...), user: dict = Depends(g
 
     photo_url = upload_image(file_bytes, public_id)
     await db.users.update_one({"id": user["id"]}, {"$set": {"photo_url": photo_url}})
-    if is_worker(user):
-        await db.workers.update_one({"user_id": user["id"]}, {"$set": {"photo_url": photo_url}})
+    await db.service_profiles.update_one(
+        {"user_id": user["id"]}, {"$set": {"photo_url": photo_url}}
+    )
     return {"ok": True, "photo_url": photo_url}
 
 
@@ -746,17 +726,9 @@ async def login_complete(request: Request, authorization: Optional[str] = Header
         await db.users.update_one(
             {"id": user["id"]}, {"$set": {"is_active": True, "deleted_at": None}}
         )
-        if is_worker(user):
-            await db.workers.update_one(
-                {"user_id": user["id"]},
-                {
-                    "$set": {
-                        "available": True,
-                        "availability_status": "available",
-                        "is_active": True,
-                    }
-                },
-            )
+        await db.service_profiles.update_one(
+            {"user_id": user["id"]}, {"$set": {"availability": True, "is_active": True}}
+        )
         await db.deactivation_log.update_one(
             {"user_id": user["id"], "reactivated_at": None},
             {"$set": {"reactivated_at": now_str}},
@@ -765,7 +737,7 @@ async def login_complete(request: Request, authorization: Optional[str] = Header
         user = await db.users.find_one({"phone_primary": phone})
 
     access_token = create_token(user["id"], phone)
-    logger.info(f"Phone login complete for {phone} ({'worker' if is_worker(user) else 'customer'})")
+    logger.info(f"Phone login complete for {phone}")
 
     return {
         "user": _user_out(user),

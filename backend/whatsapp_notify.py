@@ -29,8 +29,8 @@ def _send(destination: str, text: str) -> bool:
     Returns True on success, False on failure (non-raising — notifications should never block core flows).
     """
     if not _is_enabled():
-        logger.debug(
-            "WhatsApp notifications disabled. Would have sent to %s: %s", destination, text[:60]
+        logger.info(
+            "WhatsApp notifications DISABLED — skipping send to %s: %s", destination, text[:60]
         )
         return False
 
@@ -50,10 +50,9 @@ def _send(destination: str, text: str) -> bool:
         "channel": settings.gupshup_channel,
         "source": settings.gupshup_source,
         "destination": phone,
+        "src.name": settings.gupshup_app_id or "KaamNow",
         "message": json.dumps({"type": "text", "text": text}),
     }
-    if getattr(settings, "gupshup_app_id", None):
-        payload["src.name"] = settings.gupshup_app_id
 
     headers = {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -62,11 +61,17 @@ def _send(destination: str, text: str) -> bool:
 
     try:
         resp = requests.post(settings.gupshup_api_url, data=payload, headers=headers, timeout=10)
+        logger.info("Gupshup response [%s]: %s", resp.status_code, resp.text[:500])
         resp.raise_for_status()
         logger.info("✅ WhatsApp sent to %s", phone)
         return True
     except Exception as exc:
-        logger.error("❌ WhatsApp send failed to %s: %s", phone, exc)
+        logger.error(
+            "❌ WhatsApp send failed to %s: %s — body: %s",
+            phone,
+            exc,
+            getattr(exc, "response", None) and exc.response.text,
+        )
         return False
 
 

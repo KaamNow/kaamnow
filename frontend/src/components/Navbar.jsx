@@ -78,7 +78,7 @@ function NotifBell({ size = 18 }) {
 
   const handleClick = () => {
     const tab = "notifications";
-    const base = user?.is_worker === true ? "/worker/dashboard" : "/dashboard";
+    const base = "/dashboard";
     nav(`${base}?tab=${tab}`, { replace: false });
   };
 
@@ -106,7 +106,7 @@ function UserDropdown({ user, logout, t }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   const nav = useNavigate();
-  const dashLink = user?.is_worker === true ? "/worker/dashboard" : "/dashboard";
+  const dashLink = "/dashboard";
 
   useEffect(() => {
     const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
@@ -293,7 +293,7 @@ function MobileMenu({ open, onClose, user, logout, t, onContact, nav, onHowItWor
   }, [open]);
   if (!open) return null;
 
-  const dashLink = user?.is_worker === true ? "/worker/dashboard" : "/dashboard";
+  const dashLink = "/dashboard";
 
   return (
     <>
@@ -318,27 +318,17 @@ function MobileMenu({ open, onClose, user, logout, t, onContact, nav, onHowItWor
 
         {/* Nav links */}
         <div style={{ padding: "12px 12px 0" }}>
-          {user?.is_worker === true ? (
-            <>
-              <MobNavItem to="/worker/dashboard" onClose={onClose}>{t("nav_dashboard")}</MobNavItem>
-              <MobNavItem to="/worker/job-feed"  onClose={onClose}>{t("nav_work")}</MobNavItem>
-              <MobNavItem to="/support"          onClose={onClose}>Help &amp; Support</MobNavItem>
-            </>
-          ) : (
-            <>
-              <MobNavItem to="/"            onClose={onClose}>{t("nav_home")}</MobNavItem>
-              <MobNavItem to="/marketplace" onClose={onClose}>{t("nav_workers")}</MobNavItem>
-              <MobNavItem to="/find-work" onClose={onClose}>{t("nav_work")}</MobNavItem>
-              {!user?.is_worker && <MobNavItem to="/post-job" onClose={onClose}>Post a Job</MobNavItem>}
-              <button
-                onClick={() => { onClose(); onHowItWorks(); }}
-                style={{ width: "100%", display: "flex", alignItems: "center", padding: "13px 16px", borderRadius: 12, fontWeight: 500, fontSize: 15, color: C.text, background: "none", border: "none", cursor: "pointer", textAlign: "left", borderLeft: "3px solid transparent" }}
-                onMouseEnter={e => e.currentTarget.style.background = "#F0EAE0"}
-                onMouseLeave={e => e.currentTarget.style.background = "none"}>
-                {t("nav_how_it_works")}
-              </button>
-            </>
-          )}
+          <MobNavItem to="/"            onClose={onClose}>{t("nav_home")}</MobNavItem>
+          <MobNavItem to="/marketplace" onClose={onClose}>{t("nav_workers")}</MobNavItem>
+          <MobNavItem to="/find-work"   onClose={onClose}>{t("nav_work")}</MobNavItem>
+          <MobNavItem to="/post-job"    onClose={onClose}>Post a Job</MobNavItem>
+          <button
+            onClick={() => { onClose(); onHowItWorks(); }}
+            style={{ width: "100%", display: "flex", alignItems: "center", padding: "13px 16px", borderRadius: 12, fontWeight: 500, fontSize: 15, color: C.text, background: "none", border: "none", cursor: "pointer", textAlign: "left", borderLeft: "3px solid transparent" }}
+            onMouseEnter={e => e.currentTarget.style.background = "#F0EAE0"}
+            onMouseLeave={e => e.currentTarget.style.background = "none"}>
+            {t("nav_how_it_works")}
+          </button>
         </div>
 
         {/* Bottom */}
@@ -398,7 +388,7 @@ export default function Navbar() {
     sessionStorage.setItem("scrollTo", "how-it-works");
   }, [loc.pathname, nav]);
 
-  const isWorker = user?.is_worker === true;
+  const hasServiceProfile = user?.has_service_profile === true;
 
   return (
     <>
@@ -476,7 +466,7 @@ export default function Navbar() {
 
             {/* Desktop centre nav */}
             <div className="hidden lg:flex" style={{ alignItems: "center", gap: 36, flex: 1, justifyContent: "center" }}>
-              {isWorker ? (
+              {hasServiceProfile ? (
                 <>
                   <NavItem to="/worker/dashboard" active={loc.pathname === "/worker/dashboard"}>{t("nav_dashboard")}</NavItem>
                   <NavItem to="/worker/job-feed"  active={loc.pathname === "/worker/job-feed"}>{t("nav_work")}</NavItem>
@@ -550,7 +540,7 @@ export default function Navbar() {
         </div>
 
         {/* ── Row 2 (mobile only): quick pills — role-aware ── */}
-        {!isWorker && (
+        {!hasServiceProfile && (
           <div className="lg:hidden" style={{ borderTop: `1px solid ${C.border}` }}>
             <div style={{ display: "flex", alignItems: "stretch" }}>
               <Link to="/marketplace"

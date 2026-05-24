@@ -115,17 +115,3 @@ def set_auth_cookie(response: Response, token: str) -> None:
         max_age=settings.jwt_expiry_days * 24 * 3600,
         path="/",
     )
-
-
-def is_worker(user: Optional[dict]) -> bool:
-    if not user:
-        return False
-    return bool(
-        user.get("is_worker") or user.get("has_worker_profile") or user.get("role") == "worker"
-    )
-
-
-def is_customer(user: Optional[dict]) -> bool:
-    if not user:
-        return False
-    return user.get("is_customer", True) is not False

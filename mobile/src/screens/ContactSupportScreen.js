@@ -30,15 +30,15 @@ const SUPPORT_ITEMS = [
 
 const FAQS = [
   {
-    q: "How do I find workers?",
-    a: "Tap 'Find Workers' from the home tab, search by skill or village, and tap a worker to send a booking request.",
+    q: "How do I find Local Experts?",
+    a: "Tap 'Find Local Experts' from the home tab, search by skill or village, and tap a Local Expert to send a booking request.",
   },
   {
     q: "How does the OTP login work?",
     a: "We send a 6-digit code to your WhatsApp or SMS. Enter the code and you're in — no password needed.",
   },
   {
-    q: "Can a worker cancel after being hired?",
+    q: "Can a Local Expert cancel after being hired?",
     a: "Yes. Either party can cancel an engagement. Both are notified via WhatsApp. Please use this responsibly.",
   },
   {
@@ -47,7 +47,7 @@ const FAQS = [
   },
   {
     q: "Is KaamNow free?",
-    a: "Completely free for workers. Customers pay ₹30 per successful booking (coming soon).",
+    a: "Completely free for Local Experts. Customers pay ₹30 per successful booking (coming soon).",
   },
 ];
 
@@ -93,7 +93,7 @@ export default function ContactSupportScreen() {
               <Text style={styles.cardTitle}>{item.title}</Text>
               <Text style={styles.cardSubtitle}>{item.subtitle}</Text>
             </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+            <Ionicons name="chevron-forward" size={16} color={colors.outline} />
           </Pressable>
         ))}
 
@@ -116,37 +116,37 @@ export default function ContactSupportScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1, backgroundColor: colors.background },
 
   intro: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceCard,
+    borderRadius: radius.xxl,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderSubtle,
     padding: spacing.md,
     marginBottom: spacing.md,
-    ...shadow.xs,
+    ...shadow.sm,
   },
   introIcon: {
     width: 44,
     height: 44,
-    borderRadius: 14,
-    backgroundColor: colors.primaryLight,
+    borderRadius: radius.xxl,
+    backgroundColor: colors.primaryFixed,
     alignItems: "center",
     justifyContent: "center",
   },
-  introTitle: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.text },
-  introSub: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  introTitle: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.textHeading },
+  introSub: { fontFamily: fonts.body, fontSize: 12, color: colors.outline, marginTop: 2 },
 
   userChip: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
     alignSelf: "flex-start",
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.primaryFixed,
     borderRadius: radius.pill,
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -157,23 +157,23 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontFamily: fonts.bodyBold,
     fontSize: 16,
-    color: colors.text,
+    color: colors.textHeading,
     marginBottom: spacing.md,
     marginTop: spacing.lg,
   },
 
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceCard,
+    borderRadius: radius.xxl,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderSubtle,
     padding: spacing.md,
     flexDirection: "row",
     alignItems: "center",
     gap: 14,
     marginBottom: 10,
     minHeight: 72,
-    ...shadow.xs,
+    ...shadow.sm,
   },
   iconCircle: {
     width: 48,
@@ -183,26 +183,26 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   cardText: { flex: 1 },
-  cardTitle: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.text },
-  cardSubtitle: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginTop: 3 },
+  cardTitle: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.textHeading },
+  cardSubtitle: { fontFamily: fonts.body, fontSize: 12, color: colors.outline, marginTop: 3 },
 
   faqCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceCard,
+    borderRadius: radius.xxl,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderSubtle,
     padding: spacing.md,
     marginBottom: 10,
-    ...shadow.xs,
+    ...shadow.sm,
   },
   faqQRow: { flexDirection: "row", alignItems: "flex-start", gap: 8, marginBottom: 8 },
-  faqQ: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.text, flex: 1, lineHeight: 20 },
-  faqA: { fontFamily: fonts.body, fontSize: 13, color: colors.textSecondary, lineHeight: 20, paddingLeft: 24 },
+  faqQ: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.textHeading, flex: 1, lineHeight: 20 },
+  faqA: { fontFamily: fonts.body, fontSize: 13, color: colors.textBody, lineHeight: 20, paddingLeft: 24 },
 
   footer: {
     fontFamily: fonts.body,
     fontSize: 12,
-    color: colors.textMuted,
+    color: colors.outline,
     textAlign: "center",
     marginTop: spacing.xl,
   },

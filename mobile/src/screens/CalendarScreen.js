@@ -29,7 +29,7 @@ function todayStr() {
 export default function CalendarScreen({ navigation }) {
   const { user } = useAuth();
   const { lang } = useLanguage();
-  const isWorker = user?.is_worker === true;
+  const isWorker = user?.has_service_profile === true;
   const months = MONTH_NAMES[lang] || MONTH_NAMES.en;
   const days   = DAY_LABELS[lang]  || DAY_LABELS.en;
   const now = new Date();
@@ -45,7 +45,7 @@ export default function CalendarScreen({ navigation }) {
   const load = useCallback(async () => {
     try {
       const [engR, jobR] = await Promise.all([
-        api.get("/engagements/mine").catch(() => ({ data: [] })),
+        api.get("/work-requests/mine").catch(() => ({ data: [] })),
         !isWorker
           ? api.get("/jobs/mine").catch(() => ({ data: [] }))
           : Promise.resolve({ data: [] }),
@@ -224,7 +224,7 @@ export default function CalendarScreen({ navigation }) {
                       </View>
                     )}
                     {isSel && hasItems && (
-                      <View style={[s.dot, { backgroundColor: "#fff" }]} />
+                      <View style={[s.dot, { backgroundColor: colors.surfaceCard }]} />
                     )}
                   </Pressable>
                 );
@@ -285,7 +285,7 @@ export default function CalendarScreen({ navigation }) {
                         </Text>
                         {status === "accepted" && (
                           <View style={s.contactRow}>
-                            <Ionicons name="call-outline" size={12} color={colors.success} />
+                            <Ionicons name="call-outline" size={12} color={colors.statusSuccess} />
                             <Text style={s.contactText}>
                               {isWorker ? (item.customer_phone || "Contact shared") : (item.worker_phone || "Contact shared")}
                             </Text>
@@ -308,84 +308,84 @@ function HeroStat({ icon, val, label }) {
   return (
     <View style={{ flex: 1, alignItems: "center" }}>
       <Ionicons name={icon} size={16} color="rgba(255,255,255,0.7)" />
-      <Text style={{ fontFamily: fonts.display, fontSize: 22, color: "#fff", marginTop: 4 }}>{val}</Text>
+      <Text style={{ fontFamily: fonts.display, fontSize: 22, color: colors.onPrimary, marginTop: 4 }}>{val}</Text>
       <Text style={{ fontFamily: fonts.body, fontSize: 11, color: "rgba(255,255,255,0.65)", marginTop: 1 }}>{label}</Text>
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
+  safe: { flex: 1, backgroundColor: colors.background },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
 
   // Hero gradient
   hero: { padding: spacing.xl, paddingTop: spacing.lg, paddingBottom: spacing.xl, position: "relative", overflow: "hidden" },
   heroCircle: { position: "absolute", width: 200, height: 200, borderRadius: 100, backgroundColor: "rgba(255,255,255,0.07)", top: -50, right: -50 },
-  heroTitle: { fontFamily: fonts.display, fontSize: 24, color: "#fff", marginBottom: 2 },
+  heroTitle: { fontFamily: fonts.display, fontSize: 24, color: colors.onPrimary, marginBottom: 2 },
   heroSub: { fontFamily: fonts.body, fontSize: 13, color: "rgba(255,255,255,0.7)", marginBottom: 20 },
-  heroStats: { flexDirection: "row", backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 14, paddingVertical: 14, paddingHorizontal: 10 },
+  heroStats: { flexDirection: "row", backgroundColor: "rgba(255,255,255,0.12)", borderRadius: radius.xxl, paddingVertical: 14, paddingHorizontal: 10 },
   heroDivider: { width: 1, backgroundColor: "rgba(255,255,255,0.2)" },
 
   // Calendar card
   calCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.xl,
+    backgroundColor: colors.surfaceCard,
+    borderRadius: radius.xxl,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderSubtle,
     padding: 18,
     marginBottom: 20,
     ...shadow.sm,
   },
   calNav: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 },
-  navBtn: { padding: 8, borderRadius: 10, backgroundColor: colors.primaryLight, minWidth: 36, minHeight: 36, alignItems: "center", justifyContent: "center" },
-  calMonth: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.text },
+  navBtn: { padding: 8, borderRadius: 10, backgroundColor: colors.primaryFixed, minWidth: 36, minHeight: 36, alignItems: "center", justifyContent: "center" },
+  calMonth: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.textHeading },
   dayHeaders: { flexDirection: "row", marginBottom: 8 },
-  dayHeader: { flex: 1, textAlign: "center", fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 0.5, color: colors.textMuted },
+  dayHeader: { flex: 1, textAlign: "center", fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 0.5, color: colors.outline },
   grid: { flexDirection: "row", flexWrap: "wrap" },
   gridCell: { width: "14.28%", aspectRatio: 1, alignItems: "center", justifyContent: "center" },
   gridBtn: { borderRadius: 10 },
   gridToday: { borderWidth: 2, borderColor: colors.primary },
   gridSelected: { backgroundColor: colors.primary },
-  gridDayText: { fontFamily: fonts.bodySemi, fontSize: 13, color: colors.text },
+  gridDayText: { fontFamily: fonts.bodySemi, fontSize: 13, color: colors.textHeading },
   gridTodayText: { color: colors.primary, fontFamily: fonts.bodyBold },
-  gridSelectedText: { color: "#fff", fontFamily: fonts.bodyBold },
+  gridSelectedText: { color: colors.onPrimary, fontFamily: fonts.bodyBold },
   dotsRow: { flexDirection: "row", gap: 2, marginTop: 2 },
   dot: { width: 5, height: 5, borderRadius: 3 },
 
   // Legend
-  legend: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.border },
+  legend: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.borderSubtle },
   legendItem: { flexDirection: "row", alignItems: "center", gap: 5 },
   legendDot: { width: 8, height: 8, borderRadius: 4 },
-  legendText: { fontFamily: fonts.body, fontSize: 10, color: colors.textMuted },
+  legendText: { fontFamily: fonts.body, fontSize: 10, color: colors.outline },
 
   // Selected day
-  selectedDate: { fontFamily: fonts.display, fontSize: 18, color: colors.text, marginBottom: 12 },
+  selectedDate: { fontFamily: fonts.display, fontSize: 18, color: colors.textHeading, marginBottom: 12 },
   emptyDay: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceCard,
+    borderRadius: radius.xxl,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderSubtle,
     padding: 20,
     alignItems: "center",
-    ...shadow.xs,
+    ...shadow.sm,
   },
-  emptyDayText: { fontFamily: fonts.body, color: colors.textMuted, fontSize: 13 },
+  emptyDayText: { fontFamily: fonts.body, color: colors.outline, fontSize: 13 },
 
   // Item cards
   itemCard: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
+    backgroundColor: colors.surfaceCard,
+    borderRadius: radius.xxl,
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor: colors.borderSubtle,
     borderLeftWidth: 4,
     padding: 14,
-    ...shadow.xs,
+    ...shadow.sm,
   },
   itemHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 },
-  itemTitle: { fontFamily: fonts.bodySemi, fontSize: 15, color: colors.text, flex: 1, marginRight: 8 },
+  itemTitle: { fontFamily: fonts.bodySemi, fontSize: 15, color: colors.textHeading, flex: 1, marginRight: 8 },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
   statusText: { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 0.5 },
-  itemMeta: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted },
+  itemMeta: { fontFamily: fonts.body, fontSize: 12, color: colors.outline },
   contactRow: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: 8, backgroundColor: colors.successLight, padding: 8, borderRadius: 8 },
-  contactText: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.success },
+  contactText: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.statusSuccess },
 });

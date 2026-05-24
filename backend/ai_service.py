@@ -11,6 +11,43 @@ _gemini_model = None
 _groq_client = None
 
 
+class _GeminiWrapper:
+    """Thin wrapper around google.genai client to keep call sites unchanged."""
+
+    def __init__(self, client):
+        self._client = client
+
+    def generate_content(self, prompt):
+        from google.genai import types
+
+        if isinstance(prompt, list):
+            # Convert old-style [text, {mime_type, data}] → new parts API
+            parts = []
+            for item in prompt:
+                if isinstance(item, str):
+                    parts.append(item)
+                elif isinstance(item, dict):
+                    parts.append(
+                        types.Part.from_bytes(
+                            data=item.get("data", b""),
+                            mime_type=item.get("mime_type", "image/jpeg"),
+                        )
+                    )
+            response = self._client.models.generate_content(
+                model="gemini-2.0-flash", contents=parts
+            )
+        else:
+            response = self._client.models.generate_content(
+                model="gemini-2.0-flash", contents=prompt
+            )
+
+        class _R:
+            def __init__(self, text):
+                self.text = text
+
+        return _R(response.text or "")
+
+
 def _get_gemini_model():
     global _gemini_model
     if _gemini_model is not None:
@@ -18,10 +55,10 @@ def _get_gemini_model():
     if not settings.gemini_api_key:
         return None
     try:
-        import google.generativeai as genai
+        from google import genai
 
-        genai.configure(api_key=settings.gemini_api_key)
-        _gemini_model = genai.GenerativeModel("gemini-1.5-flash")
+        client = genai.Client(api_key=settings.gemini_api_key)
+        _gemini_model = _GeminiWrapper(client)
         return _gemini_model
     except Exception:
         return None

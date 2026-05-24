@@ -21,7 +21,7 @@ export default function SupportChatScreen() {
         startInLoadingState
         renderLoading={() => (
           <View style={styles.center}>
-            <ActivityIndicator color={colors.saffron} />
+            <ActivityIndicator color={colors.primary} />
           </View>
         )}
         style={styles.webview}

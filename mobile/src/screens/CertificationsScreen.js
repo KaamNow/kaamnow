@@ -19,7 +19,7 @@ export default function CertificationsScreen() {
 
   const load = useCallback(async () => {
     try {
-      const r = await api.get("/workers/me");
+      const r = await api.get("/service-profiles/mine");
       setCerts(r.data?.certifications || []);
     } catch {}
     finally { setLoading(false); }
@@ -43,7 +43,7 @@ export default function CertificationsScreen() {
       formData.append("file", { uri, name: "cert.jpg", type: "image/jpeg" });
       formData.append("skill", "general");
       formData.append("cert_name", "Certificate");
-      await api.post("/workers/me/certifications", formData, {
+      await api.post("/service-profiles/mine/certifications", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       await load();
@@ -60,7 +60,7 @@ export default function CertificationsScreen() {
       {
         text: t("delete"), style: "destructive",
         onPress: async () => {
-          try { await api.delete(`/workers/me/certifications/${id}`); load(); } catch {}
+          try { await api.delete(`/service-profiles/mine/certifications/${id}`); load(); } catch {}
         },
       },
     ]);
@@ -79,16 +79,16 @@ export default function CertificationsScreen() {
           : <View style={styles.pendingBadge}><Text style={styles.pendingText}>{t("cert_pending")}</Text></View>
         }
         <TouchableOpacity onPress={() => remove(item.id)} style={{ padding: 4 }}>
-          <Ionicons name="trash-outline" size={16} color={colors.danger} />
+          <Ionicons name="trash-outline" size={16} color={colors.error} />
         </TouchableOpacity>
       </View>
     </View>
   );
 
-  if (loading) return <View style={styles.center}><ActivityIndicator color={colors.saffron} /></View>;
+  if (loading) return <View style={styles.center}><ActivityIndicator color={colors.primary} /></View>;
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <FlatList
         data={certs}
         keyExtractor={(c) => c.id}
@@ -115,18 +115,18 @@ export default function CertificationsScreen() {
 
 const styles = StyleSheet.create({
   center:  { flex: 1, justifyContent: "center", alignItems: "center" },
-  card:    { flexDirection: "row", alignItems: "flex-start", backgroundColor: "#fff", borderRadius: radius.lg, padding: spacing.md, marginBottom: spacing.xs, borderWidth: 1, borderColor: colors.border },
-  certName:{ fontFamily: fonts.bodyBold, fontSize: 14, color: colors.text },
-  certSkill:{ fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, textTransform: "capitalize" },
-  certMeta:{ fontFamily: fonts.body, fontSize: 12, color: colors.textMuted },
+  card:    { flexDirection: "row", alignItems: "flex-start", backgroundColor: colors.surfaceCard, borderRadius: radius.xxl, padding: spacing.md, marginBottom: spacing.xs, borderWidth: 1, borderColor: colors.borderSubtle },
+  certName:{ fontFamily: fonts.bodyBold, fontSize: 14, color: colors.textHeading },
+  certSkill:{ fontFamily: fonts.body, fontSize: 12, color: colors.outline, textTransform: "capitalize" },
+  certMeta:{ fontFamily: fonts.body, fontSize: 12, color: colors.outline },
   cardRight: { alignItems: "flex-end", gap: 8 },
   verifiedBadge: { backgroundColor: "#d1fae5", borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3 },
   verifiedText:  { fontFamily: fonts.bodyBold, fontSize: 11, color: "#065f46" },
   pendingBadge:  { backgroundColor: "#fef3c7", borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3 },
   pendingText:   { fontFamily: fonts.bodyBold, fontSize: 11, color: "#92400e" },
   empty:    { alignItems: "center", marginTop: 60 },
-  emptyText:{ fontFamily: fonts.body, fontSize: 14, color: colors.textMuted },
-  addBar:   { backgroundColor: "#fff", borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.sm, paddingHorizontal: spacing.md },
-  addBtn:   { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: colors.indigo, borderRadius: radius.lg, paddingVertical: 13 },
-  addBtnText:{ fontFamily: fonts.bodyBold, fontSize: 14, color: "#fff" },
+  emptyText:{ fontFamily: fonts.body, fontSize: 14, color: colors.outline },
+  addBar:   { backgroundColor: colors.surfaceCard, borderTopWidth: 1, borderTopColor: colors.borderSubtle, paddingTop: spacing.sm, paddingHorizontal: spacing.md },
+  addBtn:   { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: colors.primary, borderRadius: radius.xxl, paddingVertical: 13 },
+  addBtnText:{ fontFamily: fonts.bodyBold, fontSize: 14, color: colors.onPrimary },
 });

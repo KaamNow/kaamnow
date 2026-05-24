@@ -1,8 +1,9 @@
+import certifi
 from motor.motor_asyncio import AsyncIOMotorClient
 
 from .config import settings
 
-client = AsyncIOMotorClient(settings.mongo_url)
+client = AsyncIOMotorClient(settings.mongo_url, tlsCAFile=certifi.where())
 db = client[settings.db_name]
 
 messages = db["messages"]

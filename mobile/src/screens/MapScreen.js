@@ -40,14 +40,14 @@ export default function MapScreen({ navigation }) {
 
   const fetchWorkers = async (lat, lng) => {
     try {
-      const r = await api.get(`/workers/search?lat=${lat}&lng=${lng}&radius=20&limit=50`);
-      setWorkers(r.data?.workers || r.data || []);
+      const r = await api.get(`/service-profiles?limit=50`);
+      setWorkers(Array.isArray(r.data) ? r.data : []);
     } catch {}
     finally { setLoading(false); }
   };
 
   if (loading) {
-    return <View style={styles.center}><ActivityIndicator color={colors.saffron} /></View>;
+    return <View style={styles.center}><ActivityIndicator color={colors.primary} /></View>;
   }
 
   return (
@@ -71,7 +71,7 @@ export default function MapScreen({ navigation }) {
       </MapView>
 
       <TouchableOpacity style={styles.locateBtn} onPress={locate}>
-        <Ionicons name="locate" size={20} color={colors.indigo} />
+        <Ionicons name="locate" size={20} color={colors.primary} />
       </TouchableOpacity>
     </View>
   );
@@ -83,19 +83,19 @@ const styles = StyleSheet.create({
   map:       { flex: 1 },
 
   pin: {
-    backgroundColor: colors.indigo, width: 28, height: 28,
-    borderRadius: 14, justifyContent: "center", alignItems: "center",
-    borderWidth: 2, borderColor: "#fff",
+    backgroundColor: colors.primary, width: 28, height: 28,
+    borderRadius: radius.xxl, justifyContent: "center", alignItems: "center",
+    borderWidth: 2, borderColor: colors.surfaceCard,
   },
   callout: { width: 140, padding: spacing.xs },
-  calloutName:  { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.text },
-  calloutSkill: { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted },
-  calloutRate:  { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.success, marginTop: 2 },
-  calloutLink:  { fontFamily: fonts.body, fontSize: 11, color: colors.indigo, marginTop: 4 },
+  calloutName:  { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.textHeading },
+  calloutSkill: { fontFamily: fonts.body, fontSize: 11, color: colors.outline },
+  calloutRate:  { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.statusSuccess, marginTop: 2 },
+  calloutLink:  { fontFamily: fonts.body, fontSize: 11, color: colors.primary, marginTop: 4 },
 
   locateBtn: {
     position: "absolute", bottom: 24, right: 16,
-    backgroundColor: "#fff", borderRadius: 22, width: 44, height: 44,
+    backgroundColor: colors.surfaceCard, borderRadius: 22, width: 44, height: 44,
     justifyContent: "center", alignItems: "center",
     shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 4, elevation: 4,
   },

@@ -15,29 +15,36 @@ export default function QRCodeScreen() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [qrUri, setQrUri] = useState(null);
+  const [profileUrl, setProfileUrl] = useState(null);
+  const [error] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (!user?.id) { setLoading(false); return; }
+    // Direct PNG URL — avoids data: URI rendering issues in Expo
+    setQrUri(`${API_URL}/api/service-profiles/user/${user.id}/qr-png`);
+    // Fetch profile URL separately for the share button
     (async () => {
       try {
-        await api.get("/workers/me/qr-code");
-        setQrUri(`${API_URL}/api/workers/me/qr-code`);
+        const resp = await api.get("/service-profiles/mine");
+        setProfileUrl(resp.data?.id ? `https://kaamnow.com/local-expert/${resp.data.id}` : null);
       } catch {}
       finally { setLoading(false); }
     })();
-  }, []);
+  }, [user?.id]);
 
   const shareProfile = async () => {
-    if (!user?.id) return;
+    const url = profileUrl || (user?.id ? `https://kaamnow.com/users/${user.id}` : "");
+    if (!url) return;
     try {
       await Share.share({
-        message: `Book me on KaamNow! https://kaamnow.com/local-expert/${user.id}`,
+        message: `Find me on KaamNow! ${url}`,
       });
     } catch {}
   };
 
   if (loading) {
-    return <View style={styles.center}><ActivityIndicator color={colors.saffron} /></View>;
+    return <View style={styles.center}><ActivityIndicator color={colors.primary} /></View>;
   }
 
   return (
@@ -52,7 +59,8 @@ export default function QRCodeScreen() {
           />
         ) : (
           <View style={styles.qrPlaceholder}>
-            <Ionicons name="qr-code-outline" size={80} color={colors.textMuted} />
+            <Ionicons name="qr-code-outline" size={80} color={colors.outline} />
+            {error ? <Text style={styles.errorText}>{error}</Text> : null}
           </View>
         )}
         <Text style={styles.hint}>{t("qr_hint")}</Text>
@@ -67,23 +75,24 @@ export default function QRCodeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center", padding: spacing.lg },
+  container: { flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center", padding: spacing.lg },
   center:    { flex: 1, justifyContent: "center", alignItems: "center" },
 
   card: {
-    backgroundColor: "#fff", borderRadius: radius.xl, padding: spacing.xl,
+    backgroundColor: colors.surfaceCard, borderRadius: radius.xxl, padding: spacing.xl,
     alignItems: "center", width: "100%", maxWidth: 320,
-    borderWidth: 1, borderColor: colors.border,
+    borderWidth: 1, borderColor: colors.borderSubtle,
   },
-  name:          { fontFamily: fonts.bodyBold, fontSize: 18, color: colors.text, marginBottom: spacing.md },
+  name:          { fontFamily: fonts.bodyBold, fontSize: 18, color: colors.textHeading, marginBottom: spacing.md },
   qr:            { width: 220, height: 220 },
-  qrPlaceholder: { width: 220, height: 220, justifyContent: "center", alignItems: "center" },
-  hint:          { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginTop: spacing.md, textAlign: "center" },
+  qrPlaceholder: { width: 220, height: 220, justifyContent: "center", alignItems: "center", paddingHorizontal: spacing.sm },
+  errorText:     { fontFamily: fonts.body, fontSize: 12, color: colors.outline, marginTop: spacing.sm, textAlign: "center" },
+  hint:          { fontFamily: fonts.body, fontSize: 12, color: colors.outline, marginTop: spacing.md, textAlign: "center" },
 
   shareBtn: {
     flexDirection: "row", alignItems: "center", gap: spacing.xs,
-    backgroundColor: colors.indigo, borderRadius: radius.lg,
+    backgroundColor: colors.primary, borderRadius: radius.xxl,
     paddingHorizontal: spacing.xl, paddingVertical: 14, marginTop: spacing.lg,
   },
-  shareBtnText: { fontFamily: fonts.bodyBold, fontSize: 15, color: "#fff" },
+  shareBtnText: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.onPrimary },
 });

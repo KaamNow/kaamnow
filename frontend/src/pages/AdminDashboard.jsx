@@ -1,1283 +1,451 @@
-import { useState, useEffect, useCallback } from "react";
-import { Navigate } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
-import { toast } from "sonner";
-import {
-  Users, Briefcase, CheckCircle, TrendingUp, AlertTriangle,
-  ShieldCheck, ShieldOff, Loader2, Search, MessageSquare,
-  Star, MapPin, RefreshCw, X, IndianRupee, Flag, Eye,
-  Settings, ClipboardList, Trash2, ToggleLeft, ToggleRight, LogOut,
-  FileText, HelpCircle, Scale, Wallet, Gift, Send, Plus, Edit3, Ban,
-} from "lucide-react";
 
-const TIER_LABEL = { 1: "Basic", 2: "Verified", 3: "Pro", 4: "Elite" };
-const TIER_COLOR = {
+const TIER_LABELS = { 1: "Self Verified", 2: "Verified", 3: "KaamNow Pro", 4: "Elite Expert" };
+const TIER_COLORS = {
   1: "bg-gray-100 text-gray-600",
   2: "bg-green-100 text-green-700",
   3: "bg-blue-100 text-blue-700",
   4: "bg-amber-100 text-amber-700",
 };
-const AVAIL_COLOR = {
-  available: "text-green-600",
-  restricted: "text-amber-600",
-  suspended: "text-red-600",
-};
-const STATUS_PILL = {
-  open:      "bg-green-100 text-green-700",
-  filled:    "bg-blue-100 text-blue-700",
-  expired:   "bg-gray-100 text-gray-500",
-  cancelled: "bg-red-100 text-red-600",
-  requested: "bg-amber-100 text-amber-700",
-  accepted:  "bg-blue-100 text-blue-700",
-  completed: "bg-green-100 text-green-700",
-  rejected:  "bg-red-100 text-red-600",
-};
 
-const LIMIT = 20;
+function StatCard({ label, value, icon, color = "indigo" }) {
+  const colors = {
+    indigo: "bg-indigo-50 text-indigo-600",
+    green:  "bg-green-50 text-green-600",
+    amber:  "bg-amber-50 text-amber-600",
+    rose:   "bg-rose-50 text-rose-600",
+  };
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 p-5 flex items-center gap-4 shadow-sm">
+      <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-xl ${colors[color]}`}>{icon}</div>
+      <div>
+        <p className="text-2xl font-bold text-gray-900">{value ?? "—"}</p>
+        <p className="text-xs text-gray-500 font-medium mt-0.5">{label}</p>
+      </div>
+    </div>
+  );
+}
+
+function Badge({ children, className = "" }) {
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${className}`}>
+      {children}
+    </span>
+  );
+}
+
+function SectionTitle({ children }) {
+  return <h2 className="text-base font-bold text-gray-800 mb-3">{children}</h2>;
+}
 
 export default function AdminDashboard() {
-  const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState("overview");
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
 
-  // Overview
-  const [stats, setStats] = useState(null);
-  const [statsLoading, setStatsLoading] = useState(true);
+  const [tab,    setTab]    = useState("experts");
+  const [stats,  setStats]  = useState(null);
 
-  // Workers
-  const [workers, setWorkers] = useState([]);
-  const [workersTotal, setWorkersTotal] = useState(0);
-  const [workersLoading, setWorkersLoading] = useState(false);
-  const [workerSearch, setWorkerSearch] = useState("");
-  const [workerTierFilter, setWorkerTierFilter] = useState("");
-  const [workerAvailFilter, setWorkerAvailFilter] = useState("");
-  const [workerPage, setWorkerPage] = useState(0);
+  const [experts,      setExperts]      = useState([]);
+  const [expertTotal,  setExpertTotal]  = useState(0);
+  const [expertSearch, setExpertSearch] = useState("");
+  const [expertPage,   setExpertPage]   = useState(0);
 
-  // Customers
-  const [customers, setCustomers] = useState([]);
-  const [customersTotal, setCustomersTotal] = useState(0);
-  const [customersLoading, setCustomersLoading] = useState(false);
-  const [customerSearch, setCustomerSearch] = useState("");
-  const [customerPage, setCustomerPage] = useState(0);
-
-  // Jobs
-  const [jobs, setJobs] = useState([]);
-  const [jobsTotal, setJobsTotal] = useState(0);
-  const [jobsLoading, setJobsLoading] = useState(false);
-  const [jobStatusFilter, setJobStatusFilter] = useState("");
-  const [jobSearch, setJobSearch] = useState("");
-  const [jobPage, setJobPage] = useState(0);
-
-  // Engagements
-  const [engagements, setEngagements] = useState([]);
-  const [engagementsTotal, setEngagementsTotal] = useState(0);
-  const [engagementsLoading, setEngagementsLoading] = useState(false);
-  const [engStatusFilter, setEngStatusFilter] = useState("");
-  const [engSearch, setEngSearch] = useState("");
-  const [engPage, setEngPage] = useState(0);
-  const [flagModal, setFlagModal] = useState(null);
-  const [flagNote, setFlagNote] = useState("");
-
-  // WhatsApp modal
-  const [waModal, setWaModal] = useState(null);
-  const [waMsg, setWaMsg] = useState("");
-  const [waSending, setWaSending] = useState(false);
-
-  // Broadcast modal
-  const [broadcastModal, setBroadcastModal] = useState(false);
-  const [broadcastAudience, setBroadcastAudience] = useState("workers");
-  const [broadcastMsg, setBroadcastMsg] = useState("");
-  const [broadcastSending, setBroadcastSending] = useState(false);
-
-  // Platform Controls
-  const [platform, setPlatform] = useState(null);
-  const [platformLoading, setPlatformLoading] = useState(false);
-  const [wipingSeeds, setWipingSeeds] = useState(false);
-
-  // Audit Log
-  const [auditLogs, setAuditLogs] = useState([]);
-  const [auditTotal, setAuditTotal] = useState(0);
-  const [auditLoading, setAuditLoading] = useState(false);
-  const [auditPage, setAuditPage] = useState(0);
-
-  // Reports
-  const [reports, setReports] = useState([]);
-  const [reportsLoading, setReportsLoading] = useState(false);
-  const [reportFilter, setReportFilter] = useState("pending");
-  const [reportNote, setReportNote] = useState("");
-  const [resolveModal, setResolveModal] = useState(null);
-
-  // FAQ Management
-  const [faqs, setFaqs] = useState([]);
-  const [faqsLoading, setFaqsLoading] = useState(false);
-  const [faqModal, setFaqModal] = useState(null); // null | "add" | faq object
-  const [faqForm, setFaqForm] = useState({ question_en: "", question_hi: "", answer_en: "", answer_hi: "", category: "general", order: 1 });
-
-  // Legal
-  const [legalDocs, setLegalDocs] = useState([]);
-  const [legalLoading, setLegalLoading] = useState(false);
-  const [legalModal, setLegalModal] = useState(null);
-  const [legalForm, setLegalForm] = useState({ type: "terms", version: "", content_en: "", content_hi: "", effective_date: "" });
-
-  // Users
-  const [adminUsers, setAdminUsers] = useState([]);
-  const [usersLoading, setUsersLoading] = useState(false);
+  const [users,      setUsers]      = useState([]);
+  const [userTotal,  setUserTotal]  = useState(0);
   const [userSearch, setUserSearch] = useState("");
-  const [userPage, setUserPage] = useState(0);
-  const [userTotal, setUserTotal] = useState(0);
 
-  // Wallet Audit
-  const [walletTxs, setWalletTxs] = useState([]);
-  const [walletLoading, setWalletLoading] = useState(false);
-  const [walletPage, setWalletPage] = useState(0);
-  const [walletTotal, setWalletTotal] = useState(0);
+  const [jobs,     setJobs]     = useState([]);
+  const [jobTotal, setJobTotal] = useState(0);
 
-  // Referrals
-  const [referrals, setReferrals] = useState([]);
-  const [referralsLoading, setReferralsLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  // ── Fetch helpers ──
+  const LIMIT = 25;
 
   const fetchStats = useCallback(async () => {
-    try {
-      setStatsLoading(true);
-      const res = await api.get("/admin/stats");
-      setStats(res.data);
-    } catch { toast.error("Failed to load stats"); }
-    finally { setStatsLoading(false); }
+    try { const r = await api.get("/admin/stats"); setStats(r.data); } catch {}
   }, []);
 
-  const fetchWorkers = useCallback(async (page = 0) => {
+  const fetchExperts = useCallback(async (page = 0) => {
+    setLoading(true);
     try {
-      setWorkersLoading(true);
-      const p = new URLSearchParams({ limit: LIMIT, skip: page * LIMIT,
-        ...(workerSearch && { search: workerSearch }),
-        ...(workerTierFilter && { tier: workerTierFilter }),
-        ...(workerAvailFilter && { availability: workerAvailFilter }),
-      });
-      const res = await api.get(`/admin/workers?${p}`);
-      setWorkers(res.data.items); setWorkersTotal(res.data.total);
-    } catch { toast.error("Failed to load workers"); }
-    finally { setWorkersLoading(false); }
-  }, [workerSearch, workerTierFilter, workerAvailFilter]);
+      const p = new URLSearchParams({ limit: LIMIT, skip: page * LIMIT });
+      if (expertSearch) p.append("search", expertSearch);
+      const r = await api.get(`/admin/experts?${p}`);
+      setExperts(r.data.items || []);
+      setExpertTotal(r.data.total || 0);
+      setExpertPage(page);
+    } catch {}
+    finally { setLoading(false); }
+  }, [expertSearch]);
 
-  const fetchCustomers = useCallback(async (page = 0) => {
+  const fetchUsers = useCallback(async () => {
+    setLoading(true);
     try {
-      setCustomersLoading(true);
-      const p = new URLSearchParams({ limit: LIMIT, skip: page * LIMIT,
-        ...(customerSearch && { search: customerSearch }),
-      });
-      const res = await api.get(`/admin/customers?${p}`);
-      setCustomers(res.data.items); setCustomersTotal(res.data.total);
-    } catch { toast.error("Failed to load customers"); }
-    finally { setCustomersLoading(false); }
-  }, [customerSearch]);
+      const p = new URLSearchParams({ limit: LIMIT });
+      if (userSearch) p.append("search", userSearch);
+      const r = await api.get(`/admin/users?${p}`);
+      setUsers(r.data.items || []);
+      setUserTotal(r.data.total || 0);
+    } catch {}
+    finally { setLoading(false); }
+  }, [userSearch]);
 
-  const fetchJobs = useCallback(async (page = 0) => {
+  const fetchJobs = useCallback(async () => {
+    setLoading(true);
     try {
-      setJobsLoading(true);
-      const p = new URLSearchParams({ limit: LIMIT, skip: page * LIMIT,
-        ...(jobStatusFilter && { status: jobStatusFilter }),
-        ...(jobSearch && { search: jobSearch }),
-      });
-      const res = await api.get(`/admin/jobs?${p}`);
-      setJobs(res.data.items); setJobsTotal(res.data.total);
-    } catch { toast.error("Failed to load jobs"); }
-    finally { setJobsLoading(false); }
-  }, [jobStatusFilter, jobSearch]);
-
-  const fetchEngagements = useCallback(async (page = 0) => {
-    try {
-      setEngagementsLoading(true);
-      const p = new URLSearchParams({ limit: LIMIT, skip: page * LIMIT,
-        ...(engStatusFilter && { status: engStatusFilter }),
-        ...(engSearch && { search: engSearch }),
-      });
-      const res = await api.get(`/admin/engagements?${p}`);
-      setEngagements(res.data.items); setEngagementsTotal(res.data.total);
-    } catch { toast.error("Failed to load engagements"); }
-    finally { setEngagementsLoading(false); }
-  }, [engStatusFilter, engSearch]);
-
-  const fetchPlatform = useCallback(async () => {
-    try {
-      setPlatformLoading(true);
-      const res = await api.get("/admin/platform-info");
-      setPlatform(res.data);
-    } catch { toast.error("Failed to load platform info"); }
-    finally { setPlatformLoading(false); }
+      const r = await api.get("/admin/jobs?limit=50");
+      setJobs(r.data.items || []);
+      setJobTotal(r.data.total || 0);
+    } catch {}
+    finally { setLoading(false); }
   }, []);
 
-  const fetchAuditLog = useCallback(async (page = 0) => {
-    try {
-      setAuditLoading(true);
-      const res = await api.get(`/admin/audit-log?limit=${LIMIT}&skip=${page * LIMIT}`);
-      setAuditLogs(res.data.items); setAuditTotal(res.data.total);
-    } catch { toast.error("Failed to load audit log"); }
-    finally { setAuditLoading(false); }
-  }, []);
-
-  const fetchReports = useCallback(async (status = "pending") => {
-    setReportsLoading(true);
-    try {
-      const res = await api.get(`/admin/reports?status=${status}`);
-      setReports(res.data?.items || res.data || []);
-    } catch { toast.error("Failed to load reports"); }
-    finally { setReportsLoading(false); }
-  }, []);
-
-  const resolveReport = async (id, action, note) => {
-    try {
-      await api.post(`/admin/reports/${id}/${action}`, { admin_note: note });
-      toast.success(`Report ${action}d`);
-      setResolveModal(null); setReportNote("");
-      fetchReports(reportFilter);
-    } catch { toast.error("Action failed"); }
-  };
-
-  const fetchFAQs = useCallback(async () => {
-    setFaqsLoading(true);
-    try {
-      const res = await api.get("/admin/faq");
-      setFaqs(res.data?.items || res.data || []);
-    } catch { toast.error("Failed to load FAQs"); }
-    finally { setFaqsLoading(false); }
-  }, []);
-
-  const saveFAQ = async () => {
-    try {
-      if (faqModal === "add") await api.post("/admin/faq", faqForm);
-      else await api.patch(`/admin/faq/${faqModal.id}`, faqForm);
-      toast.success("FAQ saved"); setFaqModal(null); fetchFAQs();
-    } catch { toast.error("Save failed"); }
-  };
-
-  const deleteFAQ = async (id) => {
-    if (!window.confirm("Delete this FAQ?")) return;
-    try { await api.delete(`/admin/faq/${id}`); fetchFAQs(); } catch { toast.error("Delete failed"); }
-  };
-
-  const fetchLegal = useCallback(async () => {
-    setLegalLoading(true);
-    try {
-      const res = await api.get("/admin/legal");
-      setLegalDocs(res.data?.items || res.data || []);
-    } catch { toast.error("Failed to load legal docs"); }
-    finally { setLegalLoading(false); }
-  }, []);
-
-  const publishLegal = async () => {
-    try {
-      await api.post("/admin/legal", legalForm);
-      toast.success("Published"); setLegalModal(null); fetchLegal();
-    } catch { toast.error("Publish failed"); }
-  };
-
-  const fetchAdminUsers = useCallback(async (page = 0, q = "") => {
-    setUsersLoading(true);
-    try {
-      const res = await api.get(`/admin/users?limit=${LIMIT}&skip=${page * LIMIT}${q ? `&q=${encodeURIComponent(q)}` : ""}`);
-      setAdminUsers(res.data?.items || res.data || []);
-      setUserTotal(res.data?.total || 0);
-    } catch { toast.error("Failed to load users"); }
-    finally { setUsersLoading(false); }
-  }, []);
-
-  const fetchWalletAudit = useCallback(async (page = 0) => {
-    setWalletLoading(true);
-    try {
-      const res = await api.get(`/admin/wallet?limit=${LIMIT}&skip=${page * LIMIT}`);
-      setWalletTxs(res.data?.items || res.data || []);
-      setWalletTotal(res.data?.total || 0);
-    } catch { toast.error("Failed to load wallet transactions"); }
-    finally { setWalletLoading(false); }
-  }, []);
-
-  const fetchReferrals = useCallback(async () => {
-    setReferralsLoading(true);
-    try {
-      const res = await api.get("/admin/referrals");
-      setReferrals(res.data?.items || res.data || []);
-    } catch { toast.error("Failed to load referrals"); }
-    finally { setReferralsLoading(false); }
-  }, []);
-
-  const wipeSeedData = async () => {
-    if (!window.confirm("Delete ALL dummy +717000* accounts? This cannot be undone.")) return;
-    setWipingSeeds(true);
-    try {
-      const res = await api.delete("/admin/seed-data");
-      toast.success(`Deleted: ${res.data.deleted.users} users, ${res.data.deleted.workers} workers, ${res.data.deleted.jobs} jobs`);
-      fetchPlatform();
-    } catch { toast.error("Failed to wipe seed data"); }
-    finally { setWipingSeeds(false); }
-  };
-
-  useEffect(() => { if (user?.role === "admin") fetchStats(); }, [user, fetchStats]);
-
+  useEffect(() => { fetchStats(); }, [fetchStats]);
   useEffect(() => {
-    if (activeTab === "workers")     { setWorkerPage(0);    fetchWorkers(0); }
-    if (activeTab === "customers")   { setCustomerPage(0);  fetchCustomers(0); }
-    if (activeTab === "jobs")        { setJobPage(0);       fetchJobs(0); }
-    if (activeTab === "engagements") { setEngPage(0);       fetchEngagements(0); }
-    if (activeTab === "platform")    { fetchPlatform(); }
-    if (activeTab === "audit")       { setAuditPage(0);     fetchAuditLog(0); }
-    if (activeTab === "reports")     { fetchReports(reportFilter); }
-    if (activeTab === "faq")         { fetchFAQs(); }
-    if (activeTab === "legal")       { fetchLegal(); }
-    if (activeTab === "users")       { setUserPage(0); fetchAdminUsers(0, userSearch); }
-    if (activeTab === "wallet_audit"){ setWalletPage(0); fetchWalletAudit(0); }
-    if (activeTab === "referrals")   { fetchReferrals(); }
-  }, [activeTab, workerSearch, workerTierFilter, workerAvailFilter,
-      customerSearch, jobStatusFilter, jobSearch, engStatusFilter, engSearch]);
+    if (tab === "experts") fetchExperts(0);
+    if (tab === "users")   fetchUsers();
+    if (tab === "jobs")    fetchJobs();
+  }, [tab]);
 
-  // ── Worker actions ──
-  const setTier = async (workerId, tier) => {
-    try { await api.patch(`/admin/workers/${workerId}/tier`, { tier }); toast.success(`Tier → ${TIER_LABEL[tier]}`); fetchWorkers(workerPage); }
-    catch { toast.error("Failed"); }
-  };
-  const liftRestriction = async (id) => {
-    try { await api.patch(`/admin/workers/${id}/lift-restriction`); toast.success("Restriction lifted"); fetchWorkers(workerPage); }
-    catch { toast.error("Failed"); }
-  };
-  const deleteWorker = async (id, name) => {
-    if (!window.confirm(`Permanently delete ALL data for "${name}"? This removes their account, worker profile, engagements and history. Cannot be undone.`)) return;
-    try { await api.delete(`/admin/workers/${id}`); toast.success("Worker profile deleted"); fetchWorkers(workerPage); }
-    catch { toast.error("Failed to delete worker profile"); }
-  };
-
-  const suspendWorker = async (id, status) => {
+  // ── Expert actions ──────────────────────────────────────────────────────────
+  const suspendExpert = async (id, status) => {
     const suspend = status !== "suspended";
-    try { await api.patch(`/admin/workers/${id}/suspend`, { suspend }); toast.success(suspend ? "Suspended" : "Reactivated"); fetchWorkers(workerPage); }
-    catch { toast.error("Failed"); }
-  };
-
-  // ── Customer actions ──
-  const suspendCustomer = async (id, status) => {
-    const suspend = status !== "suspended";
-    try { await api.patch(`/admin/customers/${id}/suspend`, { suspend }); toast.success(suspend ? "Suspended" : "Reactivated"); fetchCustomers(customerPage); }
-    catch { toast.error("Failed"); }
-  };
-
-  // ── Job actions ──
-  const forceCloseJob = async (id) => {
-    try { await api.patch(`/admin/jobs/${id}/close`); toast.success("Job closed"); fetchJobs(jobPage); }
-    catch { toast.error("Failed"); }
-  };
-
-  // ── Engagement actions ──
-  const flagEngagement = async () => {
-    try { await api.patch(`/admin/engagements/${flagModal.id}/flag`, { note: flagNote }); toast.success("Flagged"); setFlagModal(null); setFlagNote(""); fetchEngagements(engPage); }
-    catch { toast.error("Failed"); }
-  };
-  const unflagEngagement = async (id) => {
-    try { await api.patch(`/admin/engagements/${id}/unflag`); toast.success("Unflagged"); fetchEngagements(engPage); }
-    catch { toast.error("Failed"); }
-  };
-
-  // ── WhatsApp ──
-  const sendWhatsApp = async () => {
-    if (!waMsg.trim()) return;
-    setWaSending(true);
-    try { await api.post("/admin/whatsapp/send", { phone: waModal.phone, message: waMsg }); toast.success("Sent!"); setWaModal(null); setWaMsg(""); }
-    catch { toast.error("Failed to send"); }
-    finally { setWaSending(false); }
-  };
-
-  const sendBroadcast = async () => {
-    if (!broadcastMsg.trim()) return;
-    setBroadcastSending(true);
+    if (!window.confirm(suspend ? "Suspend this expert?" : "Reactivate this expert?")) return;
     try {
-      const res = await api.post("/admin/whatsapp/broadcast", { audience: broadcastAudience, message: broadcastMsg });
-      toast.success(`Sent to ${res.data.sent} users`);
-      setBroadcastModal(false); setBroadcastMsg("");
-    } catch { toast.error("Broadcast failed"); }
-    finally { setBroadcastSending(false); }
+      await api.patch(`/admin/experts/${id}/suspend`, { suspend });
+      fetchExperts(expertPage);
+    } catch (e) { alert(e?.response?.data?.detail || "Error"); }
   };
 
-  if (!user || user.role !== "admin") return <Navigate to="/dashboard" replace />;
+  const deleteExpert = async (id, name) => {
+    if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) return;
+    try {
+      await api.delete(`/admin/experts/${id}`);
+      fetchExperts(expertPage);
+    } catch (e) { alert(e?.response?.data?.detail || "Error"); }
+  };
 
-  const tabs = [
-    { id: "overview",     label: "Overview" },
-    { id: "reports",      label: "Reports",      badge: reports.filter(r => r.status === "pending").length || null },
-    { id: "users",        label: "Users" },
-    { id: "workers",      label: "Local Experts" },
-    { id: "customers",    label: "Customers" },
-    { id: "jobs",         label: "Jobs" },
-    { id: "engagements",  label: "Engagements" },
-    { id: "faq",          label: "FAQ" },
-    { id: "legal",        label: "Legal" },
-    { id: "wallet_audit", label: "Wallet" },
-    { id: "referrals",    label: "Referrals" },
-    { id: "platform",     label: "Platform" },
-    { id: "audit",        label: "Audit Log" },
+  const setTrustTier = async (id, tier) => {
+    try {
+      await api.patch(`/admin/experts/${id}/trust-tier`, { trust_tier: tier });
+      fetchExperts(expertPage);
+    } catch (e) { alert(e?.response?.data?.detail || "Error"); }
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/admin/login");
+  };
+
+  const TABS = [
+    { key: "experts", label: "Local Experts" },
+    { key: "users",   label: "Users" },
+    { key: "jobs",    label: "Jobs" },
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50" data-testid="admin-dashboard">
-      {/* Top bar */}
-      <div className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
+      {/* Top nav */}
+      <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between sticky top-0 z-10">
         <div className="flex items-center gap-3">
-          <span className="font-display text-xl text-[#ff6b35]">KaamNow</span>
-          <span className="text-gray-300">|</span>
-          <span className="text-sm font-bold text-gray-500 uppercase tracking-widest">Admin</span>
+          <div className="w-7 h-7 rounded-lg bg-indigo-600 flex items-center justify-center">
+            <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+            </svg>
+          </div>
+          <span className="font-bold text-gray-900">KaamNow Admin</span>
         </div>
-        <div className="flex items-center gap-2">
-          <button onClick={() => setBroadcastModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg text-sm font-bold transition-colors">
-            <MessageSquare size={14} /> Broadcast
-          </button>
-          <button onClick={() => { fetchStats(); }}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-bold transition-colors">
-            <RefreshCw size={14} /> Refresh
-          </button>
-          <button onClick={() => { document.cookie = "token=; Max-Age=0; path=/"; window.location.href = "/login"; }}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-100 hover:bg-red-50 hover:text-red-600 rounded-lg text-sm font-bold transition-colors">
-            <LogOut size={14} /> Logout
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-500">{user?.name || user?.email || "Admin"}</span>
+          <button
+            onClick={handleLogout}
+            className="text-sm text-red-500 hover:text-red-600 font-medium px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors"
+          >
+            Log out
           </button>
         </div>
-      </div>
+      </header>
 
-      <div className="max-w-7xl mx-auto px-6 py-6">
+      <div className="flex-1 max-w-7xl mx-auto w-full px-6 py-6 space-y-6">
 
-      {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-200 mb-6 overflow-x-auto">
-        {tabs.map(t => (
-          <button key={t.id} onClick={() => setActiveTab(t.id)}
-            className={`flex items-center gap-1.5 px-5 py-2.5 text-sm font-bold rounded-t-lg transition-colors -mb-px border border-transparent whitespace-nowrap ${
-              activeTab === t.id ? "border-gray-200 border-b-white bg-white text-[#ff6b35]" : "text-gray-500 hover:text-gray-900"
-            }`}>
-            {t.label}
-            {t.badge > 0 && <span className="ml-1 bg-red-500 text-white text-xs rounded-full px-1.5 py-0.5 leading-none">{t.badge}</span>}
-          </button>
-        ))}
-      </div>
+        {/* Stats */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <StatCard label="Total Users"         value={stats?.users}    icon="👤" color="indigo" />
+          <StatCard label="Local Experts"        value={stats?.experts}  icon="⭐" color="amber"  />
+          <StatCard label="Jobs Posted"          value={stats?.jobs?.total ?? stats?.jobs}     icon="📋" color="green"  />
+          <StatCard label="Engagements"          value={stats?.work_requests?.total ?? stats?.work_requests ?? stats?.engagements} icon="🤝" color="rose" />
+        </div>
 
-      {/* ── OVERVIEW ── */}
-      {activeTab === "overview" && (
-        statsLoading ? <Spinner /> : <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-            <StatCard icon={<Users size={20} className="text-blue-600" />} label="Workers" value={stats?.workers ?? 0} />
-            <StatCard icon={<Users size={20} className="text-[#3f37c9]" />} label="Customers" value={stats?.customers ?? 0} />
-            <StatCard icon={<Briefcase size={20} className="text-[#ff6b35]" />} label="Active Jobs" value={stats?.jobs?.active ?? 0} />
-            <StatCard icon={<IndianRupee size={20} className="text-green-600" />} label="GMV (₹)" value={`₹${((stats?.gmv ?? 0)/1000).toFixed(1)}k`} />
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <StatCard icon={<TrendingUp size={20} className="text-green-600" />} label="Completed Jobs" value={stats?.engagements?.completed ?? 0} />
-            <StatCard icon={<CheckCircle size={20} className="text-indigo-600" />} label="Active Engagements" value={stats?.engagements?.active ?? 0} />
-            <StatCard icon={<AlertTriangle size={20} className="text-amber-600" />} label="Restricted Workers" value={stats?.restricted_workers ?? 0} />
-            <StatCard icon={<Briefcase size={20} className="text-gray-400" />} label="Total Jobs Posted" value={stats?.jobs?.total ?? 0} />
-          </div>
-          <div className="kn-card p-6">
-            <h2 className="font-bold text-base mb-4">Workers by Trust Tier</h2>
-            <div className="grid grid-cols-4 gap-4">
-              {[1,2,3,4].map(t => (
-                <div key={t} className={`rounded-xl p-4 text-center ${TIER_COLOR[t]}`}>
-                  <div className="text-2xl font-display">{stats?.tier_breakdown?.[String(t)] ?? 0}</div>
-                  <div className="text-xs font-bold mt-1">{TIER_LABEL[t]}</div>
-                </div>
-              ))}
+        {/* Tabs */}
+        <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
+          {TABS.map(t => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${
+                tab === t.key
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {/* ── EXPERTS ── */}
+        {tab === "experts" && (
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3 flex-wrap">
+              <SectionTitle>Local Experts ({expertTotal})</SectionTitle>
+              <div className="flex items-center gap-2">
+                <input
+                  value={expertSearch}
+                  onChange={e => setExpertSearch(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && fetchExperts(0)}
+                  placeholder="Search by name or skill…"
+                  className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-52 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                />
+                <button
+                  onClick={() => fetchExperts(0)}
+                  className="bg-indigo-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-indigo-500 transition-colors"
+                >
+                  Search
+                </button>
+              </div>
             </div>
-          </div>
-        </>
-      )}
 
-      {/* ── WORKERS ── */}
-      {activeTab === "workers" && (
-        <>
-          <div className="flex flex-wrap gap-3 mb-4">
-            <SearchBox value={workerSearch} onChange={setWorkerSearch} placeholder="Search name or phone…" />
-            <Select value={workerTierFilter} onChange={setWorkerTierFilter} options={[["","All Tiers"],[1,"Basic"],[2,"Verified"],[3,"Pro"],[4,"Elite"]]} />
-            <Select value={workerAvailFilter} onChange={setWorkerAvailFilter} options={[["","All Status"],["available","Available"],["restricted","Restricted"],["suspended","Suspended"]]} />
-            <ClearBtn show={workerSearch||workerTierFilter||workerAvailFilter} onClear={() => { setWorkerSearch(""); setWorkerTierFilter(""); setWorkerAvailFilter(""); }} />
-            <span className="text-sm text-gray-400 self-center ml-auto">{workersTotal} workers</span>
-          </div>
-          <div className="kn-card overflow-hidden">
-            {workersLoading ? <Spinner /> : (
+            {loading ? (
+              <div className="p-10 text-center text-gray-400 text-sm">Loading…</div>
+            ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead><tr className="bg-gray-50 border-b border-gray-100 text-gray-500 uppercase tracking-wider text-xs">
-                    <th className="p-4">Worker</th><th className="p-4">Skills</th><th className="p-4">Location</th>
-                    <th className="p-4">Rating</th><th className="p-4">Tier</th><th className="p-4">Status</th><th className="p-4">Actions</th>
-                  </tr></thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {workers.map(w => (
-                      <tr key={w.id} className="hover:bg-gray-50/50">
-                        <td className="p-4">
-                          <div className="font-bold text-gray-900">{w.name}</div>
-                          <div className="text-gray-400 text-xs">{w.phone || "—"}</div>
-                          <div className="text-gray-400 text-xs">₹{w.daily_rate}/day</div>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      <th className="px-5 py-3">Expert</th>
+                      <th className="px-5 py-3">Skills</th>
+                      <th className="px-5 py-3">Rate</th>
+                      <th className="px-5 py-3">Trust Tier</th>
+                      <th className="px-5 py-3">Status</th>
+                      <th className="px-5 py-3">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {experts.map(w => (
+                      <tr key={w.id} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="px-5 py-3.5">
+                          <div className="font-semibold text-gray-900">{w.display_name || w.name}</div>
+                          <div className="text-gray-400 text-xs mt-0.5">{w.village || w.location_text || "—"}</div>
                         </td>
-                        <td className="p-4 text-xs text-gray-500 max-w-[140px]">
-                          <div className="truncate">{(w.skills||[]).slice(0,3).join(", ")||"—"}</div>
-                        </td>
-                        <td className="p-4 text-xs text-gray-500">
-                          <div className="flex items-center gap-1"><MapPin size={10}/>{[w.village,w.state].filter(Boolean).join(", ")||"—"}</div>
-                        </td>
-                        <td className="p-4">
-                          <div className="flex items-center gap-1">
-                            <Star size={11} className="text-amber-400 fill-amber-400"/>
-                            <span className="font-bold text-xs">{(w.avg_rating||0).toFixed(1)}</span>
-                            <span className="text-gray-400 text-xs">· {w.total_jobs} jobs</span>
+                        <td className="px-5 py-3.5">
+                          <div className="flex flex-wrap gap-1 max-w-[180px]">
+                            {(w.skills || []).slice(0, 3).map(s => (
+                              <span key={s} className="bg-gray-100 text-gray-600 text-xs px-2 py-0.5 rounded-full capitalize">
+                                {s.replace(/_/g, " ")}
+                              </span>
+                            ))}
+                            {(w.skills || []).length > 3 && (
+                              <span className="text-gray-400 text-xs">+{w.skills.length - 3}</span>
+                            )}
                           </div>
                         </td>
-                        <td className="p-4">
-                          <select value={w.trust_tier||1} onChange={e => setTier(w.id, Number(e.target.value))}
-                            className={`text-xs font-bold px-2 py-1 rounded-lg border-0 cursor-pointer ${TIER_COLOR[w.trust_tier||1]}`}>
-                            {[1,2,3,4].map(t => <option key={t} value={t}>{TIER_LABEL[t]}</option>)}
+                        <td className="px-5 py-3.5 text-gray-700">
+                          {w.daily_rate ? `₹${w.daily_rate}/day` : "—"}
+                        </td>
+                        <td className="px-5 py-3.5">
+                          <select
+                            value={w.trust_tier || 1}
+                            onChange={e => setTrustTier(w.id, parseInt(e.target.value))}
+                            className={`text-xs font-semibold rounded-lg px-2 py-1 border-0 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-400 ${TIER_COLORS[w.trust_tier || 1]}`}
+                          >
+                            {[1, 2, 3, 4].map(t => (
+                              <option key={t} value={t}>{TIER_LABELS[t]}</option>
+                            ))}
                           </select>
                         </td>
-                        <td className="p-4">
-                          <span className={`text-xs font-bold capitalize ${AVAIL_COLOR[w.availability_status]||"text-gray-500"}`}>
-                            {w.availability_status||"available"}
-                          </span>
+                        <td className="px-5 py-3.5">
+                          <Badge className={
+                            w.availability_status === "suspended" || w.is_active === false
+                              ? "bg-red-100 text-red-700"
+                              : "bg-green-100 text-green-700"
+                          }>
+                            {w.availability_status === "suspended" ? "Suspended" : "Active"}
+                          </Badge>
                         </td>
-                        <td className="p-4">
-                          <div className="flex items-center gap-1.5">
-                            {w.availability_status === "restricted" && (
-                              <ActionBtn onClick={() => liftRestriction(w.id)} color="amber" title="Lift restriction"><ShieldCheck size={13}/></ActionBtn>
-                            )}
-                            <ActionBtn onClick={() => suspendWorker(w.id, w.availability_status)}
-                              color={w.availability_status==="suspended" ? "green" : "red"}
-                              title={w.availability_status==="suspended" ? "Reactivate" : "Suspend"}>
-                              {w.availability_status==="suspended" ? <ShieldCheck size={13}/> : <ShieldOff size={13}/>}
-                            </ActionBtn>
-                            {w.phone && <ActionBtn onClick={() => setWaModal({phone:w.phone,name:w.name})} color="green" title="WhatsApp"><MessageSquare size={13}/></ActionBtn>}
-                            <ActionBtn onClick={() => deleteWorker(w.id, w.name)} color="red" title="Delete worker profile"><Trash2 size={13}/></ActionBtn>
+                        <td className="px-5 py-3.5">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => suspendExpert(w.id, w.availability_status)}
+                              className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-colors ${
+                                w.availability_status === "suspended"
+                                  ? "bg-green-50 text-green-700 hover:bg-green-100"
+                                  : "bg-amber-50 text-amber-700 hover:bg-amber-100"
+                              }`}
+                            >
+                              {w.availability_status === "suspended" ? "Reactivate" : "Suspend"}
+                            </button>
+                            <button
+                              onClick={() => deleteExpert(w.id, w.display_name || w.name)}
+                              className="text-xs px-2.5 py-1 rounded-lg font-medium bg-red-50 text-red-600 hover:bg-red-100 transition-colors"
+                            >
+                              Delete
+                            </button>
                           </div>
                         </td>
                       </tr>
                     ))}
-                    {workers.length===0 && <EmptyRow cols={7} />}
                   </tbody>
                 </table>
+                {experts.length === 0 && (
+                  <div className="p-10 text-center text-gray-400 text-sm">No experts found</div>
+                )}
               </div>
             )}
-            <Pagination total={workersTotal} page={workerPage} onPage={p => { setWorkerPage(p); fetchWorkers(p); }} />
-          </div>
-        </>
-      )}
 
-      {/* ── CUSTOMERS ── */}
-      {activeTab === "customers" && (
-        <>
-          <div className="flex flex-wrap gap-3 mb-4">
-            <SearchBox value={customerSearch} onChange={setCustomerSearch} placeholder="Search name or phone…" />
-            <ClearBtn show={customerSearch} onClear={() => setCustomerSearch("")} />
-            <span className="text-sm text-gray-400 self-center ml-auto">{customersTotal} customers</span>
+            {/* Pagination */}
+            {expertTotal > LIMIT && (
+              <div className="px-5 py-3 border-t border-gray-100 flex items-center justify-between text-sm text-gray-500">
+                <span>Showing {expertPage * LIMIT + 1}–{Math.min((expertPage + 1) * LIMIT, expertTotal)} of {expertTotal}</span>
+                <div className="flex gap-2">
+                  <button
+                    disabled={expertPage === 0}
+                    onClick={() => fetchExperts(expertPage - 1)}
+                    className="px-3 py-1 rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50"
+                  >
+                    Prev
+                  </button>
+                  <button
+                    disabled={(expertPage + 1) * LIMIT >= expertTotal}
+                    onClick={() => fetchExperts(expertPage + 1)}
+                    className="px-3 py-1 rounded-lg border border-gray-200 disabled:opacity-40 hover:bg-gray-50"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-          <div className="kn-card overflow-hidden">
-            {customersLoading ? <Spinner /> : (
+        )}
+
+        {/* ── USERS ── */}
+        {tab === "users" && (
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between gap-3 flex-wrap">
+              <SectionTitle>Users ({userTotal})</SectionTitle>
+              <div className="flex items-center gap-2">
+                <input
+                  value={userSearch}
+                  onChange={e => setUserSearch(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && fetchUsers()}
+                  placeholder="Search by name or phone…"
+                  className="border border-gray-200 rounded-lg px-3 py-1.5 text-sm w-52 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                />
+                <button
+                  onClick={fetchUsers}
+                  className="bg-indigo-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-indigo-500 transition-colors"
+                >
+                  Search
+                </button>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="p-10 text-center text-gray-400 text-sm">Loading…</div>
+            ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead><tr className="bg-gray-50 border-b border-gray-100 text-gray-500 uppercase tracking-wider text-xs">
-                    <th className="p-4">Customer</th><th className="p-4">Location</th><th className="p-4">Jobs Posted</th>
-                    <th className="p-4">Status</th><th className="p-4">Actions</th>
-                  </tr></thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {customers.map(c => (
-                      <tr key={c.id} className="hover:bg-gray-50/50">
-                        <td className="p-4">
-                          <div className="font-bold text-gray-900">{c.name || "—"}</div>
-                          <div className="text-gray-400 text-xs">{c.phone_primary}</div>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      <th className="px-5 py-3">Name</th>
+                      <th className="px-5 py-3">Phone</th>
+                      <th className="px-5 py-3">Location</th>
+                      <th className="px-5 py-3">Type</th>
+                      <th className="px-5 py-3">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {users.map(u => (
+                      <tr key={u.id} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="px-5 py-3.5 font-semibold text-gray-900">{u.name}</td>
+                        <td className="px-5 py-3.5 text-gray-500">{u.phone_primary || "—"}</td>
+                        <td className="px-5 py-3.5 text-gray-500">{u.village || u.pincode || "—"}</td>
+                        <td className="px-5 py-3.5">
+                          {u.has_service_profile
+                            ? <Badge className="bg-indigo-100 text-indigo-700">Expert</Badge>
+                            : <Badge className="bg-gray-100 text-gray-600">Customer</Badge>
+                          }
                         </td>
-                        <td className="p-4 text-xs text-gray-500">{c.village || "—"}</td>
-                        <td className="p-4 text-sm font-bold text-gray-700">{c.jobs_posted ?? 0}</td>
-                        <td className="p-4">
-                          <span className={`text-xs font-bold ${c.status==="suspended" ? "text-red-600" : "text-green-600"}`}>
-                            {c.status==="suspended" ? "Suspended" : "Active"}
-                          </span>
-                        </td>
-                        <td className="p-4">
-                          <div className="flex items-center gap-1.5">
-                            <ActionBtn onClick={() => suspendCustomer(c.id, c.status)}
-                              color={c.status==="suspended" ? "green" : "red"}
-                              title={c.status==="suspended" ? "Reactivate" : "Suspend"}>
-                              {c.status==="suspended" ? <ShieldCheck size={13}/> : <ShieldOff size={13}/>}
-                            </ActionBtn>
-                            {c.phone_primary && <ActionBtn onClick={() => setWaModal({phone:c.phone_primary,name:c.name})} color="green" title="WhatsApp"><MessageSquare size={13}/></ActionBtn>}
-                          </div>
+                        <td className="px-5 py-3.5">
+                          <Badge className={u.is_active === false ? "bg-red-100 text-red-700" : "bg-green-100 text-green-700"}>
+                            {u.is_active === false ? "Inactive" : "Active"}
+                          </Badge>
                         </td>
                       </tr>
                     ))}
-                    {customers.length===0 && <EmptyRow cols={5} />}
                   </tbody>
                 </table>
+                {users.length === 0 && (
+                  <div className="p-10 text-center text-gray-400 text-sm">No users found</div>
+                )}
               </div>
             )}
-            <Pagination total={customersTotal} page={customerPage} onPage={p => { setCustomerPage(p); fetchCustomers(p); }} />
           </div>
-        </>
-      )}
+        )}
 
-      {/* ── JOBS ── */}
-      {activeTab === "jobs" && (
-        <>
-          <div className="flex flex-wrap gap-3 mb-4">
-            <SearchBox value={jobSearch} onChange={setJobSearch} placeholder="Search title or customer…" />
-            <Select value={jobStatusFilter} onChange={setJobStatusFilter}
-              options={[["","All Status"],["open","Open"],["filled","Filled"],["expired","Expired"],["cancelled","Cancelled"]]} />
-            <ClearBtn show={jobSearch||jobStatusFilter} onClear={() => { setJobSearch(""); setJobStatusFilter(""); }} />
-            <span className="text-sm text-gray-400 self-center ml-auto">{jobsTotal} jobs</span>
-          </div>
-          <div className="kn-card overflow-hidden">
-            {jobsLoading ? <Spinner /> : (
+        {/* ── JOBS ── */}
+        {tab === "jobs" && (
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <SectionTitle>Jobs ({jobTotal})</SectionTitle>
+            </div>
+
+            {loading ? (
+              <div className="p-10 text-center text-gray-400 text-sm">Loading…</div>
+            ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead><tr className="bg-gray-50 border-b border-gray-100 text-gray-500 uppercase tracking-wider text-xs">
-                    <th className="p-4">Job</th><th className="p-4">Customer</th><th className="p-4">Rate</th>
-                    <th className="p-4">Date</th><th className="p-4">Interests</th><th className="p-4">Status</th><th className="p-4">Actions</th>
-                  </tr></thead>
-                  <tbody className="divide-y divide-gray-100">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                      <th className="px-5 py-3">Title</th>
+                      <th className="px-5 py-3">Category</th>
+                      <th className="px-5 py-3">Rate</th>
+                      <th className="px-5 py-3">Date</th>
+                      <th className="px-5 py-3">Location</th>
+                      <th className="px-5 py-3">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
                     {jobs.map(j => (
-                      <tr key={j.id} className="hover:bg-gray-50/50">
-                        <td className="p-4">
-                          <div className="font-bold text-gray-900 max-w-[180px] truncate">{j.title}</div>
-                          <div className="text-gray-400 text-xs">{j.category}</div>
-                        </td>
-                        <td className="p-4 text-xs text-gray-600">{j.customer_name || "—"}</td>
-                        <td className="p-4 text-xs font-bold text-gray-700">₹{j.daily_rate}/day</td>
-                        <td className="p-4 text-xs text-gray-500">{j.job_date ? j.job_date.slice(0,10) : "—"}</td>
-                        <td className="p-4 text-xs text-gray-700 font-bold">{j.engagement_count ?? 0}</td>
-                        <td className="p-4">
-                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${STATUS_PILL[j.status]||"bg-gray-100 text-gray-500"}`}>
-                            {j.status}
-                          </span>
-                        </td>
-                        <td className="p-4">
-                          {j.status === "open" && (
-                            <ActionBtn onClick={() => forceCloseJob(j.id)} color="red" title="Force close">
-                              <X size={13}/>
-                            </ActionBtn>
-                          )}
+                      <tr key={j.id} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="px-5 py-3.5 font-semibold text-gray-900 max-w-[200px] truncate">{j.title}</td>
+                        <td className="px-5 py-3.5 text-gray-500 capitalize">{j.category || "—"}</td>
+                        <td className="px-5 py-3.5 text-gray-700">{j.daily_rate ? `₹${j.daily_rate}` : "—"}</td>
+                        <td className="px-5 py-3.5 text-gray-500">{j.job_date || "—"}</td>
+                        <td className="px-5 py-3.5 text-gray-500">{j.village || j.pincode || "—"}</td>
+                        <td className="px-5 py-3.5">
+                          <Badge className={
+                            j.status === "open"      ? "bg-green-100 text-green-700"  :
+                            j.status === "closed"    ? "bg-gray-100 text-gray-600"    :
+                            j.status === "cancelled" ? "bg-red-100 text-red-600"      :
+                                                       "bg-blue-100 text-blue-700"
+                          }>
+                            {j.status || "open"}
+                          </Badge>
                         </td>
                       </tr>
                     ))}
-                    {jobs.length===0 && <EmptyRow cols={7} />}
                   </tbody>
                 </table>
-              </div>
-            )}
-            <Pagination total={jobsTotal} page={jobPage} onPage={p => { setJobPage(p); fetchJobs(p); }} />
-          </div>
-        </>
-      )}
-
-      {/* ── ENGAGEMENTS ── */}
-      {activeTab === "engagements" && (
-        <>
-          <div className="flex flex-wrap gap-3 mb-4">
-            <SearchBox value={engSearch} onChange={setEngSearch} placeholder="Search worker, customer, or job…" />
-            <Select value={engStatusFilter} onChange={setEngStatusFilter}
-              options={[["","All Status"],["requested","Requested"],["accepted","Accepted"],["completed","Completed"],["cancelled","Cancelled"],["rejected","Rejected"]]} />
-            <ClearBtn show={engSearch||engStatusFilter} onClear={() => { setEngSearch(""); setEngStatusFilter(""); }} />
-            <span className="text-sm text-gray-400 self-center ml-auto">{engagementsTotal} engagements</span>
-          </div>
-          <div className="kn-card overflow-hidden">
-            {engagementsLoading ? <Spinner /> : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead><tr className="bg-gray-50 border-b border-gray-100 text-gray-500 uppercase tracking-wider text-xs">
-                    <th className="p-4">Job</th><th className="p-4">Worker</th><th className="p-4">Customer</th>
-                    <th className="p-4">Rate</th><th className="p-4">Status</th><th className="p-4">Date</th><th className="p-4">Actions</th>
-                  </tr></thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {engagements.map(e => (
-                      <tr key={e.id} className={`hover:bg-gray-50/50 ${e.flagged ? "bg-red-50" : ""}`}>
-                        <td className="p-4">
-                          <div className="font-bold text-gray-900 max-w-[160px] truncate">{e.job_title||"—"}</div>
-                          {e.flagged && <span className="text-xs text-red-500 font-bold flex items-center gap-1"><Flag size={10}/> Flagged</span>}
-                        </td>
-                        <td className="p-4 text-xs text-gray-600">{e.worker_name||"—"}</td>
-                        <td className="p-4 text-xs text-gray-600">{e.customer_name||"—"}</td>
-                        <td className="p-4 text-xs font-bold text-gray-700">₹{e.daily_rate||0}/day</td>
-                        <td className="p-4">
-                          <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${STATUS_PILL[e.status]||"bg-gray-100 text-gray-500"}`}>
-                            {e.status}
-                          </span>
-                        </td>
-                        <td className="p-4 text-xs text-gray-500">{(e.created_at||"").slice(0,10)}</td>
-                        <td className="p-4">
-                          <div className="flex items-center gap-1.5">
-                            {e.flagged
-                              ? <ActionBtn onClick={() => unflagEngagement(e.id)} color="gray" title="Unflag"><Eye size={13}/></ActionBtn>
-                              : <ActionBtn onClick={() => { setFlagModal(e); setFlagNote(""); }} color="red" title="Flag dispute"><Flag size={13}/></ActionBtn>
-                            }
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {engagements.length===0 && <EmptyRow cols={7} />}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            <Pagination total={engagementsTotal} page={engPage} onPage={p => { setEngPage(p); fetchEngagements(p); }} />
-          </div>
-        </>
-      )}
-
-      {/* ── PLATFORM ── */}
-      {activeTab === "platform" && (
-        platformLoading ? <Spinner /> : platform ? (
-          <div className="space-y-6">
-            {/* Feature Flags */}
-            <div className="kn-card p-6">
-              <div className="flex items-center gap-2 mb-5">
-                <Settings size={18} className="text-[#ff6b35]" />
-                <h2 className="font-bold text-base">Feature Flags</h2>
-                <span className="text-xs text-gray-400 ml-2">(read-only — change via k8s secrets)</span>
-              </div>
-              <div className="space-y-3">
-                {Object.entries(platform.feature_flags).map(([key, val]) => (
-                  <div key={key} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-                    <span className="text-sm font-mono text-gray-700">{key}</span>
-                    <span className={`flex items-center gap-1.5 text-sm font-bold ${val ? "text-green-600" : "text-gray-400"}`}>
-                      {val ? <ToggleRight size={18}/> : <ToggleLeft size={18}/>}
-                      {val ? "ON" : "OFF"}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Collection counts */}
-            <div className="kn-card p-6">
-              <h2 className="font-bold text-base mb-4">MongoDB Collections</h2>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                {Object.entries(platform.collections).map(([col, count]) => (
-                  <div key={col} className="bg-gray-50 rounded-xl p-4">
-                    <div className="text-xl font-display text-gray-900">{count}</div>
-                    <div className="text-xs text-gray-500 font-mono mt-1">{col}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Danger zone */}
-            <div className="kn-card p-6 border-red-100">
-              <h2 className="font-bold text-base text-red-600 mb-2">Danger Zone</h2>
-              <p className="text-sm text-gray-500 mb-4">
-                Dummy accounts: <span className="font-bold text-gray-800">{platform.dummy_accounts}</span> (+717000* phones)
-              </p>
-              <button onClick={wipeSeedData} disabled={wipingSeeds || platform.dummy_accounts === 0}
-                className="flex items-center gap-2 px-4 py-2.5 bg-red-500 hover:bg-red-600 disabled:opacity-40 text-white rounded-xl text-sm font-bold transition-colors">
-                <Trash2 size={14}/> {wipingSeeds ? "Wiping…" : "Wipe Seed Data"}
-              </button>
-            </div>
-          </div>
-        ) : (
-          <button onClick={fetchPlatform} className="px-4 py-2 bg-gray-100 rounded-lg text-sm font-bold">Load Platform Info</button>
-        )
-      )}
-
-      {/* ── AUDIT LOG ── */}
-      {activeTab === "audit" && (
-        <>
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2 text-sm text-gray-500">
-              <ClipboardList size={16}/> Last {Math.min(auditTotal, LIMIT)} of {auditTotal} actions
-            </div>
-            <button onClick={() => fetchAuditLog(auditPage)} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-bold">
-              <RefreshCw size={12}/> Refresh
-            </button>
-          </div>
-          <div className="kn-card overflow-hidden">
-            {auditLoading ? <Spinner /> : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead><tr className="bg-gray-50 border-b border-gray-100 text-gray-500 uppercase tracking-wider text-xs">
-                    <th className="p-4">Time</th><th className="p-4">Admin</th><th className="p-4">Action</th>
-                    <th className="p-4">Target</th><th className="p-4">Detail</th>
-                  </tr></thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {auditLogs.map(log => (
-                      <tr key={log.id} className="hover:bg-gray-50/50">
-                        <td className="p-4 text-xs text-gray-400 whitespace-nowrap">{(log.ts||"").replace("T"," ").slice(0,19)}</td>
-                        <td className="p-4 text-xs font-bold text-gray-700">{log.admin_name}</td>
-                        <td className="p-4">
-                          <span className="text-xs font-mono bg-gray-100 text-gray-700 px-2 py-0.5 rounded">{log.action}</span>
-                        </td>
-                        <td className="p-4 text-xs text-gray-500 font-mono max-w-[140px] truncate">{log.target||"—"}</td>
-                        <td className="p-4 text-xs text-gray-500 max-w-[200px] truncate">{log.detail||"—"}</td>
-                      </tr>
-                    ))}
-                    {auditLogs.length===0 && <EmptyRow cols={5} />}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            <Pagination total={auditTotal} page={auditPage} onPage={p => { setAuditPage(p); fetchAuditLog(p); }} />
-          </div>
-        </>
-      )}
-
-      {/* ── REPORTS ── */}
-      {activeTab === "reports" && (
-        <>
-          <div className="flex items-center gap-3 mb-4">
-            {["pending","resolved","dismissed"].map(s => (
-              <button key={s} onClick={() => { setReportFilter(s); fetchReports(s); }}
-                className={`px-4 py-1.5 rounded-full text-sm font-bold border transition-colors capitalize ${reportFilter === s ? "bg-red-500 text-white border-red-500" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
-                {s}
-              </button>
-            ))}
-          </div>
-          <div className="kn-card overflow-hidden">
-            {reportsLoading ? <Spinner /> : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead><tr className="bg-gray-50 border-b border-gray-100 text-gray-500 uppercase tracking-wider text-xs">
-                    <th className="p-4">Reporter</th><th className="p-4">Reported User</th>
-                    <th className="p-4">Reason</th><th className="p-4">Date</th><th className="p-4">Actions</th>
-                  </tr></thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {reports.map(r => (
-                      <tr key={r.id} className="hover:bg-gray-50/50">
-                        <td className="p-4 text-xs text-gray-700 font-mono">{r.reporter_id?.slice(0,8)}…</td>
-                        <td className="p-4 text-xs text-gray-700 font-mono">{r.reported_user_id?.slice(0,8)}…</td>
-                        <td className="p-4"><span className="text-xs font-bold bg-red-50 text-red-700 px-2 py-0.5 rounded">{r.reason}</span></td>
-                        <td className="p-4 text-xs text-gray-400">{(r.created_at||"").slice(0,10)}</td>
-                        <td className="p-4">
-                          {r.status === "pending" && (
-                            <div className="flex gap-2">
-                              <ActionBtn color="green" onClick={() => setResolveModal({ id: r.id, action: "resolve" })} title="Resolve"><CheckCircle size={14}/></ActionBtn>
-                              <ActionBtn color="gray" onClick={() => setResolveModal({ id: r.id, action: "dismiss" })} title="Dismiss"><X size={14}/></ActionBtn>
-                            </div>
-                          )}
-                          {r.status !== "pending" && <span className="text-xs text-gray-400 capitalize">{r.status}</span>}
-                        </td>
-                      </tr>
-                    ))}
-                    {reports.length === 0 && <EmptyRow cols={5} />}
-                  </tbody>
-                </table>
+                {jobs.length === 0 && (
+                  <div className="p-10 text-center text-gray-400 text-sm">No jobs found</div>
+                )}
               </div>
             )}
           </div>
-        </>
-      )}
-
-      {/* ── USERS ── */}
-      {activeTab === "users" && (
-        <>
-          <div className="flex gap-3 mb-4">
-            <SearchBox value={userSearch} onChange={v => setUserSearch(v)} placeholder="Search by name or phone…" />
-            <button onClick={() => { setUserPage(0); fetchAdminUsers(0, userSearch); }} className="px-4 py-2 bg-[#ff6b35] text-white rounded-lg text-sm font-bold">Search</button>
-          </div>
-          <div className="kn-card overflow-hidden">
-            {usersLoading ? <Spinner /> : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead><tr className="bg-gray-50 border-b border-gray-100 text-gray-500 uppercase tracking-wider text-xs">
-                    <th className="p-4">Name</th><th className="p-4">Phone</th><th className="p-4">Role</th>
-                    <th className="p-4">Wallet</th><th className="p-4">Joined</th><th className="p-4">Actions</th>
-                  </tr></thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {adminUsers.map(u => (
-                      <tr key={u.id} className="hover:bg-gray-50/50">
-                        <td className="p-4 font-bold text-gray-900">{u.name || "—"}</td>
-                        <td className="p-4 text-xs font-mono text-gray-600">{u.phone_primary}</td>
-                        <td className="p-4">
-                          <span className={`text-xs font-bold px-2 py-0.5 rounded ${u.is_worker ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-600"}`}>
-                            {u.is_worker ? "Local Expert" : "Customer"}
-                          </span>
-                        </td>
-                        <td className="p-4 text-sm font-bold text-green-700">₹{u.wallet_balance || 0}</td>
-                        <td className="p-4 text-xs text-gray-400">{(u.created_at||"").slice(0,10)}</td>
-                        <td className="p-4">
-                          <div className="flex gap-2">
-                            <ActionBtn color="amber" title="Flag" onClick={async () => { try { await api.post(`/admin/users/${u.id}/flag`); toast.success("Flagged"); fetchAdminUsers(userPage, userSearch); } catch { toast.error("Failed"); }}}><Flag size={14}/></ActionBtn>
-                            <ActionBtn color="red" title="Ban" onClick={async () => { if (!window.confirm(`Ban ${u.name}?`)) return; try { await api.post(`/admin/users/${u.id}/ban`); toast.success("Banned"); fetchAdminUsers(userPage, userSearch); } catch { toast.error("Failed"); }}}><Ban size={14}/></ActionBtn>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {adminUsers.length === 0 && <EmptyRow cols={6} />}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            <Pagination total={userTotal} page={userPage} onPage={p => { setUserPage(p); fetchAdminUsers(p, userSearch); }} />
-          </div>
-        </>
-      )}
-
-      {/* ── FAQ MANAGEMENT ── */}
-      {activeTab === "faq" && (
-        <>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-gray-900">FAQ Management</h3>
-            <button onClick={() => { setFaqForm({ question_en: "", question_hi: "", answer_en: "", answer_hi: "", category: "general", order: 1 }); setFaqModal("add"); }}
-              className="flex items-center gap-2 px-4 py-2 bg-[#ff6b35] text-white rounded-lg text-sm font-bold">
-              <Plus size={14}/> Add FAQ
-            </button>
-          </div>
-          <div className="kn-card overflow-hidden">
-            {faqsLoading ? <Spinner /> : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead><tr className="bg-gray-50 border-b border-gray-100 text-gray-500 uppercase tracking-wider text-xs">
-                    <th className="p-4">Question (EN)</th><th className="p-4">Category</th>
-                    <th className="p-4">Status</th><th className="p-4">Actions</th>
-                  </tr></thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {faqs.map(f => (
-                      <tr key={f.id} className="hover:bg-gray-50/50">
-                        <td className="p-4 max-w-xs"><div className="font-medium text-gray-900 truncate">{f.question_en}</div><div className="text-xs text-gray-400 truncate">{f.question_hi}</div></td>
-                        <td className="p-4"><span className="text-xs font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded capitalize">{f.category}</span></td>
-                        <td className="p-4"><span className={`text-xs font-bold px-2 py-0.5 rounded ${f.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>{f.is_active ? "Active" : "Inactive"}</span></td>
-                        <td className="p-4">
-                          <div className="flex gap-2">
-                            <ActionBtn color="gray" title="Edit" onClick={() => { setFaqForm({ question_en: f.question_en||"", question_hi: f.question_hi||"", answer_en: f.answer_en||"", answer_hi: f.answer_hi||"", category: f.category, order: f.order||1 }); setFaqModal(f); }}><Edit3 size={14}/></ActionBtn>
-                            <ActionBtn color="red" title="Delete" onClick={() => deleteFAQ(f.id)}><Trash2 size={14}/></ActionBtn>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {faqs.length === 0 && <EmptyRow cols={4} />}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </>
-      )}
-
-      {/* ── LEGAL ── */}
-      {activeTab === "legal" && (
-        <>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-gray-900">Terms & Privacy</h3>
-            <button onClick={() => { setLegalForm({ type: "terms", version: "", content_en: "", content_hi: "", effective_date: new Date().toISOString().slice(0,10) }); setLegalModal(true); }}
-              className="flex items-center gap-2 px-4 py-2 bg-[#ff6b35] text-white rounded-lg text-sm font-bold">
-              <Plus size={14}/> Publish New Version
-            </button>
-          </div>
-          <div className="kn-card overflow-hidden">
-            {legalLoading ? <Spinner /> : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead><tr className="bg-gray-50 border-b border-gray-100 text-gray-500 uppercase tracking-wider text-xs">
-                    <th className="p-4">Type</th><th className="p-4">Version</th>
-                    <th className="p-4">Effective</th><th className="p-4">Current</th>
-                  </tr></thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {legalDocs.map(d => (
-                      <tr key={d.id} className="hover:bg-gray-50/50">
-                        <td className="p-4 capitalize font-bold text-gray-700">{d.doc_type || d.type}</td>
-                        <td className="p-4 font-mono text-xs">{d.version}</td>
-                        <td className="p-4 text-xs text-gray-500">{d.effective_date}</td>
-                        <td className="p-4">{d.is_current && <span className="text-xs font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded">Current</span>}</td>
-                      </tr>
-                    ))}
-                    {legalDocs.length === 0 && <EmptyRow cols={4} />}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </>
-      )}
-
-      {/* ── WALLET AUDIT ── */}
-      {activeTab === "wallet_audit" && (
-        <>
-          <div className="flex items-center justify-between mb-4">
-            <div className="text-sm text-gray-500 flex items-center gap-2"><Wallet size={16}/> Platform wallet transactions</div>
-            <button onClick={() => fetchWalletAudit(walletPage)} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-bold">
-              <RefreshCw size={12}/> Refresh
-            </button>
-          </div>
-          <div className="kn-card overflow-hidden">
-            {walletLoading ? <Spinner /> : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead><tr className="bg-gray-50 border-b border-gray-100 text-gray-500 uppercase tracking-wider text-xs">
-                    <th className="p-4">User</th><th className="p-4">Type</th><th className="p-4">Amount</th>
-                    <th className="p-4">Reason</th><th className="p-4">Date</th><th className="p-4">Expires</th>
-                  </tr></thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {walletTxs.map(tx => (
-                      <tr key={tx.id} className="hover:bg-gray-50/50">
-                        <td className="p-4 text-xs font-mono text-gray-600">{tx.user_id?.slice(0,8)}…</td>
-                        <td className="p-4"><span className={`text-xs font-bold px-2 py-0.5 rounded ${tx.type==="credit" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>{tx.type}</span></td>
-                        <td className="p-4 font-bold">₹{tx.amount}</td>
-                        <td className="p-4 text-xs text-gray-500">{tx.reason}</td>
-                        <td className="p-4 text-xs text-gray-400">{(tx.created_at||"").slice(0,10)}</td>
-                        <td className="p-4 text-xs text-gray-400">{tx.expires_at ? (tx.expired ? <span className="text-red-500">Expired</span> : (tx.expires_at||"").slice(0,10)) : "—"}</td>
-                      </tr>
-                    ))}
-                    {walletTxs.length === 0 && <EmptyRow cols={6} />}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            <Pagination total={walletTotal} page={walletPage} onPage={p => { setWalletPage(p); fetchWalletAudit(p); }} />
-          </div>
-        </>
-      )}
-
-      {/* ── REFERRALS ── */}
-      {activeTab === "referrals" && (
-        <>
-          <div className="flex items-center justify-between mb-4">
-            <div className="text-sm text-gray-500 flex items-center gap-2"><Gift size={16}/> Referral audit</div>
-            <button onClick={fetchReferrals} className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-bold">
-              <RefreshCw size={12}/> Refresh
-            </button>
-          </div>
-          <div className="kn-card overflow-hidden">
-            {referralsLoading ? <Spinner /> : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead><tr className="bg-gray-50 border-b border-gray-100 text-gray-500 uppercase tracking-wider text-xs">
-                    <th className="p-4">Referrer</th><th className="p-4">Referred</th>
-                    <th className="p-4">Referral Code</th><th className="p-4">Credits Issued</th><th className="p-4">Date</th>
-                  </tr></thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {referrals.map(r => (
-                      <tr key={r.id || r.referrer_id} className="hover:bg-gray-50/50">
-                        <td className="p-4 font-bold text-gray-900">{r.referrer_name || r.referrer_id?.slice(0,8)}</td>
-                        <td className="p-4 text-gray-700">{r.referred_name || r.referred_id?.slice(0,8)}</td>
-                        <td className="p-4 font-mono text-xs text-blue-600">{r.code}</td>
-                        <td className="p-4"><span className="font-bold text-green-700">₹{r.credits_issued || 0}</span></td>
-                        <td className="p-4 text-xs text-gray-400">{(r.created_at||"").slice(0,10)}</td>
-                      </tr>
-                    ))}
-                    {referrals.length === 0 && <EmptyRow cols={5} />}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </>
-      )}
-
-      {/* ── WhatsApp Modal ── */}
-      {waModal && (
-        <Modal title={`WhatsApp → ${waModal.name}`} onClose={() => setWaModal(null)}>
-          <div className="text-xs text-gray-400 mb-3">{waModal.phone}</div>
-          <textarea value={waMsg} onChange={e => setWaMsg(e.target.value)} placeholder="Type your message…" rows={4}
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-green-400/30 resize-none"/>
-          <div className="flex gap-3 mt-4">
-            <button onClick={() => setWaModal(null)} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50">Cancel</button>
-            <button onClick={sendWhatsApp} disabled={waSending||!waMsg.trim()}
-              className="flex-1 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-xl text-sm font-bold disabled:opacity-50">
-              {waSending ? "Sending…" : "Send"}
-            </button>
-          </div>
-        </Modal>
-      )}
-
-      {/* ── Flag Modal ── */}
-      {flagModal && (
-        <Modal title="Flag Dispute" onClose={() => setFlagModal(null)}>
-          <div className="text-sm text-gray-600 mb-3">{flagModal.job_title} — {flagModal.worker_name} / {flagModal.customer_name}</div>
-          <textarea value={flagNote} onChange={e => setFlagNote(e.target.value)} placeholder="Reason for flagging (optional)…" rows={3}
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none resize-none"/>
-          <div className="flex gap-3 mt-4">
-            <button onClick={() => setFlagModal(null)} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50">Cancel</button>
-            <button onClick={flagEngagement} className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white rounded-xl text-sm font-bold">Flag</button>
-          </div>
-        </Modal>
-      )}
-
-      {/* ── Resolve Report Modal ── */}
-      {resolveModal && (
-        <Modal title={resolveModal.action === "resolve" ? "Resolve Report" : "Dismiss Report"} onClose={() => { setResolveModal(null); setReportNote(""); }}>
-          <textarea value={reportNote} onChange={e => setReportNote(e.target.value)} placeholder="Admin note (optional)…" rows={3}
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none resize-none"/>
-          <div className="flex gap-3 mt-4">
-            <button onClick={() => { setResolveModal(null); setReportNote(""); }} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50">Cancel</button>
-            <button onClick={() => resolveReport(resolveModal.id, resolveModal.action, reportNote)}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-bold text-white ${resolveModal.action === "resolve" ? "bg-green-500 hover:bg-green-600" : "bg-gray-500 hover:bg-gray-600"}`}>
-              {resolveModal.action === "resolve" ? "Resolve" : "Dismiss"}
-            </button>
-          </div>
-        </Modal>
-      )}
-
-      {/* ── FAQ Add/Edit Modal ── */}
-      {faqModal && (
-        <Modal title={faqModal === "add" ? "Add FAQ" : "Edit FAQ"} onClose={() => setFaqModal(null)}>
-          <div className="space-y-3 max-h-[70vh] overflow-y-auto">
-            {[["question_en","Question (English)"],["question_hi","Question (Hindi)"],["answer_en","Answer (English)"],["answer_hi","Answer (Hindi)"]].map(([k,l]) => (
-              <div key={k}>
-                <label className="block text-xs font-bold text-gray-500 mb-1">{l}</label>
-                <textarea value={faqForm[k]} onChange={e => setFaqForm(f => ({...f, [k]: e.target.value}))} rows={k.startsWith("answer") ? 3 : 1}
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none resize-none"/>
-              </div>
-            ))}
-            <div>
-              <label className="block text-xs font-bold text-gray-500 mb-1">Category</label>
-              <select value={faqForm.category} onChange={e => setFaqForm(f => ({...f, category: e.target.value}))}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none">
-                {["general","local_expert","customer","payments","safety"].map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-          </div>
-          <div className="flex gap-3 mt-4">
-            <button onClick={() => setFaqModal(null)} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50">Cancel</button>
-            <button onClick={saveFAQ} className="flex-1 py-2.5 bg-[#ff6b35] hover:bg-orange-600 text-white rounded-xl text-sm font-bold">Save</button>
-          </div>
-        </Modal>
-      )}
-
-      {/* ── Legal Publish Modal ── */}
-      {legalModal && (
-        <Modal title="Publish Legal Document" onClose={() => setLegalModal(null)}>
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs font-bold text-gray-500 mb-1">Document Type</label>
-              <select value={legalForm.type} onChange={e => setLegalForm(f => ({...f, type: e.target.value}))}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
-                <option value="terms">Terms of Service</option>
-                <option value="privacy">Privacy Policy</option>
-              </select>
-            </div>
-            <div className="flex gap-2">
-              <div className="flex-1">
-                <label className="block text-xs font-bold text-gray-500 mb-1">Version (e.g. 1.1)</label>
-                <input value={legalForm.version} onChange={e => setLegalForm(f => ({...f, version: e.target.value}))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"/>
-              </div>
-              <div className="flex-1">
-                <label className="block text-xs font-bold text-gray-500 mb-1">Effective Date</label>
-                <input type="date" value={legalForm.effective_date} onChange={e => setLegalForm(f => ({...f, effective_date: e.target.value}))} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm"/>
-              </div>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-gray-500 mb-1">Content (English)</label>
-              <textarea value={legalForm.content_en} onChange={e => setLegalForm(f => ({...f, content_en: e.target.value}))} rows={4} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none"/>
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-gray-500 mb-1">Content (Hindi)</label>
-              <textarea value={legalForm.content_hi} onChange={e => setLegalForm(f => ({...f, content_hi: e.target.value}))} rows={4} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm resize-none"/>
-            </div>
-          </div>
-          <div className="flex gap-3 mt-4">
-            <button onClick={() => setLegalModal(null)} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50">Cancel</button>
-            <button onClick={publishLegal} className="flex-1 py-2.5 bg-[#ff6b35] hover:bg-orange-600 text-white rounded-xl text-sm font-bold">Publish</button>
-          </div>
-        </Modal>
-      )}
-
-      {/* ── Broadcast Modal ── */}
-      {broadcastModal && (
-        <Modal title="Broadcast WhatsApp" onClose={() => setBroadcastModal(false)}>
-          <div className="flex gap-2 mb-4">
-            {["workers","customers"].map(a => (
-              <button key={a} onClick={() => setBroadcastAudience(a)}
-                className={`flex-1 py-2 rounded-xl text-sm font-bold border transition-colors ${broadcastAudience===a ? "bg-[#ff6b35] text-white border-[#ff6b35]" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}>
-                {a.charAt(0).toUpperCase()+a.slice(1)}
-              </button>
-            ))}
-          </div>
-          <textarea value={broadcastMsg} onChange={e => setBroadcastMsg(e.target.value)} placeholder={`Message to all ${broadcastAudience}…`} rows={4}
-            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none resize-none"/>
-          <div className="text-xs text-amber-600 mt-2">⚠️ Dummy +717000* accounts are excluded automatically.</div>
-          <div className="flex gap-3 mt-4">
-            <button onClick={() => setBroadcastModal(false)} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-bold text-gray-600 hover:bg-gray-50">Cancel</button>
-            <button onClick={sendBroadcast} disabled={broadcastSending||!broadcastMsg.trim()}
-              className="flex-1 py-2.5 bg-green-500 hover:bg-green-600 text-white rounded-xl text-sm font-bold disabled:opacity-50">
-              {broadcastSending ? "Sending…" : `Send to all ${broadcastAudience}`}
-            </button>
-          </div>
-        </Modal>
-      )}
-    </div>
-    </div>
-  );
-}
-
-// ── Shared sub-components ──
-
-function StatCard({ icon, label, value }) {
-  return (
-    <div className="kn-card p-5 flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <div className="p-2 bg-gray-50 rounded-lg">{icon}</div>
-        <div className="text-xs font-bold text-gray-500 uppercase tracking-wide">{label}</div>
-      </div>
-      <div className="text-2xl font-display text-gray-900">{value}</div>
-    </div>
-  );
-}
-
-function Spinner() {
-  return <div className="flex justify-center py-12"><Loader2 className="animate-spin text-[#ff6b35]" size={24}/></div>;
-}
-
-function SearchBox({ value, onChange, placeholder }) {
-  return (
-    <div className="relative flex-1 min-w-[200px]">
-      <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-      <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-        className="w-full pl-8 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#ff6b35]/30"/>
-    </div>
-  );
-}
-
-function Select({ value, onChange, options }) {
-  return (
-    <select value={value} onChange={e => onChange(e.target.value)}
-      className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none">
-      {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-    </select>
-  );
-}
-
-function ClearBtn({ show, onClear }) {
-  if (!show) return null;
-  return (
-    <button onClick={onClear} className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-800 px-2">
-      <X size={14}/> Clear
-    </button>
-  );
-}
-
-function ActionBtn({ onClick, color, title, children }) {
-  const colors = {
-    red:   "bg-red-100 hover:bg-red-200 text-red-700",
-    green: "bg-green-100 hover:bg-green-200 text-green-700",
-    amber: "bg-amber-100 hover:bg-amber-200 text-amber-700",
-    gray:  "bg-gray-100 hover:bg-gray-200 text-gray-600",
-  };
-  return (
-    <button onClick={onClick} title={title} className={`p-1.5 rounded-lg transition-colors ${colors[color]||colors.gray}`}>
-      {children}
-    </button>
-  );
-}
-
-function EmptyRow({ cols }) {
-  return <tr><td colSpan={cols} className="p-10 text-center text-gray-400">Nothing found.</td></tr>;
-}
-
-function Pagination({ total, page, onPage }) {
-  if (total <= LIMIT) return null;
-  return (
-    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 text-sm text-gray-500">
-      <span>Showing {page*LIMIT+1}–{Math.min((page+1)*LIMIT, total)} of {total}</span>
-      <div className="flex gap-2">
-        <button disabled={page===0} onClick={() => onPage(page-1)}
-          className="px-3 py-1 rounded border border-gray-200 disabled:opacity-40 hover:bg-gray-50">← Prev</button>
-        <button disabled={(page+1)*LIMIT>=total} onClick={() => onPage(page+1)}
-          className="px-3 py-1 rounded border border-gray-200 disabled:opacity-40 hover:bg-gray-50">Next →</button>
-      </div>
-    </div>
-  );
-}
-
-function Modal({ title, onClose, children }) {
-  return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-xl">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-lg">{title}</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X size={18}/></button>
-        </div>
-        {children}
+        )}
       </div>
     </div>
   );

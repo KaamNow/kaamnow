@@ -123,12 +123,7 @@ export default function PhoneSignup() {
         // Existing user — log them in directly, skip profile step
         const user = await loginComplete(result.otp_token);
         toast.success(`Welcome back, ${user.name}!`);
-        if (user?.is_worker === true) {
-          const profile = await import("@/lib/api").then(m => m.default.get("/workers/me/profile").then(r => r.data).catch(() => null));
-          nav(profile ? "/worker/job-feed" : "/worker/onboarding");
-        } else {
-          nav("/marketplace");
-        }
+        nav(user?.has_service_profile ? "/find-work" : "/marketplace");
       } else {
         toast.success("OTP verified!");
       }
@@ -176,7 +171,7 @@ export default function PhoneSignup() {
         profile.preferredLanguage
       );
       toast.success(`Welcome to KaamNow, ${user.name}!`);
-      nav(user?.is_worker === true ? "/worker/onboarding" : "/customer-onboarding");
+      nav(user?.has_service_profile ? "/find-work" : "/customer-onboarding");
     } catch (err) {
       toast.error(formatApiError(err));
     } finally {

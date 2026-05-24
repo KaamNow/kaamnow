@@ -1,6 +1,6 @@
 """
-Bulk seed: 100 dummy workers + 70 dummy customers + jobs.
-Uses the real DB schema (workers.py + schemas.py).
+Bulk seed: 100 dummy service profiles + 70 users + jobs.
+Uses the user-to-user marketplace schema.
 Real accounts are NEVER touched.
 
 Run on EC2:
@@ -559,57 +559,56 @@ def _tier(total_jobs: int, avg_rating: float) -> int:
 async def run():
     print("🌱 KaamNow Bulk Seed starting...")
 
-    # ── Step 0: Create worker profile for +917903770969 if missing ─────────
-    real_worker_user = await db.users.find_one({"phone_primary": "+917903770969"})
-    if real_worker_user:
-        existing_profile = await db.workers.find_one({"user_id": real_worker_user["id"]})
+    # ── Step 0: Create service profile for +917903770969 if missing ────────
+    real_profile_user = await db.users.find_one({"phone": "+917903770969"})
+    if real_profile_user:
+        existing_profile = await db.service_profiles.find_one({"user_id": real_profile_user["id"]})
         if not existing_profile:
             loc = LOCATIONS[0]
             lat, lng = COORDS.get("Patna", (25.5941, 85.1376))
             now = utc_now_iso()
-            await db.workers.insert_one(
+            await db.service_profiles.insert_one(
                 {
                     "id": str(uuid.uuid4()),
-                    "user_id": real_worker_user["id"],
-                    "name": real_worker_user.get("name", "Test Worker"),
+                    "user_id": real_profile_user["id"],
+                    "display_name": real_profile_user.get("name", "Test Expert"),
                     "skills": ["mason", "tile work"],
-                    "structured_skills": [
-                        {"category": "Construction", "skill": "mason"},
-                        {"category": "Construction", "skill": "tile work"},
-                    ],
+                    "categories": ["Construction"],
                     "daily_rate": 600,
                     "bio": "5 saal ka anubhav. Patna aur aaspaas available.",
-                    "village": loc["village"],
-                    "district": loc["district"],
-                    "state": loc["state"],
-                    "address": loc,
+                    "location_text": loc["village"],
+                    "pincode": loc["pincode"],
                     "lat": lat,
                     "lng": lng,
-                    "available": True,
-                    "availability_status": "available",
-                    "trust_tier": 1,
-                    "avg_rating": 0.0,
-                    "total_jobs": 0,
+                    "availability": True,
+                    "is_active": True,
+                    "rating_avg": 0.0,
+                    "rating_count": 0,
+                    "completed_jobs": 0,
+                    "photos": [],
+                    "certifications": [],
                     "photo_url": None,
-                    "last_active_at": now,
                     "created_at": now,
+                    "updated_at": now,
                 }
             )
-            print("✅ Worker profile created for +917903770969")
+            await db.users.update_one(
+                {"id": real_profile_user["id"]}, {"$set": {"has_service_profile": True}}
+            )
+            print("✅ Service profile created for +917903770969")
         else:
-            print("ℹ️  Worker profile for +917903770969 already exists")
+            print("ℹ️  Service profile for +917903770969 already exists")
 
     # ── Step 1: Clear old dummy data ───────────────────────────────────────
-    await db.users.delete_many({"phone_primary": {"$regex": r"^\+917000"}})
+    await db.users.delete_many({"phone": {"$regex": r"^\+917000"}})
     print("🧹 Cleared old dummy seed data")
 
-    # ── Step 2: 100 dummy workers ──────────────────────────────────────────
+    # ── Step 2: 100 dummy service profiles ─────────────────────────────────
     now = utc_now_iso()
-    workers_inserted = 0
+    profiles_inserted = 0
 
     for i in range(100):
         uid = str(uuid.uuid4())
-        wid = str(uuid.uuid4())
         phone = f"+917000{100000 + i}"
 
         name = WORKER_NAMES[i % len(WORKER_NAMES)]
@@ -625,14 +624,12 @@ async def run():
         lng += random.uniform(-0.3, 0.3)
         avail = random.random() > 0.25
 
-        # User record
         await db.users.insert_one(
             {
                 "id": uid,
-                "phone_primary": phone,
+                "phone": phone,
                 "password_hash": None,
                 "name": name,
-                "role": "worker",
                 "phone_verified": True,
                 "village": loc["village"],
                 "pincode": loc["pincode"],
@@ -640,43 +637,42 @@ async def run():
                 "photo_url": None,
                 "preferred_language": "hi",
                 "avatar_color": None,
+                "has_service_profile": True,
                 "created_at": now,
-                "migration_status": "phone_primary",
             }
         )
 
-        # Worker profile — matches WorkerOut schema exactly
-        await db.workers.insert_one(
+        await db.service_profiles.insert_one(
             {
-                "id": wid,
+                "id": str(uuid.uuid4()),
                 "user_id": uid,
-                "name": name,
+                "display_name": name,
                 "skills": skills,
-                "structured_skills": [{"category": category.title(), "skill": s} for s in skills],
+                "categories": [category.title()],
                 "daily_rate": rate,
                 "bio": f"{total_jobs} kaam kiye hain. {loc['district']} aur aaspaas available.",
-                "village": loc["village"],
-                "district": loc["district"],
-                "state": loc["state"],
-                "address": loc,
+                "location_text": loc["village"],
+                "pincode": loc["pincode"],
                 "lat": round(lat, 4),
                 "lng": round(lng, 4),
-                "available": avail,
-                "availability_status": "available" if avail else "not_available",
-                "trust_tier": tier,
-                "avg_rating": avg_rating,
-                "total_jobs": total_jobs,
+                "availability": avail,
+                "is_active": True,
+                "rating_avg": avg_rating,
+                "rating_count": total_jobs,
+                "completed_jobs": total_jobs,
+                "photos": [],
+                "certifications": [],
                 "photo_url": None,
-                "last_active_at": now,
                 "created_at": now,
+                "updated_at": now,
             }
         )
-        workers_inserted += 1
+        profiles_inserted += 1
 
-    print(f"✅ {workers_inserted} dummy workers created")
+    print(f"✅ {profiles_inserted} dummy service profiles created")
 
-    # ── Step 3: 70 dummy customers + jobs ──────────────────────────────────
-    customers_inserted = 0
+    # ── Step 3: 70 dummy users + jobs ──────────────────────────────────────
+    users_inserted = 0
     jobs_inserted = 0
 
     for i in range(70):
@@ -688,10 +684,9 @@ async def run():
         await db.users.insert_one(
             {
                 "id": cid,
-                "phone_primary": phone,
+                "phone": phone,
                 "password_hash": None,
                 "name": name,
-                "role": "customer",
                 "phone_verified": True,
                 "village": loc["village"],
                 "pincode": loc["pincode"],
@@ -700,10 +695,9 @@ async def run():
                 "preferred_language": "hi",
                 "avatar_color": None,
                 "created_at": now,
-                "migration_status": "phone_primary",
             }
         )
-        customers_inserted += 1
+        users_inserted += 1
 
         # 1–2 open jobs per customer
         for _ in range(random.randint(1, 2)):
@@ -718,8 +712,8 @@ async def run():
             await db.jobs.insert_one(
                 {
                     "id": str(uuid.uuid4()),
-                    "customer_id": cid,
-                    "customer_name": name,
+                    "posted_by_user_id": cid,
+                    "posted_by_name": name,
                     "title": title,
                     "category": cat,
                     "description": f"{title}. {loc['village']}, {loc['district']} mein kaam hai. Accha payment milega.",
@@ -731,7 +725,6 @@ async def run():
                     "lng": round(lng + random.uniform(-0.2, 0.2), 4),
                     "status": "open",
                     "filled_count": 0,
-                    "accepted_worker_ids": [],
                     "required_skills": req_skills,
                     "address": loc,
                     "urgency": random.choice(["normal", "normal", "urgent"]),
@@ -740,10 +733,10 @@ async def run():
             )
             jobs_inserted += 1
 
-    print(f"✅ {customers_inserted} dummy customers + {jobs_inserted} jobs created")
+    print(f"✅ {users_inserted} dummy users + {jobs_inserted} jobs created")
     print(f"\n🎉 Bulk seed complete!")
-    print(f"   Workers : {workers_inserted} dummy (real accounts untouched)")
-    print(f"   Customers: {customers_inserted} dummy (real accounts untouched)")
+    print(f"   Profiles: {profiles_inserted} dummy (real accounts untouched)")
+    print(f"   Users   : {users_inserted} dummy (real accounts untouched)")
     print(f"   Jobs     : {jobs_inserted} open")
     print(f"\n   Tier breakdown:")
     t1 = sum(1 for i in range(100) if _tier(0, 0) == 1)

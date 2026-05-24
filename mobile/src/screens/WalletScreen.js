@@ -48,14 +48,14 @@ export default function WalletScreen({ navigation }) {
   };
 
   if (loading) {
-    return <View style={styles.center}><ActivityIndicator color={colors.saffron} /></View>;
+    return <View style={styles.center}><ActivityIndicator color={colors.primary} /></View>;
   }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={{ padding: 4 }}>
-          <Ionicons name="arrow-back" size={22} color={colors.text} />
+          <Ionicons name="arrow-back" size={22} color={colors.textHeading} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t("wallet_title")}</Text>
       </View>
@@ -83,7 +83,7 @@ export default function WalletScreen({ navigation }) {
               </View>
             ) : null}
           </View>
-          <Ionicons name="gift-outline" size={40} color={colors.saffron} />
+          <Ionicons name="gift-outline" size={40} color={colors.primary} />
         </View>
 
         {/* Transactions */}
@@ -99,19 +99,19 @@ export default function WalletScreen({ navigation }) {
                   <Ionicons
                     name={isCredit ? "arrow-down-outline" : "arrow-up-outline"}
                     size={16}
-                    color={isCredit ? colors.success : colors.danger}
+                    color={isCredit ? colors.statusSuccess : colors.error}
                   />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.txReason}>{t(`wallet_reason_${tx.reason}`) || tx.reason}</Text>
                   <Text style={styles.txDate}>{new Date(tx.created_at).toLocaleDateString("en-IN")}</Text>
                   {isCredit && days !== null && (
-                    <Text style={[styles.txExpiry, days < 15 && { color: colors.danger }]}>
+                    <Text style={[styles.txExpiry, days < 15 && { color: colors.error }]}>
                       {days > 0 ? t("wallet_expires_in", { days }) : t("wallet_expired")}
                     </Text>
                   )}
                 </View>
-                <Text style={[styles.txAmount, { color: isCredit ? colors.success : colors.danger }]}>
+                <Text style={[styles.txAmount, { color: isCredit ? colors.statusSuccess : colors.error }]}>
                   {isCredit ? "+" : "−"}₹{tx.amount}
                 </Text>
               </View>
@@ -124,52 +124,52 @@ export default function WalletScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
+  container: { flex: 1, backgroundColor: colors.background },
   center:    { flex: 1, justifyContent: "center", alignItems: "center" },
 
   header: {
     flexDirection: "row", alignItems: "center", gap: spacing.sm,
     paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
-    backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: colors.border,
+    backgroundColor: colors.surfaceCard, borderBottomWidth: 1, borderBottomColor: colors.borderSubtle,
   },
-  headerTitle: { fontFamily: fonts.bodyBold, fontSize: 18, color: colors.text },
+  headerTitle: { fontFamily: fonts.bodyBold, fontSize: 18, color: colors.textHeading },
 
   balanceCard: {
-    backgroundColor: colors.indigo, margin: spacing.md, borderRadius: radius.xl,
+    backgroundColor: colors.primary, margin: spacing.md, borderRadius: radius.xxl,
     padding: spacing.lg, alignItems: "center",
   },
   balanceLabel:  { fontFamily: fonts.body, fontSize: 13, color: "rgba(255,255,255,0.75)" },
-  balanceAmount: { fontFamily: fonts.display, fontSize: 40, color: "#fff", fontWeight: "700", marginVertical: 4 },
+  balanceAmount: { fontFamily: fonts.display, fontSize: 40, color: colors.onPrimary, fontWeight: "700", marginVertical: 4 },
   balanceSub:    { fontFamily: fonts.body, fontSize: 12, color: "rgba(255,255,255,0.55)" },
 
   referCard: {
     flexDirection: "row", alignItems: "center",
-    backgroundColor: "#fff", marginHorizontal: spacing.md, borderRadius: radius.lg,
+    backgroundColor: colors.surfaceCard, marginHorizontal: spacing.md, borderRadius: radius.xxl,
     padding: spacing.md, marginBottom: spacing.md, gap: spacing.sm,
-    borderWidth: 1, borderColor: colors.border,
+    borderWidth: 1, borderColor: colors.borderSubtle,
   },
-  referTitle: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.text, marginBottom: 2 },
-  referSub:   { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginBottom: spacing.sm },
+  referTitle: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.textHeading, marginBottom: 2 },
+  referSub:   { fontFamily: fonts.body, fontSize: 12, color: colors.outline, marginBottom: spacing.sm },
   codeRow:    { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  code:       { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.indigo, letterSpacing: 1.5 },
-  shareBtn:   { flexDirection: "row", alignItems: "center", backgroundColor: colors.indigo, borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: 5, gap: 4 },
-  shareBtnText: { fontFamily: fonts.bodyBold, fontSize: 12, color: "#fff" },
+  code:       { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.primary, letterSpacing: 1.5 },
+  shareBtn:   { flexDirection: "row", alignItems: "center", backgroundColor: colors.primary, borderRadius: radius.pill, paddingHorizontal: spacing.sm, paddingVertical: 5, gap: 4 },
+  shareBtnText: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.onPrimary },
 
   sectionHeader: {
-    fontFamily: fonts.bodyBold, fontSize: 12, color: colors.textMuted,
+    fontFamily: fonts.bodyBold, fontSize: 12, color: colors.outline,
     textTransform: "uppercase", letterSpacing: 0.8,
     paddingHorizontal: spacing.md, marginBottom: spacing.xs, marginTop: spacing.xs,
   },
-  emptyText: { fontFamily: fonts.body, fontSize: 14, color: colors.textMuted, paddingHorizontal: spacing.md },
+  emptyText: { fontFamily: fonts.body, fontSize: 14, color: colors.outline, paddingHorizontal: spacing.md },
 
   txRow: {
     flexDirection: "row", alignItems: "center",
-    backgroundColor: "#fff", paddingHorizontal: spacing.md, paddingVertical: 12,
-    borderBottomWidth: 1, borderBottomColor: colors.border, gap: spacing.sm,
+    backgroundColor: colors.surfaceCard, paddingHorizontal: spacing.md, paddingVertical: 12,
+    borderBottomWidth: 1, borderBottomColor: colors.borderSubtle, gap: spacing.sm,
   },
   txIcon:   { width: 32, height: 32, borderRadius: 16, justifyContent: "center", alignItems: "center" },
-  txReason: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.text },
-  txDate:   { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted },
-  txExpiry: { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted },
+  txReason: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.textHeading },
+  txDate:   { fontFamily: fonts.body, fontSize: 12, color: colors.outline },
+  txExpiry: { fontFamily: fonts.body, fontSize: 11, color: colors.outline },
   txAmount: { fontFamily: fonts.bodyBold, fontSize: 15 },
 });

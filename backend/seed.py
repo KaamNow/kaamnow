@@ -273,47 +273,49 @@ SEED_JOBS = [
 ]
 
 
-async def ensure_indexes() -> None:
-    try:
-        await db.users.create_index("phone_primary", unique=True, sparse=True)
-        await db.workers.create_index("user_id")
-        await db.workers.create_index("skills")
-        await db.workers.create_index("structured_skills.skill")
-        await db.workers.create_index("address.pincode")
-        await db.jobs.create_index("customer_id")
-        await db.jobs.create_index("status")
-        await db.jobs.create_index("address.pincode")
-        await db.jobs.create_index("required_skills.skill")
-        await db.bookings.create_index("worker_id")
-        await db.bookings.create_index("customer_id")
-        await db.engagements.create_index("worker_id")
-        await db.engagements.create_index("customer_id")
-        await db.engagements.create_index("job_id")
-        await db.engagements.create_index(
-            [("job_id", 1), ("worker_id", 1)],
-            unique=True,
-            partialFilterExpression={"status": {"$in": ["requested", "accepted"]}},
-        )
-        await db.engagements.create_index([("worker_id", 1), ("status", 1)])
-        await db.engagements.create_index([("customer_id", 1), ("status", 1)])
-        await db.notifications.create_index("user_id")
-        await db.notifications.create_index([("user_id", 1), ("read", 1)])
-        await db.wa_notif_log.create_index([("job_id", 1), ("user_id", 1)], unique=True)
-        await db.wa_notif_log.create_index("sent_at")
-        await db.bot_sessions.create_index("session_id")
-        await db.bot_sessions.create_index("updated_at")
-    except Exception:
-        pass
+def _make_user(phone: str, name: str, **kwargs) -> dict:
+    return {
+        "id": str(uuid.uuid4()),
+        "phone_primary": phone,
+        "phone_verified": True,
+        "name": name,
+        "gender": kwargs.get("gender"),
+        "password_hash": hash_password(kwargs["password"]) if kwargs.get("password") else None,
+        "pincode": kwargs.get("pincode"),
+        "village": kwargs.get("village"),
+        "address": kwargs.get("address"),
+        "photo_url": kwargs.get("photo_url"),
+        "preferred_language": kwargs.get("preferred_language", "hi"),
+        "avatar_color": "#FF6B6B",
+        "created_at": utc_now_iso(),
+        "is_active": True,
+        "has_service_profile": False,
+        "saved_users": [],
+        "referral_count": 0,
+        "wallet_balance": 0,
+        "saved_addresses": [],
+        "tc_version": "1.0",
+        "selfie_verified": False,
+        **{
+            k: v
+            for k, v in kwargs.items()
+            if k
+            not in {
+                "password",
+                "gender",
+                "pincode",
+                "village",
+                "address",
+                "photo_url",
+                "preferred_language",
+            }
+        },
+    }
 
 
 async def seed_data() -> None:
-    await ensure_indexes()
-
     admin_phone = settings.admin_phone.strip()
-    existing_admin = (
-        await db.users.find_one({"phone_primary": admin_phone}) if admin_phone else None
-    )
-    if admin_phone and not existing_admin:
+    if admin_phone and not await db.users.find_one({"phone_primary": admin_phone}):
         await db.users.insert_one(
             {
                 "id": str(uuid.uuid4()),
@@ -321,46 +323,14 @@ async def seed_data() -> None:
                 "password_hash": hash_password(settings.admin_password),
                 "name": "Admin",
                 "role": "admin",
-                "village": None,
                 "phone_verified": True,
-                "address": None,
-                "photo_url": None,
                 "preferred_language": "en",
                 "created_at": utc_now_iso(),
-                "migration_status": "phone_primary",
+                "is_active": True,
             }
         )
 
-    customer = await db.users.find_one({"role": "customer"})
-    if not customer:
-        customer_id = str(uuid.uuid4())
-        await db.users.insert_one(
-            {
-                "id": customer_id,
-                "phone_primary": "+919000000001",
-                "password_hash": None,
-                "name": "Demo customer",
-                "role": "customer",
-                "village": "Hoshangabad",
-                "phone_verified": True,
-                "address": {
-                    "village": "Hoshangabad",
-                    "post": "Hoshangabad",
-                    "block": "Hoshangabad",
-                    "district": "Hoshangabad",
-                    "state": "MP",
-                    "pincode": "461001",
-                },
-                "photo_url": None,
-                "preferred_language": "en",
-                "created_at": utc_now_iso(),
-                "migration_status": "phone_primary",
-            }
-        )
-    else:
-        customer_id = customer["id"]
-
-    if await db.workers.count_documents({}) == 0:
+    if await db.service_profiles.count_documents({}) == 0:
         photos = [
             "https://images.pexels.com/photos/16476333/pexels-photo-16476333.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=400&w=400",
             "https://images.pexels.com/photos/12921278/pexels-photo-12921278.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=400&w=400",
@@ -369,40 +339,65 @@ async def seed_data() -> None:
         ]
         for i, worker in enumerate(SEED_WORKERS):
             village = SEED_VILLAGES[i % len(SEED_VILLAGES)]
-            await db.workers.insert_one(
-                {
-                    "id": str(uuid.uuid4()),
-                    "user_id": str(uuid.uuid4()),
-                    "name": worker["name"],
-                    "skills": worker["skills"],
-                    "structured_skills": [
-                        {"category": "Legacy", "skill": skill} for skill in worker["skills"]
-                    ],
-                    "daily_rate": worker["rate"],
-                    "bio": worker["bio"],
-                    "village": village["name"],
-                    "district": village["district"],
-                    "state": village["state"],
-                    "address": {
-                        "village": village["name"],
-                        "post": village["post"],
-                        "block": village["block"],
-                        "district": village["district"],
-                        "state": village["state"],
-                        "pincode": village["pincode"],
-                    },
-                    "lat": village["lat"] + random.uniform(-0.05, 0.05),
-                    "lng": village["lng"] + random.uniform(-0.05, 0.05),
-                    "available": True,
-                    "availability_status": "available",
-                    "last_active_at": utc_now_iso(),
-                    "trust_tier": worker["tier"],
-                    "avg_rating": worker["rating"],
-                    "total_jobs": worker["jobs"],
-                    "photo_url": photos[i % len(photos)],
-                    "created_at": utc_now_iso(),
-                }
-            )
+            user_id = str(uuid.uuid4())
+            phone = f"+71700000{i + 10:04d}"
+            if not await db.users.find_one({"phone_primary": phone}):
+                user_doc = _make_user(
+                    phone=phone,
+                    name=worker["name"],
+                    village=village["name"],
+                    pincode=village["pincode"],
+                    photo_url=photos[i % len(photos)],
+                    has_service_profile=True,
+                )
+                user_doc["id"] = user_id
+                await db.users.insert_one(user_doc)
+            else:
+                existing = await db.users.find_one({"phone_primary": phone})
+                user_id = existing["id"]
+
+            sp_doc = {
+                "id": str(uuid.uuid4()),
+                "user_id": user_id,
+                "display_name": worker["name"],
+                "bio": worker["bio"],
+                "categories": [worker["skills"][0]] if worker["skills"] else [],
+                "skills": worker["skills"],
+                "pincode": village["pincode"],
+                "location_text": village["name"],
+                "availability": True,
+                "is_active": True,
+                "daily_rate": worker["rate"],
+                "rating_avg": worker["rating"],
+                "rating_count": worker["jobs"],
+                "completed_jobs": worker["jobs"],
+                "photos": [],
+                "certifications": [],
+                "verification_status": "unverified",
+                "photo_url": photos[i % len(photos)],
+                "lat": village["lat"] + random.uniform(-0.05, 0.05),
+                "lng": village["lng"] + random.uniform(-0.05, 0.05),
+                "created_at": utc_now_iso(),
+                "updated_at": utc_now_iso(),
+            }
+            await db.service_profiles.insert_one(sp_doc)
+
+    demo_user = await db.users.find_one({"phone_primary": "+919000000001"})
+    if not demo_user:
+        demo_user_doc = _make_user(
+            phone="+919000000001",
+            name="Mahesh Patel",
+            village="Hoshangabad",
+            pincode="461001",
+            address={
+                "village": "Hoshangabad",
+                "district": "Hoshangabad",
+                "state": "MP",
+                "pincode": "461001",
+            },
+        )
+        await db.users.insert_one(demo_user_doc)
+        demo_user = demo_user_doc
 
     if await db.jobs.count_documents({}) == 0:
         for job in SEED_JOBS:
@@ -410,8 +405,8 @@ async def seed_data() -> None:
             await db.jobs.insert_one(
                 {
                     "id": str(uuid.uuid4()),
-                    "customer_id": customer_id,
-                    "customer_name": "Mahesh Patel",
+                    "posted_by_user_id": demo_user["id"],
+                    "posted_by_name": demo_user["name"],
                     "title": job["title"],
                     "category": job["category"],
                     "description": job["description"],
@@ -423,8 +418,6 @@ async def seed_data() -> None:
                     "village": village["name"],
                     "address": {
                         "village": village["name"],
-                        "post": village["post"],
-                        "block": village["block"],
                         "district": village["district"],
                         "state": village["state"],
                         "pincode": village["pincode"],
@@ -434,7 +427,6 @@ async def seed_data() -> None:
                     "required_skills": [{"category": job["category"], "skill": job["category"]}],
                     "urgency": "normal",
                     "filled_count": 0,
-                    "accepted_worker_ids": [],
                     "status": "open",
                     "created_at": utc_now_iso(),
                 }

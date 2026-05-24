@@ -21,8 +21,8 @@ export default function PortfolioScreen() {
 
   const load = useCallback(async () => {
     try {
-      const r = await api.get("/workers/me");
-      setItems(r.data?.portfolio || []);
+      const r = await api.get("/service-profiles/mine");
+      setItems(r.data?.photos || []);
     } catch {}
     finally { setLoading(false); }
   }, []);
@@ -47,7 +47,7 @@ export default function PortfolioScreen() {
       const uri = result.assets[0].uri;
       const formData = new FormData();
       formData.append("file", { uri, name: "portfolio.jpg", type: "image/jpeg" });
-      await api.post("/workers/me/portfolio", formData, {
+      await api.post("/service-profiles/mine/photos", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       await load();
@@ -64,13 +64,13 @@ export default function PortfolioScreen() {
       {
         text: t("delete"), style: "destructive",
         onPress: async () => {
-          try { await api.delete(`/workers/me/portfolio/${id}`); load(); } catch {}
+          try { await api.delete(`/service-profiles/mine/photos/${id}`); load(); } catch {}
         },
       },
     ]);
   };
 
-  if (loading) return <View style={styles.center}><ActivityIndicator color={colors.saffron} /></View>;
+  if (loading) return <View style={styles.center}><ActivityIndicator color={colors.primary} /></View>;
 
   const data = [...items, ...(items.length < MAX_ITEMS ? [{ id: "__add" }] : [])];
 
@@ -78,7 +78,7 @@ export default function PortfolioScreen() {
     if (item.id === "__add") {
       return (
         <TouchableOpacity style={styles.addTile} onPress={pickAndUpload} disabled={uploading}>
-          {uploading ? <ActivityIndicator color={colors.textMuted} /> : <Ionicons name="add" size={32} color={colors.textMuted} />}
+          {uploading ? <ActivityIndicator color={colors.outline} /> : <Ionicons name="add" size={32} color={colors.outline} />}
         </TouchableOpacity>
       );
     }
@@ -90,7 +90,7 @@ export default function PortfolioScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.bg }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <FlatList
         data={data}
         numColumns={3}
@@ -108,5 +108,5 @@ const styles = StyleSheet.create({
   tile:    { flex: 1, aspectRatio: 1, margin: 2 },
   img:     { width: "100%", height: "100%" },
   addTile: { flex: 1, aspectRatio: 1, margin: 2, justifyContent: "center", alignItems: "center", backgroundColor: "#f3f4f6", borderRadius: radius.sm },
-  hint:    { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted, textAlign: "center", padding: spacing.xs },
+  hint:    { fontFamily: fonts.body, fontSize: 11, color: colors.outline, textAlign: "center", padding: spacing.xs },
 });

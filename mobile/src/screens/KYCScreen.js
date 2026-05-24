@@ -20,7 +20,7 @@ export default function KYCScreen({ navigation }) {
   const initiate = async () => {
     setInitiating(true);
     try {
-      await api.post("/workers/me/kyc/initiate");
+      await api.post("/service-profiles/mine/kyc/initiate", { doc_type: "aadhaar" });
       Alert.alert(t("kyc_initiated_title"), t("kyc_initiated_body"));
       await refreshUser();
     } catch {
@@ -32,14 +32,14 @@ export default function KYCScreen({ navigation }) {
 
   return (
     <ScrollView
-      style={{ flex: 1, backgroundColor: colors.bg }}
+      style={{ flex: 1, backgroundColor: colors.background }}
       contentContainerStyle={{ padding: spacing.md, paddingBottom: insets.bottom + 32, alignItems: "center" }}
     >
       <View style={styles.iconWrap}>
         <Ionicons
           name={isVerified ? "shield-checkmark" : "shield-outline"}
           size={64}
-          color={isVerified ? colors.success : colors.textMuted}
+          color={isVerified ? colors.statusSuccess : colors.outline}
         />
       </View>
 
@@ -61,7 +61,7 @@ export default function KYCScreen({ navigation }) {
 
       {isVerified && user?.kyc_doc_type && (
         <View style={styles.docRow}>
-          <Ionicons name="document-text-outline" size={16} color={colors.textMuted} />
+          <Ionicons name="document-text-outline" size={16} color={colors.outline} />
           <Text style={styles.docText}>{user.kyc_doc_type.replace(/_/g, " ")}</Text>
           {user.kyc_verified_at && (
             <Text style={styles.docDate}>{new Date(user.kyc_verified_at).toLocaleDateString("en-IN")}</Text>
@@ -74,11 +74,11 @@ export default function KYCScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   iconWrap: { marginVertical: spacing.xl },
-  title:    { fontFamily: fonts.bodyBold, fontSize: 20, color: colors.text, textAlign: "center", marginBottom: spacing.sm },
-  body:     { fontFamily: fonts.body, fontSize: 14, color: colors.textMuted, textAlign: "center", lineHeight: 22, marginBottom: spacing.xl, paddingHorizontal: spacing.md },
-  btn:      { backgroundColor: colors.indigo, borderRadius: radius.lg, paddingHorizontal: spacing.xl, paddingVertical: 14 },
-  btnText:  { fontFamily: fonts.bodyBold, fontSize: 15, color: "#fff" },
+  title:    { fontFamily: fonts.bodyBold, fontSize: 20, color: colors.textHeading, textAlign: "center", marginBottom: spacing.sm },
+  body:     { fontFamily: fonts.body, fontSize: 14, color: colors.outline, textAlign: "center", lineHeight: 22, marginBottom: spacing.xl, paddingHorizontal: spacing.md },
+  btn:      { backgroundColor: colors.primary, borderRadius: radius.xxl, paddingHorizontal: spacing.xl, paddingVertical: 14 },
+  btnText:  { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.onPrimary },
   docRow:   { flexDirection: "row", alignItems: "center", gap: spacing.xs, marginTop: spacing.md },
-  docText:  { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.text, textTransform: "capitalize" },
-  docDate:  { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted },
+  docText:  { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.textHeading, textTransform: "capitalize" },
+  docDate:  { fontFamily: fonts.body, fontSize: 12, color: colors.outline },
 });

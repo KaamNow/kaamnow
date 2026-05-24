@@ -76,7 +76,7 @@ export function AuthProvider({ children }) {
       try {
         const r = await api.get("/auth/me");
         setUser(r.data);
-        identify(r.data.id, { name: r.data.name, is_worker: r.data.is_worker });
+        identify(r.data.id, { name: r.data.name, has_service_profile: r.data.has_service_profile });
         registerPushToken();
       } catch {
         await SecureStore.deleteItemAsync(TOKEN_KEY);
@@ -173,8 +173,8 @@ export function AuthProvider({ children }) {
         loginComplete,
         resetOTPFlow,
         refreshUser,
-        isWorker: user?.is_worker === true,
-        isCustomer: user?.is_customer !== false,
+        isWorker: user?.has_service_profile === true,
+        isCustomer: true,
       }}
     >
       {children}

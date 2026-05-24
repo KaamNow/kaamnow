@@ -113,5 +113,7 @@ async def suggest_price(
         ]
     if pincode:
         query["address.pincode"] = pincode
-    workers = await db.workers.find(query, {"_id": 0, "daily_rate": 1}).limit(200).to_list(200)
+    workers = (
+        await db.service_profiles.find(query, {"_id": 0, "daily_rate": 1}).limit(200).to_list(200)
+    )
     return price_stats([w.get("daily_rate") for w in workers])

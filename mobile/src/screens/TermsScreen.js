@@ -38,7 +38,7 @@ export default function TermsScreen({ route, navigation }) {
   };
 
   if (loading) {
-    return <View style={styles.center}><ActivityIndicator color={colors.saffron} /></View>;
+    return <View style={styles.center}><ActivityIndicator color={colors.primary} /></View>;
   }
 
   const content = lang === "en" ? doc?.content_en : doc?.content_hi || doc?.content_en;
@@ -70,18 +70,18 @@ export default function TermsScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
+  container: { flex: 1, backgroundColor: colors.background },
   center:    { flex: 1, justifyContent: "center", alignItems: "center" },
-  version:   { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginBottom: spacing.md },
-  body:      { fontFamily: fonts.body, fontSize: 14, color: colors.text, lineHeight: 22 },
+  version:   { fontFamily: fonts.body, fontSize: 12, color: colors.outline, marginBottom: spacing.md },
+  body:      { fontFamily: fonts.body, fontSize: 14, color: colors.textHeading, lineHeight: 22 },
 
   acceptBar: {
     position: "absolute", bottom: 0, left: 0, right: 0,
-    backgroundColor: "#fff", borderTopWidth: 1, borderTopColor: colors.border,
+    backgroundColor: colors.surfaceCard, borderTopWidth: 1, borderTopColor: colors.borderSubtle,
     paddingTop: spacing.sm, paddingHorizontal: spacing.md,
   },
   acceptBtn: {
-    backgroundColor: colors.indigo, borderRadius: radius.lg, paddingVertical: 14, alignItems: "center",
+    backgroundColor: colors.primary, borderRadius: radius.xxl, paddingVertical: 14, alignItems: "center",
   },
-  acceptBtnText: { fontFamily: fonts.bodyBold, fontSize: 15, color: "#fff" },
+  acceptBtnText: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.onPrimary },
 });

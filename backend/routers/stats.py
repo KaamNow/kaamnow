@@ -7,13 +7,13 @@ router = APIRouter(prefix="/api", tags=["stats"])
 
 @router.get("/stats")
 async def stats():
-    workers_count = await db.workers.count_documents({})
+    experts_count = await db.service_profiles.count_documents({"is_active": True})
     jobs_count = await db.jobs.count_documents({})
-    bookings_count = await db.bookings.count_documents({"status": "completed"})
-    villages = await db.workers.distinct("village")
+    completed_count = await db.work_requests.count_documents({"status": "completed"})
+    villages = await db.service_profiles.distinct("location_text")
     return {
-        "workers": workers_count,
+        "workers": experts_count,
         "jobs": jobs_count,
-        "completed_bookings": bookings_count,
+        "completed_bookings": completed_count,
         "villages": len(villages),
     }

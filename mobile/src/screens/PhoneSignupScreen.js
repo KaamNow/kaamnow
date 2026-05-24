@@ -1,85 +1,111 @@
 import { useState } from "react";
 import {
-  Alert,
-  Image,
-  KeyboardAvoidingView,
-  Linking,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
+  View, Text, StyleSheet, Pressable, TextInput,
+  KeyboardAvoidingView, Platform, Alert, Modal, Linking,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AppScreen from "../components/AppScreen";
-import Button from "../components/Button";
 import OTPInput from "../components/OTPInput";
-import PhoneInput from "../components/PhoneInput";
-import PrimaryButton from "../components/PrimaryButton";
 import { useAuth } from "../contexts/AuthContext";
 import { useLanguage } from "../contexts/LanguageContext";
 import api, { formatApiError } from "../api";
-import { colors, fonts, shadow, spacing } from "../theme";
+import { colors, fonts, radius } from "../theme";
 
-function maskPhoneNumber(phone) {
-  const digits = (phone || "").replace(/\D/g, "").slice(-10);
-  if (digits.length !== 10) return phone || "";
-  return `XXXXX-${digits.slice(5)}`;
+const INDIGO = colors.primary;
+
+const T = {
+  en: {
+    step1Title: "Create account 🙏",
+    step1Sub: "Enter your mobile number to get started",
+    step2Title: "Enter the code",
+    step2Sub: (phone) => `We sent a 6-digit code to ${phone}`,
+    phonePlaceholder: "10-digit mobile number",
+    phoneHint: "OTP will arrive on WhatsApp",
+    sendOtp: "Send OTP",
+    sending: "Sending…",
+    verifyOtp: "Verify & Continue",
+    verifying: "Verifying…",
+    alreadyMember: "Already have an account?",
+    signIn: "Sign In",
+    wrongNumber: "Wrong number?",
+    change: "Change",
+    alreadyTitle: "Already registered",
+    alreadyBody: "This number is already registered. Please log in instead.",
+    loginBtn: "Log In",
+    cancel: "Cancel",
+    otpOptinTitle: "OTP arrives on WhatsApp",
+    otpOptinSub: "First time: tap below, send 'Hi', then come back.",
+    otpOptinOpen: "Open →",
+    invalidPhone: "Enter a valid 10-digit number",
+    invalidOtp: "Enter the 6-digit code",
+  },
+  hi: {
+    step1Title: "Account बनाएं 🙏",
+    step1Sub: "शुरू करने के लिए मोबाइल नंबर डालें",
+    step2Title: "Code डालें",
+    step2Sub: (phone) => `6-digit code भेजा: ${phone}`,
+    phonePlaceholder: "10-अंक मोबाइल नंबर",
+    phoneHint: "OTP WhatsApp पर आएगा",
+    sendOtp: "OTP भेजें",
+    sending: "भेज रहे हैं…",
+    verifyOtp: "Verify करें",
+    verifying: "Verify हो रहा है…",
+    alreadyMember: "पहले से account है?",
+    signIn: "Login करें",
+    wrongNumber: "गलत नंबर?",
+    change: "बदलें",
+    alreadyTitle: "नंबर पहले से है",
+    alreadyBody: "यह नंबर पहले से registered है। Login करें।",
+    loginBtn: "Login करें",
+    cancel: "रद्द करें",
+    otpOptinTitle: "OTP WhatsApp पर आएगा",
+    otpOptinSub: "पहली बार: नीचे tap करें, 'Hi' भेजें, वापस आएं।",
+    otpOptinOpen: "खोलें →",
+    invalidPhone: "सही 10-अंक नंबर डालें",
+    invalidOtp: "6-अंक code डालें",
+  },
+};
+
+function maskPhone(phone) {
+  const d = (phone || "").replace(/\D/g, "").slice(-10);
+  return d.length === 10 ? `+91 XXXXX-${d.slice(5)}` : phone || "";
 }
 
 export default function PhoneSignupScreen({ navigation, route }) {
   const { sendOTP, verifyOTP, loginComplete, otpFlow, resetOTPFlow } = useAuth();
   const { lang } = useLanguage();
+  const t = T[lang] || T.en;
 
   const initialPhone = (route?.params?.phone || "").replace(/\D/g, "").slice(-10);
-  const [phone, setPhone] = useState(initialPhone);
-  const [otp, setOtp] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [phone, setPhone]             = useState(initialPhone);
+  const [otp, setOtp]                 = useState("");
+  const [loading, setLoading]         = useState(false);
   const [alreadyExists, setAlreadyExists] = useState(false);
   const [requiresOptin, setRequiresOptin] = useState(false);
 
-  const safePhone = phone || "";
-  const fullPhone = safePhone.startsWith("+91") ? safePhone : `+91${safePhone.replace(/\D/g, "")}`;
+  const fullPhone = phone.startsWith("+91") ? phone : `+91${phone.replace(/\D/g, "")}`;
   const step = otpFlow.step;
 
   const goBack = () => {
-    if (step > 1) {
-      setOtp("");
-      resetOTPFlow();
-      return;
-    }
+    if (step > 1) { setOtp(""); resetOTPFlow(); return; }
     if (navigation.canGoBack()) navigation.goBack();
     else navigation.navigate("Tabs");
   };
 
   const handleSendOTP = async () => {
-    if (!/^\+91[0-9]{10}$/.test(fullPhone)) {
-      return Alert.alert(lang === "hi" ? "सही 10-अंक नंबर डालो" : "Enter a valid 10-digit number");
-    }
-
+    if (!/^\+91[0-9]{10}$/.test(fullPhone)) return Alert.alert("", t.invalidPhone);
     setLoading(true);
     try {
       const check = await api.get("/auth/check-phone", { params: { phone: fullPhone } });
-      if (check.data.exists && !check.data.expired) {
-        setAlreadyExists(true);
-        return;
-      }
+      if (check.data.exists && !check.data.expired) { setAlreadyExists(true); return; }
       const res = await sendOTP(fullPhone);
       if (res?.requires_optin) setRequiresOptin(true);
-    } catch (err) {
-      Alert.alert("Error", formatApiError(err));
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { Alert.alert("", formatApiError(e)); }
+    finally { setLoading(false); }
   };
 
   const handleVerifyOTP = async () => {
-    if (!/^[0-9]{6}$/.test(otp)) {
-      return Alert.alert(lang === "hi" ? "6-अंक code डालो" : "Enter the 6-digit code");
-    }
-
+    if (!/^[0-9]{6}$/.test(otp)) return Alert.alert("", t.invalidOtp);
     setLoading(true);
     try {
       const res = await verifyOTP(otpFlow.phone, otp);
@@ -89,119 +115,111 @@ export default function PhoneSignupScreen({ navigation, route }) {
         return;
       }
       navigation.replace("Login");
-    } catch (err) {
-      Alert.alert("Error", formatApiError(err));
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { Alert.alert("", formatApiError(e)); }
+    finally { setLoading(false); }
   };
 
+  const topTitle = step === 1 ? t.step1Title : t.step2Title;
+  const topSub   = step === 1 ? t.step1Sub   : t.step2Sub(maskPhone(otpFlow.phone));
+
   return (
-    <AppScreen edges={["top"]} style={styles.safe}>
+    <AppScreen edges={["top"]} style={{ flex: 1, backgroundColor: INDIGO }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          <Pressable style={styles.backBtn} onPress={goBack}>
-            <Ionicons name="arrow-back" size={22} color={colors.primary} />
+
+        {/* Top */}
+        <View style={s.top}>
+          <Pressable onPress={goBack} style={s.backBtn} hitSlop={12}>
+            <Ionicons name="arrow-back" size={22} color="rgba(255,255,255,0.9)" />
           </Pressable>
+          <Text style={s.brand}>KaamNow</Text>
+          <Text style={s.topTitle}>{topTitle}</Text>
+          <Text style={s.topSub}>{topSub}</Text>
+        </View>
 
-          <View style={[styles.brand, step === 2 && styles.brandCompact]}>
-            <Image source={require("../../assets/icon.png")} style={styles.logoImg} resizeMode="contain" />
-            <Text style={styles.brandName}>KaamNow</Text>
-            <Text style={styles.tagline}>काम की बात KaamNow के साथ</Text>
-          </View>
+        {/* Bottom — white card */}
+        <View style={s.card}>
 
-          <View style={styles.titleBlock}>
-            <Text style={styles.title}>{step === 2 ? "Code confirm karo" : "Account banao"}</Text>
-            <Text style={styles.subtitle}>
-              {step === 2
-                ? `6-digit code bheja: +91 ${maskPhoneNumber(otpFlow.phone)}`
-                : "Mobile number se shuru karein"}
-            </Text>
-          </View>
-
+          {/* Step 1 — Phone */}
           {step === 1 && (
-            <View>
-              <PhoneInput value={phone} onChangeText={setPhone} autoFocus />
-              <Text style={styles.hint}>OTP WhatsApp par aayega</Text>
+            <>
+              <View style={s.phoneRow}>
+                <View style={s.countryCode}>
+                  <Text style={s.countryCodeTxt}>🇮🇳 +91</Text>
+                </View>
+                <TextInput
+                  style={s.phoneInput}
+                  placeholder={t.phonePlaceholder}
+                  placeholderTextColor={colors.outline}
+                  keyboardType="number-pad"
+                  maxLength={10}
+                  value={phone}
+                  onChangeText={v => setPhone(v.replace(/\D/g, "").slice(0, 10))}
+                  autoFocus
+                />
+              </View>
+              <Text style={s.hint}><Ionicons name="logo-whatsapp" size={13} color="#25D366" /> {t.phoneHint}</Text>
 
-              <PrimaryButton
-                title="Code bhejo"
-                onPress={handleSendOTP}
-                loading={loading}
-                disabled={phone.length !== 10}
-                style={styles.cta}
-              />
-
-              <Pressable onPress={() => navigation.replace("Login", { phone })} style={styles.switchLink}>
-                <Text style={styles.switchTxt}>
-                  Already account hai? <Text style={styles.switchAccent}>Log in</Text>
-                </Text>
+              <Pressable style={[s.primaryBtn, phone.length !== 10 && s.btnDisabled]}
+                onPress={handleSendOTP} disabled={loading || phone.length !== 10}>
+                <Text style={s.primaryBtnTxt}>{loading ? t.sending : t.sendOtp}</Text>
               </Pressable>
-            </View>
+
+              <View style={s.switchRow}>
+                <Text style={s.switchTxt}>{t.alreadyMember} </Text>
+                <Pressable onPress={() => navigation.replace("Login", { phone })} hitSlop={8}>
+                  <Text style={s.switchLink}>{t.signIn}</Text>
+                </Pressable>
+              </View>
+            </>
           )}
 
+          {/* Step 2 — OTP */}
           {step === 2 && (
-            <View>
+            <>
               {requiresOptin && (
-                <Pressable
-                  style={styles.optinBanner}
-                  onPress={() => Linking.openURL("https://wa.me/917834811114?text=Hi")}
-                >
-                  <Ionicons name="logo-whatsapp" size={18} color={colors.info} />
+                <Pressable style={s.optinBanner}
+                  onPress={() => Linking.openURL("https://wa.me/917834811114?text=Hi")}>
+                  <Ionicons name="logo-whatsapp" size={18} color="#25D366" />
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.optinTitle}>
-                      {lang === "hi" ? "OTP WhatsApp से आएगा" : "OTP arrives on WhatsApp"}
-                    </Text>
-                    <Text style={styles.optinSub}>
-                      {lang === "hi"
-                        ? "पहली बार: नीचे टैप करो, 'Hi' भेजो, वापस आओ।"
-                        : "First time: tap below, send 'Hi', come back."}
-                    </Text>
+                    <Text style={s.optinTitle}>{t.otpOptinTitle}</Text>
+                    <Text style={s.optinSub}>{t.otpOptinSub}</Text>
                   </View>
-                  <Text style={styles.optinCta}>{lang === "hi" ? "खोलो →" : "Open →"}</Text>
+                  <Text style={s.optinCta}>{t.otpOptinOpen}</Text>
                 </Pressable>
               )}
 
               <OTPInput value={otp} onChange={setOtp} autoFocus />
-              <Text style={styles.hint}>WhatsApp par code check karein</Text>
+              <Text style={s.hint}>Check your WhatsApp for the code</Text>
 
-              <PrimaryButton
-                title="OTP confirm karo"
-                onPress={handleVerifyOTP}
-                loading={loading}
-                disabled={otp.length !== 6}
-                style={styles.cta}
-              />
-
-              <Pressable onPress={goBack} style={styles.switchLink}>
-                <Text style={styles.switchTxt}>
-                  Wrong number? <Text style={styles.switchAccent}>Change</Text>
-                </Text>
+              <Pressable style={[s.primaryBtn, otp.length !== 6 && s.btnDisabled]}
+                onPress={handleVerifyOTP} disabled={loading || otp.length !== 6}>
+                <Text style={s.primaryBtnTxt}>{loading ? t.verifying : t.verifyOtp}</Text>
               </Pressable>
-            </View>
+
+              <View style={s.switchRow}>
+                <Text style={s.switchTxt}>{t.wrongNumber} </Text>
+                <Pressable onPress={goBack} hitSlop={8}>
+                  <Text style={s.switchLink}>{t.change}</Text>
+                </Pressable>
+              </View>
+            </>
           )}
-        </ScrollView>
+        </View>
       </KeyboardAvoidingView>
 
+      {/* Already exists modal */}
       <Modal transparent visible={alreadyExists} animationType="fade" onRequestClose={() => setAlreadyExists(false)}>
-        <View style={styles.modalBg}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalIcon}>
-              <Ionicons name="phone-portrait-outline" size={28} color={colors.primary} />
-            </View>
-            <Text style={styles.modalTitle}>{lang === "hi" ? "नंबर पहले से है" : "Already registered"}</Text>
-            <Text style={styles.modalBody}>
-              {lang === "hi"
-                ? "यह नंबर पहले से registered है। Login karo."
-                : "This number is already registered. Please log in."}
-            </Text>
-            <Button
-              title={lang === "hi" ? "Login karo" : "Log in"}
-              onPress={() => { setAlreadyExists(false); navigation.replace("Login", { phone }); }}
-              fullWidth
-            />
-            <Pressable onPress={() => setAlreadyExists(false)} style={styles.modalCancel}>
-              <Text style={styles.modalCancelTxt}>{lang === "hi" ? "रद्द करो" : "Cancel"}</Text>
+        <View style={s.modalBg}>
+          <View style={s.modalCard}>
+            <View style={s.modalIcon}><Ionicons name="phone-portrait-outline" size={28} color={colors.primary} /></View>
+            <Text style={s.modalTitle}>{t.alreadyTitle}</Text>
+            <Text style={s.modalBody}>{t.alreadyBody}</Text>
+            <Pressable style={s.modalBtn}
+              onPress={() => { setAlreadyExists(false); navigation.replace("Login", { phone }); }}>
+              <Text style={s.modalBtnTxt}>{t.loginBtn}</Text>
+            </Pressable>
+            <Pressable onPress={() => setAlreadyExists(false)} style={s.modalCancel} hitSlop={8}>
+              <Text style={s.modalCancelTxt}>{t.cancel}</Text>
             </Pressable>
           </View>
         </View>
@@ -210,50 +228,63 @@ export default function PhoneSignupScreen({ navigation, route }) {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
-  scroll: { flexGrow: 1, paddingHorizontal: spacing.lg, paddingBottom: 60 },
-  backBtn: {
-    width: 44,
-    height: 44,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 2,
-    marginBottom: 8,
-    marginLeft: -10,
+const s = StyleSheet.create({
+  top: {
+    backgroundColor: INDIGO,
+    paddingHorizontal: 24, paddingTop: 8, paddingBottom: 32,
   },
-  brand: { alignItems: "center", marginTop: 10, marginBottom: 34 },
-  brandCompact: { marginTop: 0, marginBottom: 24 },
-  logoImg: { width: 64, height: 64, borderRadius: 18 },
-  brandName: { marginTop: 12, fontFamily: fonts.displayBold, fontSize: 24, color: colors.text },
-  tagline: { marginTop: 3, fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.textMuted },
-  titleBlock: { marginBottom: 22 },
-  title: { fontFamily: fonts.display, fontSize: 32, color: colors.text, lineHeight: 38, marginBottom: 6 },
-  subtitle: { fontFamily: fonts.body, fontSize: 15, color: colors.textSecondary, lineHeight: 22 },
-  hint: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginTop: 6, marginBottom: 4 },
-  cta: { marginTop: 20 },
-  switchLink: { marginTop: 20, alignItems: "center" },
-  switchTxt: { fontFamily: fonts.bodySemi, fontSize: 14, color: colors.textSecondary },
-  switchAccent: { color: colors.primary, fontFamily: fonts.bodyBold },
-  optinBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    backgroundColor: colors.infoLight,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#BAE6FD",
-    padding: 12,
-    marginBottom: 16,
+  backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center", marginBottom: 16 },
+  brand:    { fontFamily: fonts.bodyBold, fontSize: 13, color: "rgba(255,255,255,0.5)", marginBottom: 12, letterSpacing: 1 },
+  topTitle: { fontFamily: fonts.display, fontSize: 30, color: colors.onPrimary, letterSpacing: -0.5, marginBottom: 6 },
+  topSub:   { fontFamily: fonts.body, fontSize: 15, color: "rgba(255,255,255,0.65)", lineHeight: 22 },
+
+  card: {
+    flex: 1, backgroundColor: colors.surfaceCard,
+    borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    paddingHorizontal: 24, paddingTop: 28, paddingBottom: 40,
   },
-  optinTitle: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.info },
-  optinSub: { fontFamily: fonts.body, fontSize: 11, color: colors.textSecondary, marginTop: 2, lineHeight: 16 },
-  optinCta: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.info },
-  modalBg: { flex: 1, backgroundColor: colors.overlay, alignItems: "center", justifyContent: "center", padding: 24 },
-  modalCard: { backgroundColor: colors.surface, borderRadius: 20, padding: 28, width: "100%", maxWidth: 360, alignItems: "center", gap: 10 },
-  modalIcon: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.primaryLight, alignItems: "center", justifyContent: "center", marginBottom: 4 },
-  modalTitle: { fontFamily: fonts.display, fontSize: 20, color: colors.text, textAlign: "center" },
-  modalBody: { fontFamily: fonts.body, fontSize: 13, color: colors.textSecondary, textAlign: "center", lineHeight: 19, marginBottom: 6 },
-  modalCancel: { marginTop: 8 },
-  modalCancelTxt: { fontFamily: fonts.bodySemi, fontSize: 14, color: colors.textMuted },
+
+  phoneRow: {
+    flexDirection: "row", alignItems: "center",
+    borderWidth: 1.5, borderColor: colors.borderSubtle,
+    borderRadius: radius.xxl, overflow: "hidden", marginBottom: 8,
+  },
+  countryCode: {
+    paddingHorizontal: 14, paddingVertical: 17,
+    backgroundColor: colors.surfaceContainerLow,
+    borderRightWidth: 1.5, borderRightColor: colors.borderSubtle,
+  },
+  countryCodeTxt: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.textHeading },
+  phoneInput: {
+    flex: 1, paddingHorizontal: 14, paddingVertical: 17,
+    fontFamily: fonts.body, fontSize: 17, color: colors.textHeading, letterSpacing: 1,
+  },
+
+  hint: { fontFamily: fonts.body, fontSize: 13, color: colors.outline, marginBottom: 20 },
+
+  primaryBtn: {
+    backgroundColor: INDIGO, borderRadius: 16,
+    paddingVertical: 19, alignItems: "center", marginTop: 4,
+  },
+  btnDisabled:   { opacity: 0.4 },
+  primaryBtnTxt: { fontFamily: fonts.bodyBold, fontSize: 17, color: colors.onPrimary },
+
+  switchRow: { flexDirection: "row", justifyContent: "center", marginTop: 20 },
+  switchTxt:  { fontFamily: fonts.bodySemi, fontSize: 15, color: colors.textBody },
+  switchLink: { fontFamily: fonts.bodyBold, fontSize: 15, color: INDIGO },
+
+  optinBanner: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#F0FDF4", borderRadius: 12, borderWidth: 1, borderColor: "#BBF7D0", padding: 12, marginBottom: 16 },
+  optinTitle:  { fontFamily: fonts.bodyBold, fontSize: 13, color: "#166534" },
+  optinSub:    { fontFamily: fonts.body, fontSize: 12, color: colors.textBody, marginTop: 2 },
+  optinCta:    { fontFamily: fonts.bodyBold, fontSize: 12, color: "#166534" },
+
+  modalBg:       { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", alignItems: "center", justifyContent: "center", padding: 24 },
+  modalCard:     { backgroundColor: colors.surfaceCard, borderRadius: 24, padding: 28, width: "100%", alignItems: "center", gap: 10 },
+  modalIcon:     { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.primaryFixed, alignItems: "center", justifyContent: "center", marginBottom: 4 },
+  modalTitle:    { fontFamily: fonts.display, fontSize: 20, color: colors.textHeading, textAlign: "center" },
+  modalBody:     { fontFamily: fonts.body, fontSize: 14, color: colors.textBody, textAlign: "center", lineHeight: 20, marginBottom: 4 },
+  modalBtn:      { backgroundColor: INDIGO, borderRadius: radius.xxl, paddingVertical: 15, width: "100%", alignItems: "center" },
+  modalBtnTxt:   { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.onPrimary },
+  modalCancel:   { marginTop: 4 },
+  modalCancelTxt:{ fontFamily: fonts.bodySemi, fontSize: 14, color: colors.outline },
 });

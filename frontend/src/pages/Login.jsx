@@ -82,12 +82,7 @@ export default function Login() {
       }
       const user = await loginComplete(r.data.otp_token);
       toast.success(`Welcome back, ${user.name}!`);
-      if (user?.is_worker === true) {
-        const profile = await api.get("/workers/me/profile").then((res) => res.data).catch(() => null);
-        nav(profile ? "/worker/job-feed" : "/worker/onboarding");
-      } else {
-        nav("/marketplace");
-      }
+      nav(user?.has_service_profile ? "/find-work" : "/marketplace");
     } catch (err) {
       toast.error(formatApiError(err));
     } finally {

@@ -33,7 +33,7 @@ export default function VideoProfileScreen({ navigation }) {
       const uri = result.assets[0].uri;
       const formData = new FormData();
       formData.append("file", { uri, name: "video.mp4", type: "video/mp4" });
-      await api.post("/workers/me/video", formData, {
+      await api.post("/service-profiles/mine/video", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       await refreshUser();
@@ -48,7 +48,7 @@ export default function VideoProfileScreen({ navigation }) {
   return (
     <View style={[styles.container, { paddingBottom: insets.bottom + 32 }]}>
       <View style={styles.iconWrap}>
-        <Ionicons name={hasVideo ? "videocam" : "videocam-outline"} size={64} color={hasVideo ? colors.success : colors.textMuted} />
+        <Ionicons name={hasVideo ? "videocam" : "videocam-outline"} size={64} color={hasVideo ? colors.statusSuccess : colors.outline} />
         <Text style={styles.statusText}>
           {hasVideo ? t("video_profile_exists") : t("video_profile_none")}
         </Text>
@@ -67,10 +67,10 @@ export default function VideoProfileScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container:  { flex: 1, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center", padding: spacing.xl },
+  container:  { flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center", padding: spacing.xl },
   iconWrap:   { alignItems: "center", marginBottom: spacing.lg },
-  statusText: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.text, marginTop: spacing.sm },
-  hint:       { fontFamily: fonts.body, fontSize: 13, color: colors.textMuted, textAlign: "center", marginBottom: spacing.xl },
-  btn:        { backgroundColor: colors.indigo, borderRadius: radius.lg, paddingHorizontal: spacing.xl, paddingVertical: 14 },
-  btnText:    { fontFamily: fonts.bodyBold, fontSize: 15, color: "#fff" },
+  statusText: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.textHeading, marginTop: spacing.sm },
+  hint:       { fontFamily: fonts.body, fontSize: 13, color: colors.outline, textAlign: "center", marginBottom: spacing.xl },
+  btn:        { backgroundColor: colors.primary, borderRadius: radius.xxl, paddingHorizontal: spacing.xl, paddingVertical: 14 },
+  btnText:    { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.onPrimary },
 });

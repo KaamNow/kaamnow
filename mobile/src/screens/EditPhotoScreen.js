@@ -71,11 +71,11 @@ export default function EditPhotoScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container:     { flex: 1, backgroundColor: colors.bg, alignItems: "center", justifyContent: "center", padding: spacing.lg },
+  container:     { flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center", padding: spacing.lg },
   avatarWrap:    { marginBottom: spacing.xl },
   avatar:        { width: 120, height: 120, borderRadius: 60 },
-  avatarFallback:{ backgroundColor: colors.saffron, justifyContent: "center", alignItems: "center" },
-  avatarInitial: { color: "#fff", fontSize: 48, fontFamily: fonts.display, fontWeight: "700" },
-  btn:           { backgroundColor: colors.indigo, borderRadius: radius.lg, paddingHorizontal: spacing.xl, paddingVertical: 14 },
-  btnText:       { fontFamily: fonts.bodyBold, fontSize: 15, color: "#fff" },
+  avatarFallback:{ backgroundColor: colors.primary, justifyContent: "center", alignItems: "center" },
+  avatarInitial: { color: colors.onPrimary, fontSize: 48, fontFamily: fonts.display, fontWeight: "700" },
+  btn:           { backgroundColor: colors.primary, borderRadius: radius.xxl, paddingHorizontal: spacing.xl, paddingVertical: 14 },
+  btnText:       { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.onPrimary },
 });

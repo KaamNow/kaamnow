@@ -7,9 +7,16 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import api, { formatApiError } from "../api";
 import { useAuth } from "../contexts/AuthContext";
-import { colors, fonts, spacing } from "../theme";
+import { colors, fonts, radius, spacing } from "../theme";
 
-const TABS = ["Stats", "Workers", "Customers", "Jobs"];
+const TABS = ["Stats", "Local Experts", "Users", "Jobs"];
+
+const TIER_COLORS = {
+  1: { label: "T1 Self",   icon: "shield-outline",        bg: "#f3f4f6", fg: "#6b7280" },
+  2: { label: "T2 Verified", icon: "shield-checkmark",    bg: "#dcfce7", fg: "#15803d" },
+  3: { label: "T3 Pro",    icon: "ribbon-outline",         bg: "#dbeafe", fg: "#1d4ed8" },
+  4: { label: "T4 Elite",  icon: "trophy-outline",         bg: "#fef9c3", fg: "#b45309" },
+};
 
 export default function AdminScreen() {
   const { logout } = useAuth();
@@ -26,10 +33,10 @@ export default function AdminScreen() {
   const [workerTotal, setWorkerTotal] = useState(0);
   const [workerPage, setWorkerPage] = useState(0);
 
-  // Customers
-  const [customers, setCustomers] = useState([]);
-  const [customerSearch, setCustomerSearch] = useState("");
-  const [customerTotal, setCustomerTotal] = useState(0);
+  // Users
+  const [users, setUsers] = useState([]);
+  const [userSearch, setUserSearch] = useState("");
+  const [userTotal, setUserTotal] = useState(0);
 
   // Jobs
   const [jobs, setJobs] = useState([]);
@@ -38,7 +45,7 @@ export default function AdminScreen() {
   // Broadcast modal
   const [broadcastModal, setBroadcastModal] = useState(false);
   const [broadcastMsg, setBroadcastMsg] = useState("");
-  const [broadcastAudience, setBroadcastAudience] = useState("workers");
+  const [broadcastAudience, setBroadcastAudience] = useState("experts");
   const [broadcasting, setBroadcasting] = useState(false);
 
   const LIMIT = 20;
@@ -55,24 +62,24 @@ export default function AdminScreen() {
     try {
       const p = new URLSearchParams({ limit: LIMIT, skip: page * LIMIT });
       if (workerSearch) p.append("search", workerSearch);
-      const r = await api.get(`/admin/workers?${p}`);
+      const r = await api.get(`/admin/experts?${p}`);
       setWorkers(r.data.items || []);
       setWorkerTotal(r.data.total || 0);
-    } catch { Alert.alert("Error", "Failed to load workers"); }
+    } catch { Alert.alert("Error", "Failed to load Local Experts"); }
     finally { setLoading(false); }
   }, [workerSearch]);
 
-  const fetchCustomers = useCallback(async () => {
+  const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
       const p = new URLSearchParams({ limit: LIMIT });
-      if (customerSearch) p.append("search", customerSearch);
-      const r = await api.get(`/admin/customers?${p}`);
-      setCustomers(r.data.items || []);
-      setCustomerTotal(r.data.total || 0);
-    } catch { Alert.alert("Error", "Failed to load customers"); }
+      if (userSearch) p.append("search", userSearch);
+      const r = await api.get(`/admin/users?${p}`);
+      setUsers(r.data.items || []);
+      setUserTotal(r.data.total || 0);
+    } catch { Alert.alert("Error", "Failed to load users"); }
     finally { setLoading(false); }
-  }, [customerSearch]);
+  }, [userSearch]);
 
   const fetchJobs = useCallback(async () => {
     setLoading(true);
@@ -86,16 +93,16 @@ export default function AdminScreen() {
 
   useEffect(() => {
     fetchStats();
-    if (activeTab === "Workers") fetchWorkers(0);
-    if (activeTab === "Customers") fetchCustomers();
+    if (activeTab === "Local Experts") fetchWorkers(0);
+    if (activeTab === "Users") fetchUsers();
     if (activeTab === "Jobs") fetchJobs();
   }, [activeTab]);
 
   const onRefresh = async () => {
     setRefreshing(true);
     await fetchStats();
-    if (activeTab === "Workers") await fetchWorkers(0);
-    if (activeTab === "Customers") await fetchCustomers();
+    if (activeTab === "Local Experts") await fetchWorkers(0);
+    if (activeTab === "Users") await fetchUsers();
     if (activeTab === "Jobs") await fetchJobs();
     setRefreshing(false);
   };
@@ -104,9 +111,34 @@ export default function AdminScreen() {
   const suspendWorker = async (id, status) => {
     const suspend = status !== "suspended";
     try {
-      await api.patch(`/admin/workers/${id}/suspend`, { suspend });
+      await api.patch(`/admin/experts/${id}/suspend`, { suspend });
       fetchWorkers(workerPage);
     } catch (e) { Alert.alert("Error", formatApiError(e)); }
+  };
+
+  const setTrustTier = (worker) => {
+    const TIERS = [
+      { tier: 1, label: "Tier 1 — Self Verified" },
+      { tier: 2, label: "Tier 2 — Verified ✓" },
+      { tier: 3, label: "Tier 3 — KaamNow Pro" },
+      { tier: 4, label: "Tier 4 — Elite Expert" },
+    ];
+    Alert.alert(
+      `Set Trust Tier — ${worker.display_name || worker.name}`,
+      `Current: Tier ${worker.trust_tier || 1}`,
+      [
+        ...TIERS.map(({ tier, label }) => ({
+          text: label,
+          onPress: async () => {
+            try {
+              await api.patch(`/admin/experts/${worker.id}/trust-tier`, { trust_tier: tier });
+              fetchWorkers(workerPage);
+            } catch (e) { Alert.alert("Error", formatApiError(e)); }
+          },
+        })),
+        { text: "Cancel", style: "cancel" },
+      ]
+    );
   };
 
   const deleteWorker = async (id, name) => {
@@ -116,16 +148,11 @@ export default function AdminScreen() {
       [
         { text: "Cancel", style: "cancel" },
         { text: "Delete", style: "destructive", onPress: async () => {
-          try { await api.delete(`/admin/workers/${id}`); fetchWorkers(workerPage); }
+          try { await api.delete(`/admin/experts/${id}`); fetchWorkers(workerPage); }
           catch (e) { Alert.alert("Error", formatApiError(e)); }
         }},
       ]
     );
-  };
-
-  const setTier = async (id, tier) => {
-    try { await api.patch(`/admin/workers/${id}/tier`, { tier }); fetchWorkers(workerPage); }
-    catch (e) { Alert.alert("Error", formatApiError(e)); }
   };
 
   const sendBroadcast = async () => {
@@ -153,7 +180,7 @@ export default function AdminScreen() {
             <Ionicons name="megaphone-outline" size={18} color="#fff" />
           </Pressable>
           <Pressable style={s.logoutBtn} onPress={() => Alert.alert("Logout?", "", [{ text: "Cancel", style: "cancel" }, { text: "Logout", onPress: logout }])}>
-            <Ionicons name="log-out-outline" size={18} color={colors.textSecondary} />
+            <Ionicons name="log-out-outline" size={18} color={colors.textBody} />
           </Pressable>
         </View>
       </View>
@@ -170,7 +197,7 @@ export default function AdminScreen() {
       </ScrollView>
 
       <ScrollView
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.saffron} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />}
         contentContainerStyle={{ padding: spacing.lg, paddingBottom: 100 }}
         keyboardShouldPersistTaps="handled"
       >
@@ -178,7 +205,7 @@ export default function AdminScreen() {
         {activeTab === "Stats" && (
           <View style={s.statsGrid}>
             {[
-              { label: "Workers", val: stats?.workers ?? "—", icon: "construct-outline", color: "#6366f1" },
+              { label: "Local Experts", val: stats?.workers ?? "—", icon: "construct-outline", color: "#6366f1" },
               { label: "Customers", val: stats?.customers ?? "—", icon: "people-outline", color: "#0ea5e9" },
               { label: "Open Jobs", val: stats?.open_jobs ?? "—", icon: "briefcase-outline", color: "#f59e0b" },
               { label: "Completed", val: stats?.completed_jobs ?? "—", icon: "checkmark-circle-outline", color: "#10b981" },
@@ -194,15 +221,15 @@ export default function AdminScreen() {
           </View>
         )}
 
-        {/* ── WORKERS ── */}
-        {activeTab === "Workers" && (
+        {/* ── LOCAL EXPERTS ── */}
+        {activeTab === "Local Experts" && (
           <>
             <View style={s.searchRow}>
-              <Ionicons name="search-outline" size={15} color={colors.textMuted} />
+              <Ionicons name="search-outline" size={15} color={colors.outline} />
               <TextInput
                 style={s.searchInput}
-                placeholder="Search workers…"
-                placeholderTextColor={colors.textMuted}
+                placeholder="Search Local Experts…"
+                placeholderTextColor={colors.outline}
                 value={workerSearch}
                 onChangeText={setWorkerSearch}
                 onSubmitEditing={() => fetchWorkers(0)}
@@ -210,7 +237,7 @@ export default function AdminScreen() {
               />
             </View>
             <Text style={s.countTxt}>{workerTotal} workers</Text>
-            {loading && <ActivityIndicator color={colors.saffron} style={{ marginVertical: 20 }} />}
+            {loading && <ActivityIndicator color={colors.primary} style={{ marginVertical: 20 }} />}
             {workers.map(w => (
               <View key={w.id} style={s.card}>
                 <View style={s.cardTop}>
@@ -227,12 +254,16 @@ export default function AdminScreen() {
                   </View>
                 </View>
                 <View style={s.cardActions}>
-                  {[1,2,3,4].map(t => (
-                    <Pressable key={t} onPress={() => setTier(w.id, t)}
-                      style={[s.tierBtn, w.trust_tier === t && s.tierBtnOn]}>
-                      <Text style={[s.tierTxt, w.trust_tier === t && s.tierTxtOn]}>T{t}</Text>
-                    </Pressable>
-                  ))}
+                  {/* Trust tier badge — tap to change */}
+                  <Pressable
+                    onPress={() => setTrustTier(w)}
+                    style={[s.tierBtn, { backgroundColor: TIER_COLORS[w.trust_tier || 1]?.bg }]}
+                  >
+                    <Ionicons name={TIER_COLORS[w.trust_tier || 1]?.icon} size={12} color={TIER_COLORS[w.trust_tier || 1]?.fg} />
+                    <Text style={[s.tierBtnText, { color: TIER_COLORS[w.trust_tier || 1]?.fg }]}>
+                      {TIER_COLORS[w.trust_tier || 1]?.label}
+                    </Text>
+                  </Pressable>
                   <Pressable onPress={() => suspendWorker(w.id, w.availability_status)}
                     style={[s.actionBtn, { backgroundColor: w.availability_status === "suspended" ? "#dcfce7" : "#fff7ed" }]}>
                     <Ionicons name={w.availability_status === "suspended" ? "shield-checkmark-outline" : "pause-outline"} size={14}
@@ -247,37 +278,37 @@ export default function AdminScreen() {
           </>
         )}
 
-        {/* ── CUSTOMERS ── */}
-        {activeTab === "Customers" && (
+        {/* ── USERS ── */}
+        {activeTab === "Users" && (
           <>
             <View style={s.searchRow}>
-              <Ionicons name="search-outline" size={15} color={colors.textMuted} />
+              <Ionicons name="search-outline" size={15} color={colors.outline} />
               <TextInput
                 style={s.searchInput}
-                placeholder="Search customers…"
-                placeholderTextColor={colors.textMuted}
-                value={customerSearch}
-                onChangeText={setCustomerSearch}
-                onSubmitEditing={fetchCustomers}
+                placeholder="Search users…"
+                placeholderTextColor={colors.outline}
+                value={userSearch}
+                onChangeText={setUserSearch}
+                onSubmitEditing={fetchUsers}
                 returnKeyType="search"
               />
             </View>
-            <Text style={s.countTxt}>{customerTotal} customers</Text>
-            {loading && <ActivityIndicator color={colors.saffron} style={{ marginVertical: 20 }} />}
-            {customers.map(c => (
-              <View key={c.id} style={s.card}>
+            <Text style={s.countTxt}>{userTotal} users</Text>
+            {loading && <ActivityIndicator color={colors.primary} style={{ marginVertical: 20 }} />}
+            {users.map(u => (
+              <View key={u.id} style={s.card}>
                 <View style={s.cardTop}>
                   <View style={[s.avatar, { backgroundColor: "#e0e7ff" }]}>
-                    <Text style={[s.avatarTxt, { color: "#6366f1" }]}>{(c.name||"?")[0].toUpperCase()}</Text>
+                    <Text style={[s.avatarTxt, { color: "#6366f1" }]}>{(u.name||"?")[0].toUpperCase()}</Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={s.cardName}>{c.name}</Text>
-                    <Text style={s.cardSub}>{c.phone || "No phone"}</Text>
-                    <Text style={s.cardSub}>{c.village || ""}{c.district ? `, ${c.district}` : ""}</Text>
+                    <Text style={s.cardName}>{u.name}</Text>
+                    <Text style={s.cardSub}>{u.phone_primary || "No phone"}</Text>
+                    <Text style={s.cardSub}>{u.village || ""}{u.has_service_profile ? " · Expert" : ""}</Text>
                   </View>
-                  <View style={[s.statusBadge, { backgroundColor: c.status === "suspended" ? "#fee2e2" : "#f0fdf4" }]}>
-                    <Text style={[s.statusTxt, { color: c.status === "suspended" ? "#dc2626" : "#15803d" }]}>
-                      {c.status || "active"}
+                  <View style={[s.statusBadge, { backgroundColor: u.status === "suspended" || u.is_active === false ? "#fee2e2" : "#f0fdf4" }]}>
+                    <Text style={[s.statusTxt, { color: u.status === "suspended" || u.is_active === false ? "#dc2626" : "#15803d" }]}>
+                      {u.status || (u.is_active ? "active" : "inactive")}
                     </Text>
                   </View>
                 </View>
@@ -290,7 +321,7 @@ export default function AdminScreen() {
         {activeTab === "Jobs" && (
           <>
             <Text style={s.countTxt}>{jobTotal} jobs</Text>
-            {loading && <ActivityIndicator color={colors.saffron} style={{ marginVertical: 20 }} />}
+            {loading && <ActivityIndicator color={colors.primary} style={{ marginVertical: 20 }} />}
             {jobs.map(j => (
               <View key={j.id} style={s.card}>
                 <Text style={s.cardName}>{j.title}</Text>
@@ -313,7 +344,7 @@ export default function AdminScreen() {
           <View style={s.modalCard}>
             <Text style={s.modalTitle}>📢 Broadcast Message</Text>
             <View style={s.audienceRow}>
-              {["workers", "customers", "all"].map(a => (
+              {["experts", "all"].map(a => (
                 <Pressable key={a} onPress={() => setBroadcastAudience(a)}
                   style={[s.audienceBtn, broadcastAudience === a && s.audienceBtnOn]}>
                   <Text style={[s.audienceTxt, broadcastAudience === a && s.audienceTxtOn]}>{a}</Text>
@@ -323,7 +354,7 @@ export default function AdminScreen() {
             <TextInput
               style={s.broadcastInput}
               placeholder="Type your message…"
-              placeholderTextColor={colors.textMuted}
+              placeholderTextColor={colors.outline}
               value={broadcastMsg}
               onChangeText={setBroadcastMsg}
               multiline
@@ -346,52 +377,54 @@ export default function AdminScreen() {
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.bg },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: spacing.lg, paddingVertical: 12, backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: colors.border },
-  label: { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1.5, color: colors.saffron },
-  title: { fontFamily: fonts.display, fontSize: 20, color: colors.text },
+  safe: { flex: 1, backgroundColor: colors.background },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: spacing.lg, paddingVertical: 12, backgroundColor: colors.surfaceCard, borderBottomWidth: 1, borderBottomColor: colors.borderSubtle },
+  label: { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1.5, color: colors.primary },
+  title: { fontFamily: fonts.display, fontSize: 20, color: colors.textHeading },
   headerActions: { flexDirection: "row", gap: 8 },
-  broadcastBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: colors.saffron, alignItems: "center", justifyContent: "center" },
+  broadcastBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   logoutBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: "#f3f4f6", alignItems: "center", justifyContent: "center" },
-  tabBar: { backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: colors.border },
+  tabBar: { backgroundColor: colors.surfaceCard, borderBottomWidth: 1, borderBottomColor: colors.borderSubtle },
   tabRow: { flexDirection: "row", paddingHorizontal: spacing.lg, gap: 4, paddingVertical: 8 },
-  tab: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20, borderWidth: 1.5, borderColor: colors.border },
-  tabOn: { backgroundColor: colors.saffron, borderColor: colors.saffron },
-  tabTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.textSecondary },
-  tabTxtOn: { color: "#fff" },
+  tab: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20, borderWidth: 1.5, borderColor: colors.borderSubtle },
+  tabOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  tabTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.textBody },
+  tabTxtOn: { color: colors.onPrimary },
   statsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
-  statCard: { width: "47%", backgroundColor: "#fff", borderRadius: 14, padding: 16, borderWidth: 1, borderColor: colors.border, alignItems: "center", gap: 6 },
-  statVal: { fontFamily: fonts.display, fontSize: 26, color: colors.text },
-  statLabel: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.textMuted, textTransform: "uppercase", letterSpacing: 0.8 },
-  searchRow: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#fff", borderRadius: 12, borderWidth: 1.5, borderColor: colors.border, paddingHorizontal: 12, marginBottom: 12 },
-  searchInput: { flex: 1, paddingVertical: 10, fontFamily: fonts.body, fontSize: 14, color: colors.text },
-  countTxt: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginBottom: 10 },
-  card: { backgroundColor: "#fff", borderRadius: 14, borderWidth: 1, borderColor: colors.border, padding: 14, marginBottom: 10 },
+  statCard: { width: "47%", backgroundColor: colors.surfaceCard, borderRadius: radius.xxl, padding: 16, borderWidth: 1, borderColor: colors.borderSubtle, alignItems: "center", gap: 6 },
+  statVal: { fontFamily: fonts.display, fontSize: 26, color: colors.textHeading },
+  statLabel: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.outline, textTransform: "uppercase", letterSpacing: 0.8 },
+  searchRow: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.surfaceCard, borderRadius: 12, borderWidth: 1.5, borderColor: colors.borderSubtle, paddingHorizontal: 12, marginBottom: 12 },
+  searchInput: { flex: 1, paddingVertical: 10, fontFamily: fonts.body, fontSize: 14, color: colors.textHeading },
+  countTxt: { fontFamily: fonts.body, fontSize: 12, color: colors.outline, marginBottom: 10 },
+  card: { backgroundColor: colors.surfaceCard, borderRadius: radius.xxl, borderWidth: 1, borderColor: colors.borderSubtle, padding: 14, marginBottom: 10 },
   cardTop: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
-  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.saffronTint, alignItems: "center", justifyContent: "center" },
-  avatarTxt: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.saffron },
-  cardName: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.text },
-  cardSub: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.primaryFixed, alignItems: "center", justifyContent: "center" },
+  avatarTxt: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.primary },
+  cardName: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.textHeading },
+  cardSub: { fontFamily: fonts.body, fontSize: 12, color: colors.outline, marginTop: 2 },
   statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
   statusTxt: { fontFamily: fonts.bodyBold, fontSize: 11 },
   cardActions: { flexDirection: "row", gap: 6, marginTop: 10, alignItems: "center" },
-  tierBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1.5, borderColor: colors.border },
-  tierBtnOn: { backgroundColor: colors.saffron, borderColor: colors.saffron },
-  tierTxt: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.textSecondary },
-  tierTxtOn: { color: "#fff" },
+  tierBtn: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1.5, borderColor: colors.borderSubtle },
+  tierBtnOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  tierTxt: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.textBody },
+  tierTxtOn: { color: colors.onPrimary },
   actionBtn: { width: 32, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center" },
+  tierBtn: { flexDirection: "row", alignItems: "center", gap: 4, flex: 1, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  tierBtnText: { fontFamily: fonts.bodyBold, fontSize: 11 },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
-  modalCard: { backgroundColor: "#fff", borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },
-  modalTitle: { fontFamily: fonts.bodyBold, fontSize: 18, color: colors.text, marginBottom: 16 },
+  modalCard: { backgroundColor: colors.surfaceCard, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 },
+  modalTitle: { fontFamily: fonts.bodyBold, fontSize: 18, color: colors.textHeading, marginBottom: 16 },
   audienceRow: { flexDirection: "row", gap: 8, marginBottom: 14 },
-  audienceBtn: { flex: 1, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5, borderColor: colors.border, alignItems: "center" },
-  audienceBtnOn: { backgroundColor: colors.saffron, borderColor: colors.saffron },
-  audienceTxt: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.textSecondary, textTransform: "capitalize" },
-  audienceTxtOn: { color: "#fff" },
-  broadcastInput: { backgroundColor: "#f9f8f5", borderRadius: 12, padding: 12, fontFamily: fonts.body, fontSize: 14, color: colors.text, minHeight: 100, textAlignVertical: "top", marginBottom: 16 },
+  audienceBtn: { flex: 1, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5, borderColor: colors.borderSubtle, alignItems: "center" },
+  audienceBtnOn: { backgroundColor: colors.primary, borderColor: colors.primary },
+  audienceTxt: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.textBody, textTransform: "capitalize" },
+  audienceTxtOn: { color: colors.onPrimary },
+  broadcastInput: { backgroundColor: colors.surfaceContainerLow, borderRadius: 12, padding: 12, fontFamily: fonts.body, fontSize: 14, color: colors.textHeading, minHeight: 100, textAlignVertical: "top", marginBottom: 16 },
   modalActions: { flexDirection: "row", gap: 12 },
-  modalCancel: { flex: 1, paddingVertical: 14, borderRadius: 12, borderWidth: 1.5, borderColor: colors.border, alignItems: "center" },
-  modalCancelTxt: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.textSecondary },
-  modalConfirm: { flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: colors.saffron, alignItems: "center" },
-  modalConfirmTxt: { fontFamily: fonts.bodyBold, fontSize: 14, color: "#fff" },
+  modalCancel: { flex: 1, paddingVertical: 14, borderRadius: 12, borderWidth: 1.5, borderColor: colors.borderSubtle, alignItems: "center" },
+  modalCancelTxt: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.textBody },
+  modalConfirm: { flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: colors.primary, alignItems: "center" },
+  modalConfirmTxt: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.onPrimary },
 });

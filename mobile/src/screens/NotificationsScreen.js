@@ -1,120 +1,204 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useTranslation } from "../i18n";
-import { colors, fonts, spacing, radius } from "../theme";
+import { useFocusEffect } from "@react-navigation/native";
+import { colors, fonts } from "../theme";
 import api from "../lib/api";
 
-const KIND_ICON = {
-  new_request:     "briefcase-outline",
-  accepted:        "checkmark-circle-outline",
-  rejected:        "close-circle-outline",
-  completed:       "ribbon-outline",
-  new_message:     "chatbubble-outline",
-  payment_received:"card-outline",
-  wallet_credited: "wallet-outline",
+// Map notification type/kind → icon + color
+const KIND_CONFIG = {
+  new_message:       { icon: "chatbubble-outline",        color: "#6366f1", bg: "#eef2ff" },
+  new_request:       { icon: "briefcase-outline",         color: "#f59e0b", bg: "#fef3c7" },
+  booking_request:   { icon: "briefcase-outline",         color: "#f59e0b", bg: "#fef3c7" },
+  accepted:          { icon: "checkmark-circle-outline",  color: "#10b981", bg: "#d1fae5" },
+  booking_accepted:  { icon: "checkmark-circle-outline",  color: "#10b981", bg: "#d1fae5" },
+  rejected:          { icon: "close-circle-outline",      color: "#ef4444", bg: "#fee2e2" },
+  booking_rejected:  { icon: "close-circle-outline",      color: "#ef4444", bg: "#fee2e2" },
+  cancelled:         { icon: "close-circle-outline",      color: "#6b7280", bg: "#f3f4f6" },
+  completed:         { icon: "ribbon-outline",            color: "#3b82f6", bg: "#dbeafe" },
+  payment_received:  { icon: "card-outline",              color: "#10b981", bg: "#d1fae5" },
+  wallet_credited:   { icon: "wallet-outline",            color: "#6366f1", bg: "#eef2ff" },
+  job_alert:         { icon: "location-outline",          color: "#f59e0b", bg: "#fef3c7" },
+  work_request:      { icon: "briefcase-outline",         color: "#f59e0b", bg: "#fef3c7" },
 };
 
+function timeAgo(iso) {
+  if (!iso) return "";
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1)  return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
 export default function NotificationsScreen({ navigation }) {
-  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const [items, setItems] = useState([]);
+  const [items, setItems]   = useState([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     try {
-      const r = await api.get("/notifications");
+      const r = await api.get("/notifications/mine");
       setItems(r.data?.items || r.data || []);
     } catch {}
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const markAllRead = async () => {
     try { await api.post("/notifications/read-all"); load(); } catch {}
   };
 
-  const handleTap = (item) => {
-    if (!item.deep_link) return;
-    const [, path] = item.deep_link.split("kaamnow://");
-    if (!path) return;
-    if (path.startsWith("engagement/")) navigation.navigate("EngagementDetail", { id: path.split("/")[1] });
-    else if (path.startsWith("chat/"))        navigation.navigate("Chat", { engagementId: path.split("/")[1] });
+  const handleTap = async (item) => {
+    // Mark as read
+    if (!item.read) {
+      try { await api.post(`/notifications/${item.id}/read`); } catch {}
+      setItems(prev => prev.map(n => n.id === item.id ? { ...n, read: true } : n));
+    }
+
+    // Route based on type/kind + ref
+    const kind = item.type || item.kind || "";
+    const refId = item.work_request_id || item.ref_id;
+
+    // job_alert ref_id is a job_id (no detail screen); wallet_credited ref_id is a tx id
+    if (!refId || kind === "job_alert" || kind === "wallet_credited") return;
+
+    if (kind === "new_message" || kind === "accepted" || kind === "booking_accepted") {
+      navigation.navigate("Chat", { engagementId: refId });
+    } else {
+      navigation.navigate("EngagementDetail", { id: refId });
+    }
   };
 
-  const renderItem = ({ item }) => (
-    <TouchableOpacity style={[styles.row, !item.read && styles.rowUnread]} onPress={() => handleTap(item)} activeOpacity={0.75}>
-      <View style={styles.iconWrap}>
-        <Ionicons name={KIND_ICON[item.kind] || "notifications-outline"} size={20} color={colors.indigo} />
-      </View>
-      <View style={styles.textWrap}>
-        <Text style={styles.title} numberOfLines={1}>{item.title}</Text>
-        <Text style={styles.body} numberOfLines={2}>{item.body}</Text>
-        <Text style={styles.time}>{new Date(item.created_at).toLocaleDateString()}</Text>
-      </View>
-      {!item.read && <View style={styles.dot} />}
-    </TouchableOpacity>
-  );
+  const unreadCount = items.filter(n => !n.read).length;
+
+  const renderItem = ({ item }) => {
+    const kind   = item.type || item.kind || "";
+    const cfg    = KIND_CONFIG[kind] || { icon: "notifications-outline", color: colors.primary, bg: "#eef2ff" };
+    const hasRef = !!(item.work_request_id || item.ref_id) && kind !== "job_alert" && kind !== "wallet_credited";
+
+    return (
+      <TouchableOpacity
+        style={[S.row, !item.read && S.rowUnread]}
+        onPress={() => handleTap(item)}
+        activeOpacity={hasRef ? 0.7 : 1}
+      >
+        {/* Icon */}
+        <View style={[S.iconWrap, { backgroundColor: cfg.bg }]}>
+          <Ionicons name={cfg.icon} size={20} color={cfg.color} />
+        </View>
+
+        {/* Text */}
+        <View style={S.textWrap}>
+          <Text style={S.rowTitle} numberOfLines={1}>{item.title}</Text>
+          <Text style={S.rowBody} numberOfLines={2}>{item.body}</Text>
+          <View style={S.rowMeta}>
+            <Text style={S.rowTime}>{timeAgo(item.created_at)}</Text>
+            {hasRef && (
+              <View style={S.tapHint}>
+                <Text style={[S.tapHintText, { color: cfg.color }]}>Tap to open</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+        {/* Unread dot */}
+        {!item.read && <View style={[S.dot, { backgroundColor: cfg.color }]} />}
+      </TouchableOpacity>
+    );
+  };
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>{t("notifications_title")}</Text>
-        <TouchableOpacity onPress={markAllRead}>
-          <Text style={styles.markRead}>{t("notifications_mark_all_read")}</Text>
+    <View style={[S.container, { paddingTop: insets.top }]}>
+      {/* Header */}
+      <View style={S.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={S.backBtn} hitSlop={8}>
+          <Ionicons name="arrow-back" size={22} color={colors.textHeading} />
         </TouchableOpacity>
+        <Text style={S.headerTitle}>Notifications</Text>
+        {unreadCount > 0 ? (
+          <TouchableOpacity onPress={markAllRead} hitSlop={8}>
+            <Text style={S.markAll}>Mark all read</Text>
+          </TouchableOpacity>
+        ) : <View style={{ width: 70 }} />}
       </View>
 
-      {loading
-        ? <View style={styles.center}><ActivityIndicator color={colors.saffron} /></View>
-        : (
-          <FlatList
-            data={items}
-            keyExtractor={(n) => n.id}
-            renderItem={renderItem}
-            contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
-            ListEmptyComponent={
-              <View style={styles.empty}>
-                <Ionicons name="notifications-off-outline" size={40} color={colors.textMuted} />
-                <Text style={styles.emptyText}>{t("notifications_empty")}</Text>
+      {loading ? (
+        <View style={S.center}><ActivityIndicator color={colors.primary} size="large" /></View>
+      ) : (
+        <FlatList
+          data={items}
+          keyExtractor={(n) => n.id}
+          renderItem={renderItem}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+          showsVerticalScrollIndicator={false}
+          ItemSeparatorComponent={() => <View style={S.separator} />}
+          ListEmptyComponent={
+            <View style={S.empty}>
+              <View style={S.emptyIcon}>
+                <Ionicons name="notifications-off-outline" size={34} color={colors.outline} />
               </View>
-            }
-          />
-        )
-      }
+              <Text style={S.emptyTitle}>No notifications yet</Text>
+              <Text style={S.emptySub}>We'll let you know when something{"\n"}needs your attention.</Text>
+            </View>
+          }
+        />
+      )}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
+const S = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#f5f5f7" },
   center:    { flex: 1, justifyContent: "center", alignItems: "center" },
 
+  // Header
   header: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
-    backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: colors.border,
+    flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 16, paddingVertical: 14,
+    backgroundColor: "#ffffff",
+    borderBottomWidth: 1, borderBottomColor: "#e8e8ed",
   },
-  headerTitle: { fontFamily: fonts.bodyBold, fontSize: 18, color: colors.text },
-  markRead:    { fontFamily: fonts.body, fontSize: 13, color: colors.indigo },
+  backBtn: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: "#f0f0f5", alignItems: "center", justifyContent: "center",
+  },
+  headerTitle: {
+    flex: 1, textAlign: "center",
+    fontFamily: fonts.bodyBold, fontSize: 17, color: colors.textHeading,
+  },
+  markAll: { fontFamily: fonts.bodySemi, fontSize: 13, color: colors.primary, width: 70, textAlign: "right" },
 
+  // Row
   row: {
     flexDirection: "row", alignItems: "flex-start",
-    backgroundColor: "#fff", paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
-    borderBottomWidth: 1, borderBottomColor: colors.border, gap: spacing.sm,
+    backgroundColor: "#ffffff",
+    paddingHorizontal: 16, paddingVertical: 14, gap: 12,
   },
-  rowUnread:  { backgroundColor: "#f0f4ff" },
-  iconWrap:   { width: 36, height: 36, borderRadius: 18, backgroundColor: "#e0e7ff", justifyContent: "center", alignItems: "center" },
-  textWrap:   { flex: 1 },
-  title:      { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.text, marginBottom: 2 },
-  body:       { fontFamily: fonts.body, fontSize: 13, color: colors.textMuted, marginBottom: 3 },
-  time:       { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted },
-  dot:        { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.indigo, marginTop: 6 },
+  rowUnread: { backgroundColor: "#fafbff" },
+  separator: { height: 1, backgroundColor: "#f0f0f5", marginLeft: 68 },
 
-  empty: { alignItems: "center", marginTop: 100, gap: spacing.sm },
-  emptyText: { fontFamily: fonts.body, fontSize: 14, color: colors.textMuted },
+  iconWrap: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center", marginTop: 2 },
+
+  textWrap: { flex: 1 },
+  rowTitle: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.textHeading, marginBottom: 3 },
+  rowBody:  { fontFamily: fonts.body, fontSize: 13, color: colors.outline, lineHeight: 18, marginBottom: 5 },
+  rowMeta:  { flexDirection: "row", alignItems: "center", gap: 10 },
+  rowTime:  { fontFamily: fonts.body, fontSize: 11, color: colors.outline },
+  tapHint:  { borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2, backgroundColor: "#f0f0f5" },
+  tapHintText: { fontFamily: fonts.bodySemi, fontSize: 10 },
+
+  dot: { width: 8, height: 8, borderRadius: 4, marginTop: 6 },
+
+  // Empty
+  empty:      { alignItems: "center", justifyContent: "center", marginTop: 100 },
+  emptyIcon:  { width: 72, height: 72, borderRadius: 22, backgroundColor: "#f0f0f5", alignItems: "center", justifyContent: "center", marginBottom: 18 },
+  emptyTitle: { fontFamily: fonts.bodyBold, fontSize: 17, color: colors.textHeading, marginBottom: 8 },
+  emptySub:   { fontFamily: fonts.body, fontSize: 14, color: colors.outline, textAlign: "center", lineHeight: 22 },
 });

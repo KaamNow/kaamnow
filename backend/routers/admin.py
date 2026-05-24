@@ -1,6 +1,7 @@
 import logging
 import re
 import uuid
+import uuid as _uuid
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -8,7 +9,6 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from ..auth import create_token, get_current_user, verify_password
 from ..config import settings
 from ..db import db
-from ..engagements import _notify
 from ..utils import utc_now_iso
 from ..whatsapp_notify import _send as wa_send
 
@@ -114,45 +114,34 @@ async def bootstrap_admin(body: dict, x_bootstrap_secret: Optional[str] = Header
 
 @router.get("/stats")
 async def get_stats(admin: dict = Depends(get_admin_user)):
-    total_workers = await db.workers.count_documents({})
-    total_customers = await db.users.count_documents({"is_customer": {"$ne": False}})
+    total_users = await db.users.count_documents({})
+    total_experts = await db.service_profiles.count_documents({})
     total_jobs = await db.jobs.count_documents({})
     active_jobs = await db.jobs.count_documents({"status": "open"})
 
-    total_engagements = await db.engagements.count_documents({})
-    active_engagements = await db.engagements.count_documents(
+    total_requests = await db.work_requests.count_documents({})
+    active_requests = await db.work_requests.count_documents(
         {"status": {"$in": ["requested", "accepted"]}}
     )
-    completed_engagements = await db.engagements.count_documents({"status": "completed"})
+    completed_requests = await db.work_requests.count_documents({"status": "completed"})
 
-    # Tier breakdown
-    tier_pipeline = [{"$group": {"_id": "$trust_tier", "count": {"$sum": 1}}}]
-    tier_docs = await db.workers.aggregate(tier_pipeline).to_list(10)
-    tier_breakdown = {str(t["_id"] or 1): t["count"] for t in tier_docs}
-
-    # GMV — sum of daily_rate on completed engagements
     gmv_pipeline = [
         {"$match": {"status": "completed"}},
         {"$group": {"_id": None, "total": {"$sum": "$daily_rate"}}},
     ]
-    gmv_docs = await db.engagements.aggregate(gmv_pipeline).to_list(1)
+    gmv_docs = await db.work_requests.aggregate(gmv_pipeline).to_list(1)
     gmv = gmv_docs[0]["total"] if gmv_docs else 0
 
-    # Restricted workers
-    restricted = await db.workers.count_documents({"availability_status": "restricted"})
-
     return {
-        "workers": total_workers,
-        "customers": total_customers,
+        "users": total_users,
+        "experts": total_experts,
         "jobs": {"total": total_jobs, "active": active_jobs},
-        "engagements": {
-            "total": total_engagements,
-            "active": active_engagements,
-            "completed": completed_engagements,
+        "work_requests": {
+            "total": total_requests,
+            "active": active_requests,
+            "completed": completed_requests,
         },
-        "tier_breakdown": tier_breakdown,
         "gmv": gmv,
-        "restricted_workers": restricted,
     }
 
 
@@ -196,25 +185,19 @@ async def update_user_status(user_id: str, body: dict, admin: dict = Depends(get
     update_data = {}
     if "status" in body:
         update_data["status"] = body["status"]
-    if not update_data and "trust_tier" not in body:
+    if not update_data:
         raise HTTPException(status_code=400, detail="Invalid payload")
-
-    if update_data:
-        res = await db.users.update_one({"id": user_id}, {"$set": update_data})
-        if res.matched_count == 0:
-            raise HTTPException(status_code=404, detail="User not found")
-
-    if "trust_tier" in body:
-        await db.workers.update_one(
-            {"user_id": user_id}, {"$set": {"trust_tier": int(body["trust_tier"])}}
-        )
-
+    res = await db.users.update_one({"id": user_id}, {"$set": update_data})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
     return {"ok": True}
 
 
 @router.post("/users/{user_id}/ban")
 async def ban_user(user_id: str, admin: dict = Depends(get_admin_user)):
-    res = await db.users.update_one({"id": user_id}, {"$set": {"is_active": False, "status": "banned"}})
+    res = await db.users.update_one(
+        {"id": user_id}, {"$set": {"is_active": False, "status": "banned"}}
+    )
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
     return {"ok": True}
@@ -233,140 +216,129 @@ async def flag_user(user_id: str, admin: dict = Depends(get_admin_user)):
 # ---------------------------------------------------------------------------
 
 
-@router.get("/workers")
-async def list_workers(
+@router.get("/experts")
+async def list_experts(
     search: Optional[str] = None,
-    tier: Optional[int] = None,
-    availability: Optional[str] = None,
-    state: Optional[str] = None,
     skill: Optional[str] = None,
+    available_only: bool = False,
     limit: int = 50,
     skip: int = 0,
     admin: dict = Depends(get_admin_user),
 ):
-    query = {}
-    if tier is not None:
-        query["trust_tier"] = tier
-    if availability:
-        query["availability_status"] = availability
-    if state:
-        query["state"] = {"$regex": re.escape(state), "$options": "i"}
+    query: dict = {}
+    if available_only:
+        query["availability"] = True
     if skill:
-        query["skills"] = {"$regex": re.escape(skill), "$options": "i"}
+        query["skills"] = {"$in": [skill]}
     if search:
         pattern = re.escape(search.strip())
-        query["$or"] = [
-            {"name": {"$regex": pattern, "$options": "i"}},
-        ]
+        query["display_name"] = {"$regex": pattern, "$options": "i"}
 
-    workers = (
-        await db.workers.find(query, {"_id": 0})
+    profiles = (
+        await db.service_profiles.find(query, {"_id": 0})
         .skip(skip)
         .limit(limit)
         .sort("created_at", -1)
         .to_list(limit)
     )
-
-    # Attach phone from users collection
-    user_ids = [w["user_id"] for w in workers if w.get("user_id")]
+    user_ids = [p["user_id"] for p in profiles if p.get("user_id")]
     user_docs = await db.users.find(
-        {"id": {"$in": user_ids}}, {"id": 1, "phone_primary": 1, "status": 1, "_id": 0}
+        {"id": {"$in": user_ids}}, {"id": 1, "phone_primary": 1, "is_active": 1, "_id": 0}
     ).to_list(len(user_ids))
     user_map = {u["id"]: u for u in user_docs}
+    for p in profiles:
+        u = user_map.get(p.get("user_id"), {})
+        p["phone"] = u.get("phone_primary", "")
+        p["is_active"] = u.get("is_active", True)
 
-    for w in workers:
-        u = user_map.get(w.get("user_id"), {})
-        w["phone"] = u.get("phone_primary", "")
-        w["account_status"] = u.get("status", "active")
-
-    total = await db.workers.count_documents(query)
-    return {"items": workers, "total": total, "skip": skip, "limit": limit}
-
-
-@router.patch("/workers/{worker_id}/tier")
-async def set_worker_tier(worker_id: str, body: dict, admin: dict = Depends(get_admin_user)):
-    tier = body.get("tier")
-    if tier not in (1, 2, 3, 4):
-        raise HTTPException(status_code=400, detail="tier must be 1, 2, 3, or 4")
-    res = await db.workers.update_one({"id": worker_id}, {"$set": {"trust_tier": tier}})
-    if res.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Worker not found")
-    await audit(admin, "worker.tier_set", worker_id, f"tier={tier}")
-    return {"ok": True}
+    total = await db.service_profiles.count_documents(query)
+    return {"items": profiles, "total": total, "skip": skip, "limit": limit}
 
 
-@router.patch("/workers/{worker_id}/lift-restriction")
-async def lift_worker_restriction(worker_id: str, admin: dict = Depends(get_admin_user)):
-    res = await db.workers.update_one(
-        {"id": worker_id}, {"$set": {"availability_status": "available"}}
-    )
-    if res.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Worker not found")
-    await audit(admin, "worker.restriction_lifted", worker_id)
-    return {"ok": True}
-
-
-@router.patch("/workers/{worker_id}/suspend")
-async def suspend_worker(worker_id: str, body: dict, admin: dict = Depends(get_admin_user)):
+@router.patch("/experts/{profile_id}/suspend")
+async def suspend_expert(profile_id: str, body: dict, admin: dict = Depends(get_admin_user)):
     suspend = body.get("suspend", True)
-    new_status = "suspended" if suspend else "available"
-
-    worker = await db.workers.find_one({"id": worker_id}, {"user_id": 1, "name": 1})
-    if not worker:
-        raise HTTPException(status_code=404, detail="Worker not found")
-
-    await db.workers.update_one({"id": worker_id}, {"$set": {"availability_status": new_status}})
+    sp = await db.service_profiles.find_one(
+        {"id": profile_id}, {"_id": 0, "user_id": 1, "display_name": 1}
+    )
+    if not sp:
+        raise HTTPException(status_code=404, detail="Service profile not found")
+    await db.service_profiles.update_one(
+        {"id": profile_id}, {"$set": {"is_active": not suspend, "availability": not suspend}}
+    )
     await db.users.update_one(
-        {"id": worker["user_id"]}, {"$set": {"status": "suspended" if suspend else "active"}}
+        {"id": sp["user_id"]}, {"$set": {"status": "suspended" if suspend else "active"}}
     )
     await audit(
         admin,
-        "worker.suspended" if suspend else "worker.reactivated",
-        worker_id,
-        worker.get("name", ""),
+        "expert.suspended" if suspend else "expert.reactivated",
+        profile_id,
+        sp.get("display_name", ""),
     )
     return {"ok": True}
 
 
-@router.delete("/workers/{worker_id}")
-async def delete_worker_profile(worker_id: str, admin: dict = Depends(get_admin_user)):
-    """Full wipe: deletes worker profile, user account, all engagements, notifications, bot session."""
-    worker = await db.workers.find_one({"id": worker_id}, {"_id": 0, "user_id": 1, "name": 1})
-    if not worker:
-        raise HTTPException(status_code=404, detail="Worker not found")
-    user_id = worker.get("user_id", "")
-    name = worker.get("name", "")
-    user_doc = await db.users.find_one({"id": user_id}, {"_id": 0, "phone_primary": 1})
-    phone_digits = "".join(c for c in (user_doc or {}).get("phone_primary", "") if c.isdigit())
-    await db.workers.delete_one({"id": worker_id})
-    await db.users.delete_one({"id": user_id})
-    await db.engagements.delete_many({"worker_id": worker_id})
-    await db.notifications.delete_many({"user_id": user_id})
-    await db.wa_notif_log.delete_many({"user_id": user_id})
-    if phone_digits:
-        await db.bot_sessions.delete_many({"session_id": {"$regex": phone_digits[-10:]}})
-        await db.otps.delete_many({"phone": {"$regex": phone_digits[-10:]}})
-    await audit(admin, "worker.full_delete", worker_id, name)
-    return {"ok": True, "deleted": name}
+@router.patch("/experts/{profile_id}/trust-tier")
+async def set_expert_trust_tier(profile_id: str, body: dict, admin: dict = Depends(get_admin_user)):
+    tier = body.get("trust_tier")
+    if tier not in (1, 2, 3, 4):
+        raise HTTPException(status_code=400, detail="trust_tier must be 1, 2, 3, or 4")
+    sp = await db.service_profiles.find_one(
+        {"id": profile_id}, {"_id": 0, "user_id": 1, "display_name": 1}
+    )
+    if not sp:
+        raise HTTPException(status_code=404, detail="Service profile not found")
+    verification_status = "verified" if tier >= 2 else "unverified"
+    await db.service_profiles.update_one(
+        {"id": profile_id},
+        {
+            "$set": {
+                "trust_tier": tier,
+                "verification_status": verification_status,
+                "updated_at": utc_now_iso(),
+            }
+        },
+    )
+    tier_labels = {1: "Self Verified", 2: "Verified", 3: "KaamNow Pro", 4: "Elite Expert"}
+    await audit(
+        admin,
+        "expert.trust_tier_set",
+        profile_id,
+        f"{sp.get('display_name', '')} → {tier_labels[tier]}",
+    )
+    return {"ok": True, "trust_tier": tier, "verification_status": verification_status}
+
+
+@router.delete("/experts/{profile_id}")
+async def delete_expert_profile(profile_id: str, admin: dict = Depends(get_admin_user)):
+    """Delete service profile only (keeps user account)."""
+    sp = await db.service_profiles.find_one(
+        {"id": profile_id}, {"_id": 0, "user_id": 1, "display_name": 1}
+    )
+    if not sp:
+        raise HTTPException(status_code=404, detail="Service profile not found")
+    await db.service_profiles.delete_one({"id": profile_id})
+    await db.users.update_one({"id": sp["user_id"]}, {"$set": {"has_service_profile": False}})
+    await audit(admin, "expert.profile_deleted", profile_id, sp.get("display_name", ""))
+    return {"ok": True}
 
 
 @router.delete("/users/by-phone/{phone}")
 async def delete_user_by_phone(phone: str, admin: dict = Depends(get_admin_user)):
-    """Full wipe of a user account by phone number — removes user, worker profile, all data."""
+    """Full wipe of a user account by phone number."""
     user = await db.users.find_one(
         {"phone_primary": {"$regex": phone, "$options": "i"}}, {"_id": 0}
     )
     if not user:
         raise HTTPException(status_code=404, detail=f"No user found with phone containing {phone}")
     user_id = user["id"]
-    worker = await db.workers.find_one({"user_id": user_id}, {"_id": 0, "id": 1})
-    if worker:
-        await db.workers.delete_one({"id": worker["id"]})
-        await db.engagements.delete_many({"worker_id": worker["id"]})
-        await db.wa_notif_log.delete_many({"user_id": user_id})
-    await db.engagements.delete_many({"customer_id": user_id})
-    await db.jobs.delete_many({"customer_id": user_id})
+    await db.service_profiles.delete_many({"user_id": user_id})
+    await db.work_requests.delete_many(
+        {"$or": [{"requested_by_user_id": user_id}, {"requested_to_user_id": user_id}]}
+    )
+    await db.jobs.delete_many({"posted_by_user_id": user_id})
     await db.notifications.delete_many({"user_id": user_id})
+    await db.wa_notif_log.delete_many({"user_id": user_id})
     await db.bot_sessions.delete_many({"session_id": {"$regex": phone.replace("+", "")}})
     await db.otps.delete_many({"phone": {"$regex": phone.replace("+", "")}})
     await db.users.delete_one({"id": user_id})
@@ -405,57 +377,15 @@ async def send_whatsapp(body: dict, admin: dict = Depends(get_admin_user)):
 # ---------------------------------------------------------------------------
 
 
-@router.get("/customers")
-async def list_customers(
-    search: Optional[str] = None,
-    status: Optional[str] = None,
-    limit: int = 50,
-    skip: int = 0,
-    admin: dict = Depends(get_admin_user),
-):
-    query: dict = {"is_customer": {"$ne": False}}
-    if status:
-        query["status"] = status
-    if search:
-        pattern = re.escape(search.strip())
-        query["$or"] = [
-            {"name": {"$regex": pattern, "$options": "i"}},
-            {"phone_primary": {"$regex": pattern, "$options": "i"}},
-        ]
-
-    customers = (
-        await db.users.find(query, {"password_hash": 0, "_id": 0})
-        .skip(skip)
-        .limit(limit)
-        .sort("created_at", -1)
-        .to_list(limit)
-    )
-    total = await db.users.count_documents(query)
-
-    # Attach job counts
-    cids = [c["id"] for c in customers]
-    job_counts = await db.jobs.aggregate(
-        [
-            {"$match": {"customer_id": {"$in": cids}}},
-            {"$group": {"_id": "$customer_id", "count": {"$sum": 1}}},
-        ]
-    ).to_list(len(cids))
-    jmap = {j["_id"]: j["count"] for j in job_counts}
-    for c in customers:
-        c["jobs_posted"] = jmap.get(c["id"], 0)
-
-    return {"items": customers, "total": total, "skip": skip, "limit": limit}
-
-
-@router.patch("/customers/{user_id}/suspend")
-async def suspend_customer(user_id: str, body: dict, admin: dict = Depends(get_admin_user)):
+@router.patch("/users/{user_id}/suspend")
+async def suspend_user(user_id: str, body: dict, admin: dict = Depends(get_admin_user)):
     suspend = body.get("suspend", True)
     res = await db.users.update_one(
         {"id": user_id}, {"$set": {"status": "suspended" if suspend else "active"}}
     )
     if res.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Customer not found")
-    await audit(admin, "customer.suspended" if suspend else "customer.reactivated", user_id)
+        raise HTTPException(status_code=404, detail="User not found")
+    await audit(admin, "user.suspended" if suspend else "user.reactivated", user_id)
     return {"ok": True}
 
 
@@ -482,7 +412,7 @@ async def list_jobs(
         pattern = re.escape(search.strip())
         query["$or"] = [
             {"title": {"$regex": pattern, "$options": "i"}},
-            {"customer_name": {"$regex": pattern, "$options": "i"}},
+            {"posted_by_name": {"$regex": pattern, "$options": "i"}},
         ]
 
     jobs = (
@@ -494,17 +424,16 @@ async def list_jobs(
     )
     total = await db.jobs.count_documents(query)
 
-    # Attach engagement count per job
     job_ids = [j["id"] for j in jobs]
-    eng_counts = await db.engagements.aggregate(
+    req_counts = await db.work_requests.aggregate(
         [
             {"$match": {"job_id": {"$in": job_ids}}},
             {"$group": {"_id": "$job_id", "count": {"$sum": 1}}},
         ]
     ).to_list(len(job_ids))
-    emap = {e["_id"]: e["count"] for e in eng_counts}
+    rmap = {r["_id"]: r["count"] for r in req_counts}
     for j in jobs:
-        j["engagement_count"] = emap.get(j.get("id"), 0)
+        j["request_count"] = rmap.get(j.get("id"), 0)
 
     return {"items": jobs, "total": total, "skip": skip, "limit": limit}
 
@@ -523,8 +452,8 @@ async def force_close_job(job_id: str, admin: dict = Depends(get_admin_user)):
 # ---------------------------------------------------------------------------
 
 
-@router.get("/engagements")
-async def list_engagements(
+@router.get("/work-requests")
+async def list_work_requests(
     status: Optional[str] = None,
     date_from: Optional[str] = None,
     search: Optional[str] = None,
@@ -532,7 +461,7 @@ async def list_engagements(
     skip: int = 0,
     admin: dict = Depends(get_admin_user),
 ):
-    query = {}
+    query: dict = {}
     if status:
         query["status"] = status
     if date_from:
@@ -540,42 +469,41 @@ async def list_engagements(
     if search:
         pattern = re.escape(search.strip())
         query["$or"] = [
-            {"worker_name": {"$regex": pattern, "$options": "i"}},
-            {"customer_name": {"$regex": pattern, "$options": "i"}},
+            {"requested_by_name": {"$regex": pattern, "$options": "i"}},
+            {"requested_to_name": {"$regex": pattern, "$options": "i"}},
             {"job_title": {"$regex": pattern, "$options": "i"}},
         ]
 
-    engagements = (
-        await db.engagements.find(query, {"_id": 0})
+    items = (
+        await db.work_requests.find(query, {"_id": 0})
         .skip(skip)
         .limit(limit)
         .sort("created_at", -1)
         .to_list(limit)
     )
-    total = await db.engagements.count_documents(query)
+    total = await db.work_requests.count_documents(query)
+    return {"items": items, "total": total, "skip": skip, "limit": limit}
 
-    return {"items": engagements, "total": total, "skip": skip, "limit": limit}
 
-
-@router.patch("/engagements/{engagement_id}/flag")
-async def flag_engagement(engagement_id: str, body: dict, admin: dict = Depends(get_admin_user)):
+@router.patch("/work-requests/{request_id}/flag")
+async def flag_work_request(request_id: str, body: dict, admin: dict = Depends(get_admin_user)):
     note = (body.get("note") or "").strip()
-    res = await db.engagements.update_one(
-        {"id": engagement_id},
+    res = await db.work_requests.update_one(
+        {"id": request_id},
         {"$set": {"flagged": True, "admin_note": note, "flagged_at": utc_now_iso()}},
     )
     if res.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Engagement not found")
-    await audit(admin, "engagement.flagged", engagement_id, note[:80])
+        raise HTTPException(status_code=404, detail="Work request not found")
+    await audit(admin, "work_request.flagged", request_id, note[:80])
     return {"ok": True}
 
 
-@router.patch("/engagements/{engagement_id}/unflag")
-async def unflag_engagement(engagement_id: str, admin: dict = Depends(get_admin_user)):
-    await db.engagements.update_one(
-        {"id": engagement_id}, {"$unset": {"flagged": "", "admin_note": "", "flagged_at": ""}}
+@router.patch("/work-requests/{request_id}/unflag")
+async def unflag_work_request(request_id: str, admin: dict = Depends(get_admin_user)):
+    await db.work_requests.update_one(
+        {"id": request_id}, {"$unset": {"flagged": "", "admin_note": "", "flagged_at": ""}}
     )
-    await audit(admin, "engagement.unflagged", engagement_id)
+    await audit(admin, "work_request.unflagged", request_id)
     return {"ok": True}
 
 
@@ -591,18 +519,19 @@ async def broadcast_whatsapp(body: dict, admin: dict = Depends(get_admin_user)):
     message = (body.get("message") or "").strip()
     if not message:
         raise HTTPException(status_code=400, detail="message required")
-    if audience not in ("workers", "customers"):
-        raise HTTPException(status_code=400, detail="audience must be 'workers' or 'customers'")
+    if audience not in ("experts", "all"):
+        raise HTTPException(status_code=400, detail="audience must be 'experts' or 'all'")
 
-    if audience == "workers":
-        users = await db.users.find(
-            {"$or": [{"is_worker": True}, {"has_worker_profile": True}, {"role": "worker"}]},
-            {"phone_primary": 1},
-        ).to_list(2000)
-    else:
-        users = await db.users.find({"is_customer": {"$ne": False}}, {"phone_primary": 1}).to_list(
+    if audience == "experts":
+        sp_user_ids = [
+            p["user_id"]
+            for p in await db.service_profiles.find({}, {"user_id": 1, "_id": 0}).to_list(2000)
+        ]
+        users = await db.users.find({"id": {"$in": sp_user_ids}}, {"phone_primary": 1}).to_list(
             2000
         )
+    else:
+        users = await db.users.find({}, {"phone_primary": 1}).to_list(2000)
 
     import threading
 
@@ -839,20 +768,31 @@ async def admin_broadcast(body: dict, admin: dict = Depends(get_admin_user)):
     if body.get("pincode"):
         query["saved_addresses.pincode"] = body["pincode"]
     users = await db.users.find(query, {"_id": 0, "id": 1}).limit(2000).to_list(2000)
+    now = utc_now_iso()
     for target in users:
-        await _notify(target["id"], title, message, "admin_broadcast", None)
+        await db.notifications.insert_one(
+            {
+                "id": str(_uuid.uuid4()),
+                "user_id": target["id"],
+                "title": title,
+                "body": message,
+                "type": "admin_broadcast",
+                "read": False,
+                "created_at": now,
+            }
+        )
     await audit(admin, "broadcast.sent", "", f"count={len(users)}")
     return {"ok": True, "sent": len(users)}
 
 
-@router.post("/workers/{worker_id}/verify-cert/{cert_id}")
-async def verify_worker_cert(
-    worker_id: str, cert_id: str, body: dict, admin: dict = Depends(get_admin_user)
+@router.post("/experts/{profile_id}/verify-cert/{cert_id}")
+async def verify_expert_cert(
+    profile_id: str, cert_id: str, body: dict, admin: dict = Depends(get_admin_user)
 ):
-    worker = await db.workers.find_one({"id": worker_id}, {"_id": 0, "certifications": 1})
-    if not worker:
-        raise HTTPException(status_code=404, detail="Worker not found")
-    certs = worker.get("certifications") or []
+    sp = await db.service_profiles.find_one({"id": profile_id}, {"_id": 0, "certifications": 1})
+    if not sp:
+        raise HTTPException(status_code=404, detail="Service profile not found")
+    certs = sp.get("certifications") or []
     found = False
     for cert in certs:
         if cert.get("id") == cert_id:
@@ -864,8 +804,8 @@ async def verify_worker_cert(
             break
     if not found:
         raise HTTPException(status_code=404, detail="Certification not found")
-    await db.workers.update_one({"id": worker_id}, {"$set": {"certifications": certs}})
-    await audit(admin, "worker.cert_verified", worker_id, cert_id)
+    await db.service_profiles.update_one({"id": profile_id}, {"$set": {"certifications": certs}})
+    await audit(admin, "expert.cert_verified", profile_id, cert_id)
     return {"ok": True}
 
 
@@ -898,9 +838,9 @@ async def get_platform_info(admin: dict = Depends(get_admin_user)):
         },
         "collections": {
             "users": await db.users.count_documents({}),
-            "workers": await db.workers.count_documents({}),
+            "service_profiles": await db.service_profiles.count_documents({}),
             "jobs": await db.jobs.count_documents({}),
-            "engagements": await db.engagements.count_documents({}),
+            "work_requests": await db.work_requests.count_documents({}),
             "notifications": await db.notifications.count_documents({}),
             "admin_logs": await db.admin_logs.count_documents({}),
         },
@@ -925,20 +865,20 @@ async def delete_seed_data(admin: dict = Depends(get_admin_user)):
     dummy_ids = [u["id"] for u in dummy_users]
 
     del_users = await db.users.delete_many({"phone_primary": {"$regex": pattern}})
-    del_workers = await db.workers.delete_many({"user_id": {"$in": dummy_ids}})
-    del_jobs = await db.jobs.delete_many({"customer_id": {"$in": dummy_ids}})
+    del_profiles = await db.service_profiles.delete_many({"user_id": {"$in": dummy_ids}})
+    del_jobs = await db.jobs.delete_many({"posted_by_user_id": {"$in": dummy_ids}})
 
     await audit(
         admin,
         "seed_data.deleted",
         "",
-        f"users={del_users.deleted_count} workers={del_workers.deleted_count} jobs={del_jobs.deleted_count}",
+        f"users={del_users.deleted_count} profiles={del_profiles.deleted_count} jobs={del_jobs.deleted_count}",
     )
     return {
         "ok": True,
         "deleted": {
             "users": del_users.deleted_count,
-            "workers": del_workers.deleted_count,
+            "profiles": del_profiles.deleted_count,
             "jobs": del_jobs.deleted_count,
         },
     }

@@ -8,7 +8,7 @@ const T = {
   en: {
     // ── Nav ──────────────────────────────────────────────────
     nav_home: "Home",
-    nav_workers: "Find Workers",
+    nav_workers: "Find Local Experts",
     nav_work: "Find Work",
     nav_whatsapp: "WhatsApp",
     nav_contact: "Contact",
@@ -45,7 +45,7 @@ const T = {
     fw_posted_ago: "ago",
     fw_urgent: "Urgent",
     fw_per_day: "/day",
-    fw_workers_needed: "workers needed",
+    fw_workers_needed: "Local Experts needed",
     fw_open_slots: "slot open",
     fw_pincode_hint: "6-digit pincode",
     fw_loading: "Loading jobs…",
@@ -54,67 +54,67 @@ const T = {
     nav_logout: "Logout",
 
     // ── Hero ─────────────────────────────────────────────────
-    hero_overline: "Find trusted workers and nearby jobs",
+    hero_overline: "Find trusted Local Experts and nearby jobs",
     hero_headline_1: "Find work directly,",
     hero_headline_2: "without middlemen —",
     hero_headline_3: "right from your mobile.",
     hero_sub:
-      "KaamNow connects daily-wage workers with farmers, homeowners, and contractors. Over WhatsApp, voice, and the phone you already own. Fair pay. Verified trust. No dalal.",
+      "KaamNow connects skilled Local Experts with farmers, homeowners, and contractors. Over WhatsApp, voice, and the phone you already own. Fair pay. Verified trust. No dalal.",
     hero_cta_worker: "I need work",
-    hero_cta_customer: "I need a worker",
+    hero_cta_customer: "I need a Local Expert",
     hero_cta_demo: "Try WhatsApp Bot",
     hero_badge_verified: "Gaon Verified",
     hero_badge_tier: "Tier 2 trust badge",
     hero_badge_live: "Live",
-    hero_badge_workers: "workers online",
+    hero_badge_workers: "Local Experts online",
 
     // ── Role-based hero ────────────────────────────────────────
     hero_guest_tagline:   "Har haath ko kaam, har kaam ko samman.",
     hero_guest_t1:        "Built for",
     hero_guest_t2:        "India's",
     hero_guest_t3:        "local workforce.",
-    hero_guest_sub:       "KaamNow connects workers, homeowners, farmers, and contractors directly through mobile and WhatsApp.",
+    hero_guest_sub:       "KaamNow connects Local Experts, homeowners, farmers, and contractors directly through mobile and WhatsApp.",
     hero_guest_desc:      "Verified trust. Fair opportunities. No middlemen.",
     hero_customer_t1:     "India's local workforce,",
     hero_customer_t2:     "on demand.",
-    hero_customer_sub:    "Hire trusted nearby workers quickly and confidently.",
-    hero_customer_desc:   "Find verified painters, helpers, electricians, plumbers, and daily-wage workers from your nearby area.",
+    hero_customer_sub:    "Hire trusted Local Experts quickly and confidently.",
+    hero_customer_desc:   "Find verified painters, helpers, electricians, plumbers, and daily-wage Local Experts from your nearby area.",
     hero_worker_t1:       "Local work opportunities,",
     hero_worker_t2:       "made simple.",
     hero_worker_sub:      "Connect directly with nearby customers and contractors.",
     hero_worker_desc:     "Get better work opportunities, fair hiring, and direct customer connections without middlemen.",
-    cta_find_workers:     "Find Workers",
+    cta_find_workers:     "Find Local Experts",
     cta_post_job:         "Post a Job",
     cta_find_jobs:        "Find Jobs",
     cta_whatsapp_bot:     "WhatsApp Bot",
     cta_find_work:        "Find Work",
 
     // ── Stats ─────────────────────────────────────────────────
-    stat_workers: "Registered workers",
+    stat_workers: "Registered Local Experts",
     stat_villages: "Villages served",
     stat_wage: "Avg. daily wage",
     stat_match: "Avg. match time",
 
     // ── Find Work ─────────────────────────────────────────────
-    findwork_overline: "For workers",
+    findwork_overline: "For Local Experts",
     findwork_headline: "Stop waiting at the chowk.",
     findwork_headline_accent: "Jobs come to you.",
     findwork_sub:
       "Register once. Customers nearby post jobs every day. Get notified on WhatsApp.",
-    findwork_cta_register: "Register as Worker",
+    findwork_cta_register: "Become a Local Expert",
     findwork_cta_browse: "Browse Job Feed",
     findwork_empty: "Loading job opportunities…",
 
     // ── Workers ───────────────────────────────────────────────
     workers_overline: "Hire locally",
     workers_headline: "Hire",
-    workers_headline_accent: "verified workers",
+    workers_headline_accent: "verified Local Experts",
     workers_headline_end: "in minutes.",
     workers_cta: "Browse Marketplace",
     workers_filter_pin: "Pincode:",
     workers_filter_hint: "e.g. 302001",
-    workers_request: "Request Worker",
-    workers_empty: "No workers listed in this area yet…",
+    workers_request: "Request Local Expert",
+    workers_empty: "No Local Experts listed in this area yet…",
     workers_jobs_done: "jobs done",
 
     // ── How it works ──────────────────────────────────────────
@@ -124,12 +124,12 @@ const T = {
     how_step1_title: "Tell us over WhatsApp",
     how_step1_desc:
       "Voice message or text — Hindi works. Tell us the job, date, and your village. Takes 60 seconds.",
-    how_step2_title: "We find trusted workers nearby",
+    how_step2_title: "We find trusted Local Experts nearby",
     how_step2_desc:
-      "Sarpanch-vouched, peer-rated workers within 5 km. Trust tier shown upfront.",
+      "Sarpanch-vouched, peer-rated Local Experts within 5 km. Trust tier shown upfront.",
     how_step3_title: "They arrive. Work done. Pay cash or UPI.",
     how_step3_desc:
-      "Cash-friendly. Rate the worker after. Their reputation grows. So does yours.",
+      "Cash-friendly. Rate the Local Expert after. Their reputation grows. So does yours.",
 
     // ── Features ──────────────────────────────────────────────
     feat_overline: "What makes us different",
@@ -144,7 +144,7 @@ const T = {
     feat_trust_title: "3-tier trust",
     feat_trust_desc: "Self-verified → Gaon Verified → KaamNow Pro.",
     feat_calendar_title: "Farm calendar",
-    feat_calendar_desc: "Pre-book workers 7 days before sowing or harvest.",
+    feat_calendar_desc: "Pre-book Local Experts 7 days before sowing or harvest.",
     feat_pay_title: "Cash + UPI both",
     feat_pay_desc: "Start with cash. Move to UPI when you're comfortable.",
 
@@ -161,8 +161,8 @@ const T = {
       "Join the waitlist. Be among the first 100 villages we onboard.",
     wait_name: "Your name",
     wait_phone: "Mobile number",
-    wait_role_customer: "I need workers",
-    wait_role_worker: "I am a worker",
+    wait_role_customer: "I need Local Experts",
+    wait_role_worker: "I am a Local Expert",
     wait_role_partner: "NGO / Govt partner",
     wait_cta: "Join Waitlist",
     wait_cta_loading: "Joining…",
@@ -171,7 +171,7 @@ const T = {
 
     // ── Service categories ────────────────────────────────────
     cat_heading: "What work do you need done?",
-    cat_sub: "Choose a category — see verified workers available near you",
+    cat_sub: "Choose a category — see verified Local Experts available near you",
     cat_construction: "Construction",
     cat_farm: "Agriculture",
     cat_electrical: "Electrical",
@@ -181,7 +181,7 @@ const T = {
     cat_tailoring: "Tailoring",
     cat_home: "Home Services",
     cat_other: "Other",
-    cat_workers: "workers nearby",
+    cat_workers: "Local Experts nearby",
 
     // ── WhatsApp feature ──────────────────────────────────────
     wa_section_overline: "Our biggest advantage",
@@ -203,18 +203,18 @@ const T = {
 
     // ── FAQ ───────────────────────────────────────────────────
     faq_heading: "Common Questions",
-    faq_q1: "Is KaamNow free for workers?",
+    faq_q1: "Is KaamNow free for Local Experts?",
     faq_a1: "Yes — completely free. Register, build a profile, get job alerts at zero cost.",
     faq_q2: "How does payment work?",
     faq_a2: "Cash or UPI, directly between you and the customer. KaamNow never holds money.",
-    faq_q3: "How do I know the worker is trustworthy?",
-    faq_a3: "Every worker has a visible trust tier: Self-verified → Gaon Verified → KaamNow Pro. Past customer ratings are always shown.",
+    faq_q3: "How do I know the Local Expert is trustworthy?",
+    faq_a3: "Every Local Expert has a visible trust tier: Self-verified → Gaon Verified → KaamNow Pro. Past customer ratings are always shown.",
     faq_q4: "No smartphone — can I still use KaamNow?",
     faq_a4: "Yes. Our WhatsApp bot works on any phone that runs WhatsApp. Type JOBS to see nearby work.",
-    faq_q5: "What if a worker doesn't show up?",
-    faq_a5: "Rate and report after every job. Poor-rated workers lose their tier. Contact support on WhatsApp for disputes.",
-    faq_q6: "How quickly can I find a worker?",
-    faq_a6: "Usually within 15 minutes. Workers get an instant WhatsApp alert the moment you post.",
+    faq_q5: "What if a Local Expert doesn't show up?",
+    faq_a5: "Rate and report after every job. Poor-rated Local Experts lose their tier. Contact support on WhatsApp for disputes.",
+    faq_q6: "How quickly can I find a Local Expert?",
+    faq_a6: "Usually within 15 minutes. Local Experts get an instant WhatsApp alert the moment you post.",
 
     // ── Footer ────────────────────────────────────────────────
     footer_tagline: "Proudly made in Bharat.",
@@ -224,7 +224,7 @@ const T = {
     footer_copy: `© ${new Date().getFullYear()} KaamNow. Built for Bharat.`,
 
     // ── Mobile sticky bar ─────────────────────────────────────
-    mob_workers: "Find Workers",
+    mob_workers: "Find Experts",
     mob_work: "Find Work",
   },
 
@@ -277,7 +277,7 @@ const T = {
     nav_logout: "लॉगआउट",
 
     // ── Hero ─────────────────────────────────────────────────
-    hero_overline: "Trusted workers aur nearby kaam — ek jagah",
+    hero_overline: "Trusted Local Experts aur nearby kaam — ek jagah",
     hero_headline_1: "अब काम ढूंढना हुआ आसान —",
     hero_headline_2: "बिना दलाल,",
     hero_headline_3: "सीधे मोबाइल से।",

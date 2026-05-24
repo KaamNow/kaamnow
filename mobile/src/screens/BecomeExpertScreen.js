@@ -1,238 +1,325 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   View, Text, ScrollView, TextInput, TouchableOpacity,
   StyleSheet, Alert, ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import * as Location from "expo-location";
 import { useAuth } from "../contexts/AuthContext";
-import { useTranslation } from "../i18n";
 import { colors, fonts, spacing, radius } from "../theme";
-import api from "../lib/api";
+import api, { formatApiError } from "../api";
 import { track } from "../lib/analytics";
 
 const SKILL_OPTIONS = [
-  "plumber", "electrician", "carpenter", "painter", "cleaner",
-  "cook", "driver", "security_guard", "gardener", "tailor",
-  "welder", "mason", "ac_technician", "mobile_repair", "tutor",
+  { key: "plumber",        label: "Plumber" },
+  { key: "electrician",    label: "Electrician" },
+  { key: "carpenter",      label: "Carpenter" },
+  { key: "painter",        label: "Painter" },
+  { key: "cleaner",        label: "Cleaner" },
+  { key: "cook",           label: "Cook" },
+  { key: "driver",         label: "Driver" },
+  { key: "security_guard", label: "Security Guard" },
+  { key: "gardener",       label: "Gardener" },
+  { key: "tailor",         label: "Tailor" },
+  { key: "welder",         label: "Welder" },
+  { key: "mason",          label: "Mason" },
+  { key: "ac_technician",  label: "AC Technician" },
+  { key: "mobile_repair",  label: "Mobile Repair" },
+  { key: "tutor",          label: "Tutor" },
 ];
 
-export default function BecomeExpertScreen({ navigation }) {
+const SKILL_KEYS = SKILL_OPTIONS.map(s => s.key);
+const SKILL_LABEL = Object.fromEntries(SKILL_OPTIONS.map(s => [s.key, s.label]));
+const formatSkill = key => SKILL_LABEL[key] || key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+
+export default function BecomeExpertScreen({ navigation, route }) {
+  const editMode = route?.params?.editMode === true;
   const { refreshUser } = useAuth();
-  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const [step, setStep] = useState(1);
-  const [skills, setSkills] = useState([]);
-  const [dailyRate, setDailyRate] = useState("");
-  const [bio, setBio] = useState("");
-  const [pincode, setPincode] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [gpsLoading, setGpsLoading] = useState(false);
-  const [lat, setLat] = useState(null);
-  const [lng, setLng] = useState(null);
 
-  const useGPS = async () => {
-    setGpsLoading(true);
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        Alert.alert("Location denied", "Allow location in Settings, or type your pincode.");
-        return;
-      }
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      const { latitude, longitude } = loc.coords;
-      setLat(latitude);
-      setLng(longitude);
+  const [loading,     setLoading]     = useState(editMode);
+  const [step,        setStep]        = useState(1);
+  const [skills,      setSkills]      = useState([]);   // preset keys
+  const [customSkill, setCustomSkill] = useState("");   // free-text input
+  const [dailyRate,   setDailyRate]   = useState("");
+  const [submitting,  setSubmitting]  = useState(false);
 
-      // Reverse geocode → pincode via OpenStreetMap Nominatim
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
-        { headers: { "Accept-Language": "en", "User-Agent": "KaamNow/1.0" } }
-      );
-      const data = await res.json();
-      const pin = (data.address?.postcode || "").replace(/\s/g, "").slice(0, 6);
-      if (pin.length === 6) {
-        setPincode(pin);
-        Alert.alert("Location detected", `Pincode ${pin} auto-filled.`);
-      } else {
-        Alert.alert("Location set", "Could not detect pincode. Please type it.");
-      }
-    } catch {
-      Alert.alert("Could not get location", "Type your pincode manually.");
-    } finally {
-      setGpsLoading(false);
-    }
+  useEffect(() => {
+    if (!editMode) return;
+    api.get("/service-profiles/mine")
+      .then(r => {
+        const d = r.data || {};
+        const presets = (d.skills || []).filter(s => SKILL_KEYS.includes(s));
+        const customs = (d.skills || []).filter(s => !SKILL_KEYS.includes(s));
+        setSkills(presets);
+        setCustomSkill(customs.join(", "));
+        setDailyRate(d.daily_rate ? String(d.daily_rate) : "");
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [editMode]);
+
+  const toggleSkill = key => {
+    setSkills(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
   };
 
-  const toggleSkill = (s) => {
-    setSkills((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]);
+  const addCustom = () => {
+    const extras = customSkill.trim().split(",").map(s => s.trim().toLowerCase()).filter(Boolean);
+    if (!extras.length) return;
+    setSkills(prev => {
+      const merged = [...prev];
+      extras.forEach(e => { if (!SKILL_KEYS.includes(e) && !merged.includes(e)) merged.push(e); });
+      return merged;
+    });
+    setCustomSkill("");
+  };
+
+  const allSkills = () => {
+    const extras = customSkill.trim()
+      ? customSkill.split(",").map(s => s.trim().toLowerCase()).filter(Boolean)
+      : [];
+    return [...new Set([...skills, ...extras])];
   };
 
   const next = () => {
-    if (step === 1 && skills.length === 0) {
-      Alert.alert(t("become_expert_skills_required"));
+    if (step === 1 && allSkills().length === 0) {
+      Alert.alert("Select at least one skill");
       return;
     }
-    if (step === 2 && !dailyRate.trim()) {
-      Alert.alert(t("become_expert_rate_required"));
+    if (step === 2 && (!dailyRate.trim() || isNaN(parseInt(dailyRate)))) {
+      Alert.alert("Enter your daily rate");
       return;
     }
-    setStep((s) => s + 1);
+    setStep(s => s + 1);
   };
 
   const submit = async () => {
     setSubmitting(true);
     try {
-      track("become_local_expert", { skills, daily_rate: parseInt(dailyRate, 10) });
-      await api.post("/workers/become-worker", {
-        skills,
+      const payload = {
+        skills:     allSkills(),
         daily_rate: parseInt(dailyRate, 10),
-        bio: bio.trim() || undefined,
-        pincode: pincode.trim() || undefined,
-        lat: lat || undefined,
-        lng: lng || undefined,
-      });
+      };
+      if (editMode) {
+        await api.patch("/service-profiles/mine", payload);
+      } else {
+        track("become_local_expert", payload);
+        await api.post("/service-profiles", payload);
+      }
       await refreshUser();
       navigation.goBack();
-    } catch {
-      Alert.alert(t("err_generic"));
+    } catch (err) {
+      Alert.alert("Error", formatApiError(err));
     } finally {
       setSubmitting(false);
     }
   };
 
+  if (loading) {
+    return (
+      <View style={[s.container, { justifyContent: "center", alignItems: "center" }]}>
+        <ActivityIndicator color={colors.primary} size="large" />
+      </View>
+    );
+  }
+
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={[s.container, { paddingTop: insets.top }]}>
       {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => step > 1 ? setStep(s => s - 1) : navigation.goBack()} style={{ padding: 4 }}>
-          <Ionicons name="arrow-back" size={22} color={colors.text} />
+      <View style={s.header}>
+        <TouchableOpacity onPress={() => step > 1 ? setStep(p => p - 1) : navigation.goBack()} style={{ padding: 4 }}>
+          <Ionicons name="arrow-back" size={22} color={colors.textHeading} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t("become_expert_title")}</Text>
-        <Text style={styles.stepNum}>{step}/3</Text>
+        <Text style={s.headerTitle}>{editMode ? "Update My Skills" : "Become a Local Expert"}</Text>
+        <Text style={s.stepNum}>{step} / 2</Text>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: insets.bottom + 100 }}>
+      <ScrollView
+        contentContainerStyle={{ padding: spacing.md, paddingBottom: insets.bottom + 100 }}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+
+        {/* ── Step 1: Skills ─────────────────────────────────────── */}
         {step === 1 && (
           <>
-            <Text style={styles.stepTitle}>{t("become_expert_step1_title")}</Text>
-            <View style={styles.skillsGrid}>
-              {SKILL_OPTIONS.map((s) => (
+            <Text style={s.stepTitle}>What skills do you offer?</Text>
+            <Text style={s.stepSub}>Select all that apply — be thorough, it helps you get discovered.</Text>
+
+            <View style={s.grid}>
+              {SKILL_OPTIONS.map(({ key, label }) => {
+                const active = skills.includes(key);
+                return (
+                  <TouchableOpacity
+                    key={key}
+                    style={[s.chip, active && s.chipActive]}
+                    onPress={() => toggleSkill(key)}
+                    activeOpacity={0.75}
+                  >
+                    {active && <Ionicons name="checkmark" size={13} color="#fff" style={{ marginRight: 4 }} />}
+                    <Text style={[s.chipText, active && s.chipTextActive]}>{label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Custom skill */}
+            <Text style={s.inputLabel}>Don't see your skill? Add it</Text>
+            <View style={s.customRow}>
+              <TextInput
+                style={[s.input, { flex: 1 }]}
+                value={customSkill}
+                onChangeText={setCustomSkill}
+                placeholder="e.g. RCC work, pump repair, tiling…"
+                placeholderTextColor={colors.outline}
+                returnKeyType="done"
+                onSubmitEditing={addCustom}
+              />
+              <TouchableOpacity style={s.addBtn} onPress={addCustom}>
+                <Ionicons name="add" size={20} color="#fff" />
+              </TouchableOpacity>
+            </View>
+
+            {skills.filter(k => !SKILL_KEYS.includes(k)).length > 0 && (
+              <View style={s.customChips}>
+                {skills.filter(k => !SKILL_KEYS.includes(k)).map(k => (
+                  <TouchableOpacity
+                    key={k}
+                    style={s.customChip}
+                    onPress={() => setSkills(prev => prev.filter(x => x !== k))}
+                  >
+                    <Text style={s.customChipText}>{formatSkill(k)}</Text>
+                    <Ionicons name="close-circle" size={14} color={colors.primary} style={{ marginLeft: 4 }} />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </>
+        )}
+
+        {/* ── Step 2: Daily Rate ─────────────────────────────────── */}
+        {step === 2 && (
+          <>
+            <Text style={s.stepTitle}>What's your daily rate?</Text>
+            <Text style={s.stepSub}>This is shown to employers. You can update it anytime.</Text>
+
+            <View style={s.rateWrap}>
+              <View style={s.ratePrefix}>
+                <Text style={s.ratePrefixText}>₹</Text>
+              </View>
+              <TextInput
+                style={s.rateInput}
+                value={dailyRate}
+                onChangeText={v => setDailyRate(v.replace(/\D/g, ""))}
+                placeholder="500"
+                keyboardType="numeric"
+                placeholderTextColor={colors.outline}
+                autoFocus
+              />
+              <Text style={s.rateSuffix}>/day</Text>
+            </View>
+
+            {/* Quick-pick suggestions */}
+            <View style={s.suggestRow}>
+              {[300, 500, 700, 1000].map(v => (
                 <TouchableOpacity
-                  key={s}
-                  style={[styles.skillChip, skills.includes(s) && styles.skillChipActive]}
-                  onPress={() => toggleSkill(s)}
+                  key={v}
+                  style={[s.suggest, dailyRate === String(v) && s.suggestActive]}
+                  onPress={() => setDailyRate(String(v))}
                 >
-                  <Text style={[styles.skillText, skills.includes(s) && styles.skillTextActive]}>
-                    {t(`skill_${s}`) || s}
-                  </Text>
+                  <Text style={[s.suggestText, dailyRate === String(v) && s.suggestTextActive]}>₹{v}</Text>
                 </TouchableOpacity>
               ))}
             </View>
-          </>
-        )}
-
-        {step === 2 && (
-          <>
-            <Text style={styles.stepTitle}>{t("become_expert_step2_title")}</Text>
-            <Text style={styles.inputLabel}>{t("become_expert_daily_rate")}</Text>
-            <TextInput
-              style={styles.input}
-              value={dailyRate}
-              onChangeText={setDailyRate}
-              placeholder="500"
-              keyboardType="numeric"
-              placeholderTextColor={colors.textMuted}
-            />
-            {/* GPS button — auto-fills pincode from location */}
-            <TouchableOpacity style={styles.gpsBtn} onPress={useGPS} disabled={gpsLoading}>
-              {gpsLoading
-                ? <ActivityIndicator size="small" color={colors.indigo} />
-                : <Ionicons name="locate-outline" size={16} color={colors.indigo} />
-              }
-              <Text style={styles.gpsBtnText}>
-                {lat ? "Location set ✓ — update" : "Use my location (auto-fill pincode)"}
-              </Text>
-            </TouchableOpacity>
-
-            <Text style={styles.inputLabel}>{t("become_expert_pincode")}</Text>
-            <TextInput
-              style={styles.input}
-              value={pincode}
-              onChangeText={setPincode}
-              placeholder="800001"
-              keyboardType="numeric"
-              maxLength={6}
-              placeholderTextColor={colors.textMuted}
-            />
-          </>
-        )}
-
-        {step === 3 && (
-          <>
-            <Text style={styles.stepTitle}>{t("become_expert_step3_title")}</Text>
-            <Text style={styles.inputLabel}>{t("become_expert_bio")}</Text>
-            <TextInput
-              style={[styles.input, { height: 100, textAlignVertical: "top" }]}
-              value={bio}
-              onChangeText={setBio}
-              placeholder={t("become_expert_bio_placeholder")}
-              placeholderTextColor={colors.textMuted}
-              multiline
-              maxLength={500}
-            />
+            <Text style={s.rateHint}>Average: ₹400 – ₹800 / day for most trades in tier-2 cities.</Text>
           </>
         )}
       </ScrollView>
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 8 }]}>
-        {step < 3
-          ? (
-            <TouchableOpacity style={styles.nextBtn} onPress={next}>
-              <Text style={styles.nextBtnText}>{t("next")}</Text>
-            </TouchableOpacity>
-          )
-          : (
-            <TouchableOpacity style={styles.nextBtn} onPress={submit} disabled={submitting}>
-              {submitting
-                ? <ActivityIndicator color="#fff" />
-                : <Text style={styles.nextBtnText}>{t("become_expert_submit")}</Text>
-              }
-            </TouchableOpacity>
-          )
-        }
+      {/* Footer */}
+      <View style={[s.footer, { paddingBottom: insets.bottom + 8 }]}>
+        {step < 2 ? (
+          <TouchableOpacity style={s.nextBtn} onPress={next}>
+            <Text style={s.nextBtnText}>Continue</Text>
+            <Ionicons name="arrow-forward" size={18} color="#fff" />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={s.nextBtn} onPress={submit} disabled={submitting}>
+            {submitting
+              ? <ActivityIndicator color="#fff" />
+              : <>
+                  <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
+                  <Text style={s.nextBtnText}>{editMode ? "Save Changes" : "Create My Profile"}</Text>
+                </>
+            }
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
+const s = StyleSheet.create({
+  container:  { flex: 1, backgroundColor: colors.background },
+
   header: {
     flexDirection: "row", alignItems: "center", gap: spacing.sm,
-    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
-    backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: colors.border,
+    paddingHorizontal: spacing.md, paddingVertical: 14,
+    backgroundColor: colors.surfaceCard,
+    borderBottomWidth: 1, borderBottomColor: colors.borderSubtle,
   },
-  headerTitle: { flex: 1, fontFamily: fonts.bodyBold, fontSize: 16, color: colors.text },
-  stepNum:     { fontFamily: fonts.body, fontSize: 13, color: colors.textMuted },
+  headerTitle: { flex: 1, fontFamily: fonts.bodyBold, fontSize: 16, color: colors.textHeading },
+  stepNum:     { fontFamily: fonts.body, fontSize: 13, color: colors.outline },
 
-  stepTitle:  { fontFamily: fonts.bodyBold, fontSize: 18, color: colors.text, marginBottom: spacing.md },
-  inputLabel: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.textMuted, marginBottom: 6, marginTop: spacing.md },
-  input:      { backgroundColor: "#fff", borderRadius: radius.lg, borderWidth: 1, borderColor: colors.border, paddingHorizontal: spacing.md, paddingVertical: 12, fontFamily: fonts.body, fontSize: 15, color: colors.text },
+  stepTitle: { fontFamily: fonts.bodyBold, fontSize: 22, color: colors.textHeading, marginBottom: 6 },
+  stepSub:   { fontFamily: fonts.body, fontSize: 14, color: colors.outline, marginBottom: 20, lineHeight: 20 },
+  inputLabel:{ fontFamily: fonts.bodyBold, fontSize: 13, color: colors.outline, marginBottom: 8, marginTop: 20 },
 
-  skillsGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.xs },
-  skillChip: {
-    paddingHorizontal: spacing.sm, paddingVertical: 8, borderRadius: radius.pill,
-    borderWidth: 1.5, borderColor: colors.border, backgroundColor: "#fff",
+  // Skill grid
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  chip: {
+    flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 16, paddingVertical: 10,
+    borderRadius: radius.pill, borderWidth: 1.5,
+    borderColor: "#e2e8f0", backgroundColor: "#fff",
   },
-  skillChipActive: { backgroundColor: colors.indigo, borderColor: colors.indigo },
-  skillText:       { fontFamily: fonts.body, fontSize: 13, color: colors.text, textTransform: "capitalize" },
-  skillTextActive: { color: "#fff" },
+  chipActive:     { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipText:       { fontFamily: fonts.bodySemi, fontSize: 14, color: "#374151" },
+  chipTextActive: { color: "#fff" },
 
-  footer:     { backgroundColor: "#fff", borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.sm, paddingHorizontal: spacing.md },
-  nextBtn:    { backgroundColor: colors.indigo, borderRadius: radius.lg, paddingVertical: 14, alignItems: "center" },
+  // Custom skill
+  customRow: { flexDirection: "row", gap: 10, alignItems: "center" },
+  addBtn:    { width: 48, height: 48, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  input: {
+    backgroundColor: "#fff", borderRadius: 14,
+    borderWidth: 1, borderColor: "#e2e8f0",
+    paddingHorizontal: spacing.md, paddingVertical: 13,
+    fontFamily: fonts.body, fontSize: 15, color: colors.textHeading,
+  },
+  customChips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
+  customChip:  {
+    flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 12, paddingVertical: 7,
+    borderRadius: radius.pill, borderWidth: 1,
+    borderColor: colors.primary, backgroundColor: "#eef2ff",
+  },
+  customChipText: { fontFamily: fonts.bodySemi, fontSize: 13, color: colors.primary },
+
+  // Daily rate
+  rateWrap:       { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderRadius: 18, borderWidth: 1.5, borderColor: "#e2e8f0", overflow: "hidden", marginTop: 4 },
+  ratePrefix:     { width: 52, height: 60, backgroundColor: "#f8fafc", borderRightWidth: 1, borderRightColor: "#e2e8f0", alignItems: "center", justifyContent: "center" },
+  ratePrefixText: { fontFamily: fonts.bodyBold, fontSize: 22, color: colors.primary },
+  rateInput:      { flex: 1, paddingHorizontal: 16, paddingVertical: 14, fontFamily: fonts.bodyBold, fontSize: 26, color: colors.textHeading, letterSpacing: 1 },
+  rateSuffix:     { fontFamily: fonts.body, fontSize: 14, color: colors.outline, paddingRight: 16 },
+
+  suggestRow:      { flexDirection: "row", gap: 10, marginTop: 16 },
+  suggest:         { flex: 1, paddingVertical: 11, borderRadius: 12, borderWidth: 1.5, borderColor: "#e2e8f0", backgroundColor: "#fff", alignItems: "center" },
+  suggestActive:   { backgroundColor: colors.primary, borderColor: colors.primary },
+  suggestText:     { fontFamily: fonts.bodyBold, fontSize: 14, color: "#374151" },
+  suggestTextActive: { color: "#fff" },
+  rateHint:        { fontFamily: fonts.body, fontSize: 12, color: colors.outline, marginTop: 12, lineHeight: 18 },
+
+  footer:     { backgroundColor: colors.surfaceCard, borderTopWidth: 1, borderTopColor: colors.borderSubtle, paddingTop: 12, paddingHorizontal: spacing.md },
+  nextBtn:    { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.primary, borderRadius: 16, paddingVertical: 16 },
   nextBtnText:{ fontFamily: fonts.bodyBold, fontSize: 15, color: "#fff" },
-  gpsBtn:     { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderColor: colors.indigo, borderRadius: radius.lg, paddingHorizontal: spacing.md, paddingVertical: 12, marginBottom: spacing.sm, backgroundColor: "#f0f4ff" },
-  gpsBtnText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.indigo, flex: 1 },
 });

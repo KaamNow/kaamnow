@@ -6,7 +6,13 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
 BASE_DIR = Path(__file__).resolve().parent
-load_dotenv(BASE_DIR / ".env")
+# Load .env.dev first (dev override), fall back to .env
+_env_dev = BASE_DIR / ".env.dev"
+_env = BASE_DIR / ".env"
+if _env_dev.exists():
+    load_dotenv(_env_dev, override=True)
+elif _env.exists():
+    load_dotenv(_env)
 
 
 def _clean(value: Optional[str]) -> Optional[str]:

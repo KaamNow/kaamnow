@@ -24,7 +24,7 @@ export default function PrivacyScreen() {
   }, []);
 
   if (loading) {
-    return <View style={styles.center}><ActivityIndicator color={colors.saffron} /></View>;
+    return <View style={styles.center}><ActivityIndicator color={colors.primary} /></View>;
   }
 
   const content = lang === "en" ? doc?.content_en : doc?.content_hi || doc?.content_en;
@@ -47,8 +47,8 @@ export default function PrivacyScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
+  container: { flex: 1, backgroundColor: colors.background },
   center:    { flex: 1, justifyContent: "center", alignItems: "center" },
-  version:   { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginBottom: spacing.md },
-  body:      { fontFamily: fonts.body, fontSize: 14, color: colors.text, lineHeight: 22 },
+  version:   { fontFamily: fonts.body, fontSize: 12, color: colors.outline, marginBottom: spacing.md },
+  body:      { fontFamily: fonts.body, fontSize: 14, color: colors.textHeading, lineHeight: 22 },
 });

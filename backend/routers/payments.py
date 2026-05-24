@@ -5,7 +5,6 @@ from fastapi import APIRouter, Depends, HTTPException
 from ..auth import get_current_user
 from ..config import settings
 from ..db import db
-from ..engagements import _notify
 from ..payment_service import create_order, verify_signature
 from ..schemas import PaymentVerifyIn
 from ..utils import utc_now_iso
@@ -18,34 +17,29 @@ def _ensure_payments_enabled() -> None:
         raise HTTPException(status_code=503, detail="Payments are disabled")
 
 
-async def _payment_parties(engagement: dict) -> tuple[str, str]:
-    worker = await db.workers.find_one({"id": engagement.get("worker_id")}, {"_id": 0})
-    if not worker or not worker.get("user_id"):
-        raise HTTPException(status_code=404, detail="Worker not found")
-    return engagement["customer_id"], worker["user_id"]
-
-
 @router.post("/create-order")
 async def create_payment_order(body: dict, user: dict = Depends(get_current_user)):
     _ensure_payments_enabled()
-    engagement_id = body.get("engagement_id")
-    if not engagement_id:
-        raise HTTPException(status_code=400, detail="engagement_id required")
-    engagement = await db.engagements.find_one({"id": engagement_id}, {"_id": 0})
-    if not engagement:
-        raise HTTPException(status_code=404, detail="Engagement not found")
-    if engagement.get("customer_id") != user["id"]:
-        raise HTTPException(status_code=403, detail="Only the customer can pay")
+    work_request_id = body.get("work_request_id")
+    if not work_request_id:
+        raise HTTPException(status_code=400, detail="work_request_id required")
+    wr = await db.work_requests.find_one({"id": work_request_id}, {"_id": 0})
+    if not wr:
+        raise HTTPException(status_code=404, detail="Work request not found")
+    if wr.get("requested_by_user_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="Only the requester can pay")
 
-    amount = int(engagement.get("payment_amount") or engagement.get("daily_rate") or 0)
+    amount = int(wr.get("payment_amount") or wr.get("daily_rate") or 0)
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Payment amount missing")
-    payer_id, payee_id = await _payment_parties(engagement)
-    order = create_order(amount, receipt=engagement_id)
+
+    payer_id = wr["requested_by_user_id"]
+    payee_id = wr["requested_to_user_id"]
+    order = create_order(amount, receipt=work_request_id)
     now = utc_now_iso()
     payment = {
         "id": str(uuid.uuid4()),
-        "engagement_id": engagement_id,
+        "work_request_id": work_request_id,
         "payer_id": payer_id,
         "payee_id": payee_id,
         "amount": amount,
@@ -57,8 +51,8 @@ async def create_payment_order(body: dict, user: dict = Depends(get_current_user
         "updated_at": now,
     }
     await db.payments.insert_one(payment)
-    await db.engagements.update_one(
-        {"id": engagement_id},
+    await db.work_requests.update_one(
+        {"id": work_request_id},
         {"$set": {"payment_status": "created", "payment_amount": amount, "updated_at": now}},
     )
     return {
@@ -93,22 +87,29 @@ async def verify_payment(body: PaymentVerifyIn, user: dict = Depends(get_current
             }
         },
     )
-    await db.engagements.update_one(
-        {"id": payment["engagement_id"]},
+    work_request_id = payment.get("work_request_id")
+    if work_request_id:
+        await db.work_requests.update_one(
+            {"id": work_request_id},
+            {
+                "$set": {
+                    "payment_status": "paid",
+                    "payment_id": body.razorpay_payment_id,
+                    "updated_at": now,
+                }
+            },
+        )
+    await db.notifications.insert_one(
         {
-            "$set": {
-                "payment_status": "paid",
-                "payment_id": body.razorpay_payment_id,
-                "updated_at": now,
-            }
-        },
-    )
-    await _notify(
-        payment["payee_id"],
-        "Payment received",
-        f"Rs {payment['amount']} received for your KaamNow job.",
-        "payment_received",
-        payment["engagement_id"],
+            "id": str(uuid.uuid4()),
+            "user_id": payment["payee_id"],
+            "title": "Payment received",
+            "body": f"Rs {payment['amount']} received for your KaamNow job.",
+            "type": "payment_received",
+            "work_request_id": work_request_id,
+            "read": False,
+            "created_at": now,
+        }
     )
     return {"success": True}
 

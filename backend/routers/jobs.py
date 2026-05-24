@@ -5,12 +5,10 @@ from typing import List, Optional, Union
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ..auth import get_current_user, get_optional_user, is_worker
+from ..auth import get_current_user, get_optional_user
 from ..db import db
-from ..engagements import _notify, create_engagement_request
 from ..schemas import JobIn, JobOut
 from ..utils import utc_now_iso
-from ..whatsapp_notify import notify_worker_job_alert
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
@@ -157,21 +155,17 @@ async def create_job(body: JobIn, user: dict = Depends(get_current_user)):
     job_payload["required_skills"] = _legacy_required_skills(job_payload)
     job_doc = {
         "id": job_id,
-        "customer_id": user["id"],
-        "customer_name": user["name"],
+        "posted_by_user_id": user["id"],
+        "posted_by_name": user.get("name", ""),
         **job_payload,
+        "skills": [],
         "status": "open",
-        "filled_count": 0,
-        "accepted_worker_ids": [],
-        "is_template": job_payload.get("is_template", False),
-        "template_name": job_payload.get("template_name"),
+        "selected_request_id": None,
+        "selected_user_id": None,
         "created_at": utc_now_iso(),
+        "updated_at": utc_now_iso(),
     }
     await db.jobs.insert_one(job_doc)
-
-    # Fire WhatsApp job alerts to matching available workers (non-blocking)
-    asyncio.create_task(_alert_matching_workers(job_doc))
-
     return {k: job_doc.get(k) for k in JobOut.model_fields.keys()}
 
 
@@ -181,24 +175,20 @@ async def delete_job(job_id: str, user: dict = Depends(get_current_user)):
     job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    if job["customer_id"] != user["id"]:
+    owner_id = job.get("posted_by_user_id")
+    if owner_id != user["id"]:
         raise HTTPException(status_code=403, detail="You can only delete your own jobs")
-    if job.get("status") in ("booked", "completed"):
+    if job.get("status") == "completed":
         raise HTTPException(
             status_code=400,
-            detail="Cannot delete a booked or completed job. Cancel the booking first.",
+            detail="Cannot delete a completed job.",
         )
 
-    # Cancel any pending engagements for this job
-    await db.engagements.update_many(
+    now = utc_now_iso()
+    cancel_set = {"status": "cancelled", "cancelled_at": now, "updated_at": now}
+    await db.work_requests.update_many(
         {"job_id": job_id, "status": {"$in": ["requested", "accepted"]}},
-        {
-            "$set": {
-                "status": "cancelled",
-                "cancelled_at": utc_now_iso(),
-                "updated_at": utc_now_iso(),
-            }
-        },
+        {"$set": cancel_set},
     )
     await db.jobs.delete_one({"id": job_id})
     return {"ok": True}
@@ -217,19 +207,17 @@ async def _alert_matching_workers(job: dict) -> None:
         job_lat = float(job.get("lat") or 0) or None
         job_lng = float(job.get("lng") or 0) or None
 
-        # Available workers only
+        # Available service profiles only (new schema)
         workers = (
-            await db.workers.find(
-                {"available": True},
+            await db.service_profiles.find(
+                {"availability": True, "is_active": True},
                 {
                     "_id": 0,
                     "id": 1,
                     "user_id": 1,
-                    "address": 1,
-                    "structured_skills": 1,
+                    "pincode": 1,
                     "skills": 1,
-                    "lat": 1,
-                    "lng": 1,
+                    "categories": 1,
                 },
             )
             .limit(200)
@@ -238,8 +226,8 @@ async def _alert_matching_workers(job: dict) -> None:
 
         matched = []
         for w in workers:
-            w_skills = _skill_names(w.get("structured_skills")) | _skill_names(w.get("skills"))
-            w_pincode = (w.get("address") or {}).get("pincode")
+            w_skills = _skill_names(w.get("skills")) | _skill_names(w.get("categories"))
+            w_pincode = w.get("pincode")
             skill_match = bool(job_skills & w_skills)
             same_pincode = bool(job_pincode and w_pincode and job_pincode == w_pincode)
 
@@ -273,13 +261,17 @@ async def _alert_matching_workers(job: dict) -> None:
             if already_sent:
                 continue
 
-            # In-app notification (always, no phone needed)
-            await _notify(
-                uid,
-                "New job near you!",
-                f"{job.get('title', 'A new job')} in {job.get('village', 'your area')} — ₹{job.get('daily_rate', '?')}/day",
-                "job_alert",
-                job_id,
+            await db.notifications.insert_one(
+                {
+                    "id": str(uuid.uuid4()),
+                    "user_id": uid,
+                    "title": "New job near you!",
+                    "body": f"{job.get('title', 'A new job')} in {job.get('village', 'your area')} — ₹{job.get('daily_rate', '?')}/day",
+                    "type": "job_alert",
+                    "ref_id": job_id,
+                    "read": False,
+                    "created_at": utc_now_iso(),
+                }
             )
 
             # Log before sending WhatsApp
@@ -322,7 +314,10 @@ async def list_jobs(category: Optional[str] = None, status: Optional[str] = None
 @router.get("/mine", response_model=List[JobOut])
 async def my_jobs(user: dict = Depends(get_current_user)):
     jobs = (
-        await db.jobs.find({"customer_id": user["id"]}, {"_id": 0})
+        await db.jobs.find(
+            {"posted_by_user_id": user["id"]},
+            {"_id": 0},
+        )
         .sort("created_at", -1)
         .to_list(100)
     )
@@ -342,26 +337,20 @@ async def job_feed(
     worker_lat: Optional[float] = None
     worker_lng: Optional[float] = None
 
-    if is_worker(user):
-        worker = await db.workers.find_one({"user_id": user["id"]}, {"_id": 0})
-        if worker:
-            selected_pincode = selected_pincode or (worker.get("address") or {}).get("pincode")
+    if user.get("id"):
+        sp = await db.service_profiles.find_one({"user_id": user["id"]}, {"_id": 0})
+        if sp:
+            selected_pincode = selected_pincode or sp.get("pincode")
             if not selected_skills:
-                selected_skills = sorted(
-                    _skill_names(worker.get("structured_skills"))
-                    | _skill_names(worker.get("skills"))
-                )
-            try:
-                worker_lat = float(worker.get("lat") or 0) or None
-                worker_lng = float(worker.get("lng") or 0) or None
-            except (TypeError, ValueError):
-                pass
+                selected_skills = list(sp.get("skills") or [])
 
     query: dict = {
         "status": "open",
         "is_template": {"$ne": True},
         "$expr": {"$lt": ["$filled_count", "$workers_needed"]},
     }
+    if user.get("id"):
+        query["posted_by_user_id"] = {"$ne": user["id"]}
     if category:
         query["category"] = category
 
@@ -451,7 +440,7 @@ async def list_public_jobs(
 async def list_templates(user: dict = Depends(get_current_user)):
     return (
         await db.jobs.find(
-            {"customer_id": user["id"], "is_template": True},
+            {"posted_by_user_id": user["id"], "is_template": True},
             {"_id": 0},
         )
         .sort("created_at", -1)
@@ -473,8 +462,8 @@ async def create_template(body: dict, user: dict = Depends(get_current_user)):
     payload["required_skills"] = _legacy_required_skills(payload)
     template_doc = {
         "id": template_id,
-        "customer_id": user["id"],
-        "customer_name": user["name"],
+        "posted_by_user_id": user["id"],
+        "posted_by_name": user.get("name", ""),
         "title": (payload.get("title") or payload.get("template_name") or "Job template")[:120],
         "category": payload.get("category") or "other",
         "description": (payload.get("description") or "")[:1000],
@@ -493,7 +482,6 @@ async def create_template(body: dict, user: dict = Depends(get_current_user)):
         "is_anonymous": bool(payload.get("is_anonymous", False)),
         "status": "template",
         "filled_count": 0,
-        "accepted_worker_ids": [],
         "is_template": True,
         "template_name": (payload.get("template_name") or payload.get("title") or "Template")[:60],
         "created_at": now,
@@ -505,7 +493,7 @@ async def create_template(body: dict, user: dict = Depends(get_current_user)):
 @router.delete("/templates/{template_id}")
 async def delete_template(template_id: str, user: dict = Depends(get_current_user)):
     result = await db.jobs.delete_one(
-        {"id": template_id, "customer_id": user["id"], "is_template": True}
+        {"id": template_id, "posted_by_user_id": user["id"], "is_template": True}
     )
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Template not found")
@@ -517,7 +505,7 @@ async def create_from_template(
     template_id: str, body: dict, user: dict = Depends(get_current_user)
 ):
     template = await db.jobs.find_one(
-        {"id": template_id, "customer_id": user["id"], "is_template": True},
+        {"id": template_id, "posted_by_user_id": user["id"], "is_template": True},
         {"_id": 0},
     )
     if not template:
@@ -533,8 +521,9 @@ async def create_from_template(
         "is_template": False,
         "template_name": template.get("template_name"),
         "filled_count": 0,
-        "accepted_worker_ids": [],
         "created_at": utc_now_iso(),
+        "posted_by_user_id": user["id"],
+        "posted_by_name": user.get("name", ""),
     }
     await db.jobs.insert_one(job_doc)
     asyncio.create_task(_alert_matching_workers(job_doc))
@@ -551,14 +540,50 @@ async def get_job(job_id: str):
 
 @router.post("/{job_id}/interest")
 async def express_interest(job_id: str, user: dict = Depends(get_current_user)):
-    if not is_worker(user):
-        raise HTTPException(status_code=403, detail="Activate worker profile first")
-    worker = await db.workers.find_one({"user_id": user["id"]}, {"_id": 0})
-    if not worker:
-        raise HTTPException(status_code=404, detail="Worker profile not found")
-    return await create_engagement_request(
-        job_id=job_id,
-        worker_id=worker["id"],
-        source="worker_interest",
-        user=user,
+    """Apply to a job — creates a work_request of type job_application."""
+    job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job.get("status") != "open":
+        raise HTTPException(status_code=400, detail="Job is not open for applications")
+    posted_by = job.get("posted_by_user_id")
+    if posted_by == user["id"]:
+        raise HTTPException(status_code=400, detail="You cannot apply to your own job")
+
+    import uuid as _uuid
+
+    from ..utils import utc_now_iso as _now
+
+    recipient = await db.users.find_one({"id": posted_by}, {"_id": 0, "id": 1, "name": 1})
+    dup = await db.work_requests.find_one(
+        {
+            "requested_by_user_id": user["id"],
+            "job_id": job_id,
+            "request_type": "job_application",
+            "status": {"$in": ["requested", "accepted"]},
+        }
     )
+    if dup:
+        raise HTTPException(status_code=400, detail="You have already applied to this job")
+
+    now = _now()
+    doc = {
+        "id": str(_uuid.uuid4()),
+        "requested_by_user_id": user["id"],
+        "requested_by_name": user.get("name", ""),
+        "requested_to_user_id": posted_by,
+        "requested_to_name": (recipient or {}).get("name", ""),
+        "request_type": "job_application",
+        "job_id": job_id,
+        "message": "",
+        "status": "requested",
+        "created_at": now,
+        "updated_at": now,
+        "accepted_at": None,
+        "rejected_at": None,
+        "cancelled_at": None,
+        "completed_at": None,
+    }
+    await db.work_requests.insert_one(doc)
+    doc.pop("_id", None)
+    return doc

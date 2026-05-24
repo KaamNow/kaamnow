@@ -2,173 +2,381 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import {
   View, Text, FlatList, TextInput, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator,
+  ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../contexts/AuthContext";
-import { useTranslation } from "../i18n";
-import { colors, fonts, spacing, radius } from "../theme";
+import { colors, fonts } from "../theme";
 import api from "../lib/api";
 import { track } from "../lib/analytics";
+
+const STATUS_CONFIG = {
+  requested: { label: "Pending",   bg: "#fef3c7", text: "#92400e" },
+  accepted:  { label: "Active",    bg: "#d1fae5", text: "#065f46" },
+  completed: { label: "Completed", bg: "#dbeafe", text: "#1d4ed8" },
+  rejected:  { label: "Declined",  bg: "#fee2e2", text: "#991b1b" },
+  cancelled: { label: "Cancelled", bg: "#f3f4f6", text: "#6b7280" },
+};
+
+// Contextual quick replies — poster sees worker-facing Qs, worker sees poster-facing Qs
+const QUICK_REPLIES = {
+  // direction === "received" → I'm the job poster, they applied to me
+  received: [
+    "When can you start?",
+    "What's your experience?",
+    "Share your location",
+    "Can you bring tools?",
+    "I'll confirm by EOD",
+  ],
+  // direction === "sent" → I'm the worker, I applied
+  sent: [
+    "I'm available ✓",
+    "Ready to start 👍",
+    "Please share site address",
+    "What tools do I need?",
+    "Is the rate negotiable?",
+  ],
+};
 
 export default function ChatScreen({ route, navigation }) {
   const { engagementId } = route.params || {};
   const { user } = useAuth();
-  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const [messages, setMessages] = useState([]);
-  const [text, setText] = useState("");
-  const [sending, setSending] = useState(false);
-  const [loading, setLoading] = useState(true);
+
+  const [messages,   setMessages]   = useState([]);
+  const [engagement, setEngagement] = useState(null);
+  const [text,       setText]       = useState("");
+  const [sending,    setSending]    = useState(false);
+  const [loading,    setLoading]    = useState(true);
+
   const listRef = useRef(null);
   const pollRef = useRef(null);
 
-  const load = useCallback(async (quiet = false) => {
+  const loadEngagement = useCallback(async () => {
+    try {
+      const r = await api.get(`/work-requests/${engagementId}`);
+      setEngagement(r.data);
+    } catch {}
+  }, [engagementId]);
+
+  const loadMessages = useCallback(async (quiet = false) => {
     try {
       const r = await api.get(`/chat/${engagementId}/messages`);
       setMessages(r.data || []);
-      if (!quiet) setLoading(false);
-    } catch {
-      if (!quiet) setLoading(false);
-    }
+      // Mark all messages read whenever we load (silently)
+      api.post(`/chat/${engagementId}/read-all`).catch(() => {});
+    } catch {}
+    finally { if (!quiet) setLoading(false); }
   }, [engagementId]);
 
   useEffect(() => {
-    load();
-    pollRef.current = setInterval(() => load(true), 4000);
+    Promise.all([loadEngagement(), loadMessages()]);
+    pollRef.current = setInterval(() => loadMessages(true), 4000);
     return () => clearInterval(pollRef.current);
-  }, [load]);
+  }, [loadEngagement, loadMessages]);
 
-  const send = async () => {
-    const trimmed = text.trim();
+  const sendText = async (msg) => {
+    const trimmed = (msg ?? text).trim();
     if (!trimmed || sending) return;
     setSending(true);
     setText("");
     try {
       track("chat_message_sent", { engagement_id: engagementId });
       await api.post(`/chat/${engagementId}/send`, { text: trimmed });
-      await load(true);
+      await loadMessages(true);
     } catch {
-      setText(trimmed);
+      if (!msg) setText(trimmed); // restore only if it was from the input
     } finally {
       setSending(false);
     }
   };
 
+  const canChat   = engagement?.status === "accepted" || engagement?.status === "completed";
+  const otherName = engagement
+    ? (engagement.direction === "sent" ? engagement.requested_to_name : engagement.requested_by_name)
+    : "…";
+  const jobTitle  = engagement?.job_summary?.title;
+  const jobId     = engagement?.job_summary?.id;
+  const statusCfg = STATUS_CONFIG[engagement?.status] || STATUS_CONFIG.requested;
+  const quickReplies = QUICK_REPLIES[engagement?.direction] || QUICK_REPLIES.sent;
+
+  // Last message from me — for Delivered/Read label
+  const lastMineId = [...messages].reverse().find(m => m.sender_id === user?.id)?.id ?? null;
+
   const renderItem = ({ item }) => {
-    const mine = item.sender_id === user?.id;
+    const mine    = item.sender_id === user?.id;
+    const timeStr = new Date(item.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const isLastMine = mine && item.id === lastMineId;
+
     return (
-      <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleOther]}>
-        <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{item.text}</Text>
-        <View style={styles.bubbleMeta}>
-          <Text style={[styles.time, mine && styles.timeMine]}>
-            {new Date(item.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+      <View style={mine ? S.rowMine : S.rowOther}>
+        <View style={[S.bubble, mine ? S.bubbleMine : S.bubbleOther]}>
+          <Text style={[S.bubbleText, mine && S.bubbleTextMine]}>
+            {item.image_url ? "📷 Photo" : item.voice_url ? "🎤 Voice message" : item.text}
           </Text>
-          {mine && (
-            <Ionicons
-              name={item.read ? "checkmark-done" : "checkmark"}
-              size={12}
-              color={item.read ? colors.success : "rgba(255,255,255,0.6)"}
-              style={{ marginLeft: 2 }}
-            />
-          )}
+          <View style={S.bubbleMeta}>
+            <Text style={[S.time, mine && S.timeMine]}>{timeStr}</Text>
+            {mine && (
+              <Ionicons
+                name="checkmark-done"
+                size={13}
+                color={item.read ? "#10b981" : "rgba(255,255,255,0.5)"}
+                style={{ marginLeft: 3 }}
+              />
+            )}
+          </View>
         </View>
+        {/* Delivered / Read label — only under the very last sent message */}
+        {isLastMine && (
+          <Text style={[S.receiptLabel, item.read && S.receiptLabelRead]}>
+            {item.read ? "Read" : "Delivered"}
+          </Text>
+        )}
       </View>
     );
   };
 
+  // ── Header ────────────────────────────────────────────────────────────────
+  const Header = () => (
+    <View style={S.header}>
+      <TouchableOpacity onPress={() => navigation.goBack()} style={S.headerBack} hitSlop={8}>
+        <Ionicons name="arrow-back" size={22} color={colors.textHeading} />
+      </TouchableOpacity>
+      <View style={{ flex: 1 }}>
+        <Text style={S.headerName} numberOfLines={1}>{otherName}</Text>
+        {jobTitle ? <Text style={S.headerSub} numberOfLines={1}>{jobTitle}</Text> : null}
+      </View>
+      {engagement && (
+        <View style={[S.statusBadge, { backgroundColor: statusCfg.bg }]}>
+          <Text style={[S.statusBadgeText, { color: statusCfg.text }]}>{statusCfg.label}</Text>
+        </View>
+      )}
+    </View>
+  );
+
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator color={colors.saffron} />
+      <View style={[S.safe, { paddingTop: insets.top }]}>
+        <Header />
+        <View style={S.center}><ActivityIndicator color={colors.primary} /></View>
       </View>
     );
   }
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[S.safe, { paddingTop: insets.top }]}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={insets.top + 44}
+      keyboardVerticalOffset={insets.top}
     >
+      <Header />
+
+      {/* Job banner — tappable → JobDetail */}
+      {engagement?.job_summary && (
+        <TouchableOpacity
+          style={S.jobBanner}
+          activeOpacity={0.8}
+          onPress={() => jobId && navigation.navigate("JobDetail", { jobId })}
+        >
+          <View style={S.jobBannerIcon}>
+            <Ionicons name="briefcase-outline" size={16} color={colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={S.jobBannerTitle} numberOfLines={1}>{engagement.job_summary.title}</Text>
+            {engagement.job_summary.budget_max
+              ? <Text style={S.jobBannerSub}>₹{engagement.job_summary.budget_max}/day · tap to view</Text>
+              : <Text style={S.jobBannerSub}>Tap to view job details</Text>}
+          </View>
+          <Ionicons name="chevron-forward" size={14} color={colors.outline} />
+        </TouchableOpacity>
+      )}
+
+      {/* Cover message — shown when no messages yet */}
+      {engagement?.message && messages.length === 0 && (
+        <View style={S.coverMsg}>
+          <Text style={S.coverMsgLabel}>APPLICATION MESSAGE</Text>
+          <Text style={S.coverMsgText}>"{engagement.message}"</Text>
+        </View>
+      )}
+
+      {/* Messages list */}
       <FlatList
         ref={listRef}
         data={messages}
         keyExtractor={(m) => m.id}
         renderItem={renderItem}
-        contentContainerStyle={{ padding: spacing.md, paddingBottom: spacing.sm }}
+        contentContainerStyle={S.messageList}
         onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
         ListEmptyComponent={
-          <View style={styles.emptyWrap}>
-            <Text style={styles.emptyText}>{t("chat_empty")}</Text>
+          <View style={S.emptyWrap}>
+            <Ionicons
+              name={canChat ? "chatbubble-outline" : "lock-closed-outline"}
+              size={32} color={colors.outline}
+              style={{ marginBottom: 10 }}
+            />
+            <Text style={S.emptyText}>
+              {canChat ? "Send your first message" : "Chat opens after the request is accepted"}
+            </Text>
           </View>
         }
       />
 
-      <View style={[styles.inputBar, { paddingBottom: insets.bottom + 8 }]}>
-        <TextInput
-          style={styles.input}
-          value={text}
-          onChangeText={setText}
-          placeholder={t("chat_placeholder")}
-          placeholderTextColor={colors.textMuted}
-          multiline
-          maxLength={2000}
-        />
-        <TouchableOpacity
-          style={[styles.sendBtn, { opacity: text.trim() ? 1 : 0.4 }]}
-          onPress={send}
-          disabled={!text.trim() || sending}
-        >
-          {sending
-            ? <ActivityIndicator size="small" color="#fff" />
-            : <Ionicons name="send" size={18} color="#fff" />
-          }
-        </TouchableOpacity>
-      </View>
+      {canChat ? (
+        <>
+          {/* Quick reply pills */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={S.quickBar}
+            contentContainerStyle={S.quickBarContent}
+          >
+            {quickReplies.map((reply) => (
+              <TouchableOpacity
+                key={reply}
+                style={S.quickPill}
+                activeOpacity={0.75}
+                onPress={() => sendText(reply)}
+                disabled={sending}
+              >
+                <Text style={S.quickPillText}>{reply}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {/* Input bar */}
+          <View style={[S.inputBar, { paddingBottom: insets.bottom + 8 }]}>
+            <TextInput
+              style={S.input}
+              value={text}
+              onChangeText={setText}
+              placeholder="Type a message…"
+              placeholderTextColor={colors.outline}
+              multiline
+              maxLength={2000}
+              onSubmitEditing={() => sendText()}
+            />
+            <TouchableOpacity
+              style={[S.sendBtn, { opacity: text.trim() ? 1 : 0.4 }]}
+              onPress={() => sendText()}
+              disabled={!text.trim() || sending}
+            >
+              {sending
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <Ionicons name="send" size={18} color="#fff" />
+              }
+            </TouchableOpacity>
+          </View>
+        </>
+      ) : (
+        <View style={[S.lockedBar, { paddingBottom: insets.bottom + 14 }]}>
+          <Ionicons name="lock-closed-outline" size={15} color={colors.outline} />
+          <Text style={S.lockedText}>
+            {engagement?.status === "completed"
+              ? "This job is completed"
+              : "Chat unlocks after acceptance"}
+          </Text>
+        </View>
+      )}
     </KeyboardAvoidingView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bg },
-  center:    { flex: 1, justifyContent: "center", alignItems: "center" },
+const S = StyleSheet.create({
+  safe:   { flex: 1, backgroundColor: "#f9f9fe" },
+  center: { flex: 1, justifyContent: "center", alignItems: "center" },
 
-  bubble: {
-    maxWidth: "78%", borderRadius: radius.lg, padding: spacing.sm,
-    marginBottom: spacing.xs,
+  // ── Header
+  header: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    paddingHorizontal: 16, paddingVertical: 12,
+    backgroundColor: "#ffffff",
+    borderBottomWidth: 1, borderBottomColor: "#e8e8ed",
   },
-  bubbleMine: {
-    alignSelf: "flex-end",
-    backgroundColor: colors.indigo,
-    borderBottomRightRadius: 4,
+  headerBack:      { width: 36, height: 36, borderRadius: 18, backgroundColor: "#f0f0f5", alignItems: "center", justifyContent: "center" },
+  headerName:      { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.textHeading },
+  headerSub:       { fontFamily: fonts.body, fontSize: 12, color: colors.outline, marginTop: 1 },
+  statusBadge:     { borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
+  statusBadgeText: { fontFamily: fonts.bodyBold, fontSize: 11, letterSpacing: 0.3 },
+
+  // ── Job banner
+  jobBanner: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    backgroundColor: "#ffffff", borderBottomWidth: 1, borderBottomColor: "#e8e8ed",
+    paddingHorizontal: 16, paddingVertical: 10,
   },
-  bubbleOther: {
-    alignSelf: "flex-start",
-    backgroundColor: "#fff",
-    borderBottomLeftRadius: 4,
-    borderWidth: 1, borderColor: colors.border,
+  jobBannerIcon:  { width: 32, height: 32, borderRadius: 9, backgroundColor: "#dae2fd", alignItems: "center", justifyContent: "center" },
+  jobBannerTitle: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.textHeading },
+  jobBannerSub:   { fontFamily: fonts.body, fontSize: 11, color: colors.primary, marginTop: 1 },
+
+  // ── Cover message
+  coverMsg: {
+    marginHorizontal: 16, marginTop: 12,
+    backgroundColor: "#f0f0f5", borderRadius: 12, padding: 12,
   },
-  bubbleText:     { fontFamily: fonts.body, fontSize: 15, color: colors.text },
-  bubbleTextMine: { color: "#fff" },
-  bubbleMeta:     { flexDirection: "row", alignItems: "center", marginTop: 3, alignSelf: "flex-end" },
-  time:     { fontFamily: fonts.body, fontSize: 10, color: colors.textMuted },
+  coverMsgLabel: { fontFamily: fonts.bodyBold, fontSize: 10, color: colors.outline, letterSpacing: 0.8, marginBottom: 4 },
+  coverMsgText:  { fontFamily: fonts.bodySemi, fontSize: 14, color: colors.textHeading, fontStyle: "italic" },
+
+  // ── Messages
+  messageList: { paddingHorizontal: 16, paddingVertical: 12 },
+
+  rowMine:  { alignItems: "flex-end",   marginBottom: 6 },
+  rowOther: { alignItems: "flex-start", marginBottom: 6 },
+
+  bubble: { maxWidth: "78%", borderRadius: 18, padding: 12 },
+  bubbleMine:  { backgroundColor: colors.primary, borderBottomRightRadius: 4 },
+  bubbleOther: { backgroundColor: "#ffffff", borderBottomLeftRadius: 4, borderWidth: 1, borderColor: "#e8e8ed" },
+
+  bubbleText:     { fontFamily: fonts.body, fontSize: 15, color: colors.textHeading },
+  bubbleTextMine: { color: "#ffffff" },
+  bubbleMeta:     { flexDirection: "row", alignItems: "center", marginTop: 4, alignSelf: "flex-end" },
+  time:     { fontFamily: fonts.body, fontSize: 10, color: colors.outline },
   timeMine: { color: "rgba(255,255,255,0.65)" },
 
-  emptyWrap: { alignItems: "center", marginTop: 80 },
-  emptyText: { fontFamily: fonts.body, fontSize: 14, color: colors.textMuted },
+  receiptLabel:     { fontFamily: fonts.body, fontSize: 10, color: colors.outline, marginTop: 2, marginRight: 4 },
+  receiptLabelRead: { color: "#10b981" },
 
+  emptyWrap: { alignItems: "center", marginTop: 80 },
+  emptyText: { fontFamily: fonts.body, fontSize: 14, color: colors.outline, textAlign: "center" },
+
+  // ── Quick reply pills
+  quickBar: {
+    backgroundColor: "#ffffff",
+    borderTopWidth: 1, borderTopColor: "#f0f0f5",
+    maxHeight: 52,
+  },
+  quickBarContent: {
+    flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 14, paddingVertical: 10, gap: 8,
+  },
+  quickPill: {
+    paddingHorizontal: 14, paddingVertical: 7,
+    borderRadius: 20, borderWidth: 1.5, borderColor: colors.primary,
+    backgroundColor: "#f0f4ff",
+  },
+  quickPillText: { fontFamily: fonts.bodySemi, fontSize: 13, color: colors.primary },
+
+  // ── Input bar
   inputBar: {
     flexDirection: "row", alignItems: "flex-end",
-    backgroundColor: "#fff", borderTopWidth: 1, borderTopColor: colors.border,
-    paddingHorizontal: spacing.md, paddingTop: spacing.sm, gap: spacing.sm,
+    backgroundColor: "#ffffff", borderTopWidth: 1, borderTopColor: "#e8e8ed",
+    paddingHorizontal: 16, paddingTop: 10, gap: 10,
   },
   input: {
-    flex: 1, fontFamily: fonts.body, fontSize: 15, color: colors.text,
-    maxHeight: 100, paddingVertical: 8,
+    flex: 1, fontFamily: fonts.body, fontSize: 15, color: colors.textHeading,
+    maxHeight: 100, paddingVertical: 9, paddingHorizontal: 14,
+    backgroundColor: "#f0f0f5", borderRadius: 22,
   },
   sendBtn: {
-    backgroundColor: colors.indigo, borderRadius: 20,
-    width: 36, height: 36, justifyContent: "center", alignItems: "center",
+    backgroundColor: colors.primary, borderRadius: 22,
+    width: 42, height: 42, justifyContent: "center", alignItems: "center",
   },
+
+  // ── Locked bar
+  lockedBar: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    backgroundColor: "#ffffff", borderTopWidth: 1, borderTopColor: "#e8e8ed",
+    paddingHorizontal: 16, paddingTop: 16,
+  },
+  lockedText: { fontFamily: fonts.bodySemi, fontSize: 13, color: colors.outline },
 });
