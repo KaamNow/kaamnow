@@ -74,6 +74,8 @@ export default function ChatsListScreen({ navigation }) {
     const jobTitle  = item.job_summary?.title || item.request_type_label || "Work request";
     const lastMsg   = item.last_message;
     const timestamp = timeAgo(lastMsg?.created_at || item.updated_at || item.created_at);
+    const isExpert  = item.request_type === "job_application" ? isSent : !isSent;
+    const roleTag   = isExpert ? "Work I Do" : "You Posted";
 
     if (section.key === "incoming") {
       return (
@@ -87,7 +89,10 @@ export default function ChatsListScreen({ navigation }) {
               <Text style={S.name} numberOfLines={1}>{otherName}</Text>
               <Text style={S.time}>{timestamp}</Text>
             </View>
-            <Text style={S.jobLabel} numberOfLines={1}>{jobTitle}</Text>
+            <View style={S.jobRow}>
+              <Text style={S.jobLabel} numberOfLines={1}>{jobTitle}</Text>
+              <View style={S.roleChip}><Text style={S.roleChipText}>{roleTag}</Text></View>
+            </View>
             {item.message ? (
               <Text style={S.preview} numberOfLines={1}>"{item.message}"</Text>
             ) : null}
@@ -108,6 +113,13 @@ export default function ChatsListScreen({ navigation }) {
                 onPress={() => act(`/work-requests/${item.id}/reject`, item.id)}
               >
                 <Text style={S.declineBtnText}>Decline</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={S.detailsBtn}
+                onPress={() => navigation.navigate("EngagementDetail", { id: item.id })}
+              >
+                <Text style={S.detailsBtnText}>Details</Text>
+                <Ionicons name="chevron-forward" size={11} color={colors.primary} />
               </TouchableOpacity>
             </View>
           </View>
@@ -131,7 +143,10 @@ export default function ChatsListScreen({ navigation }) {
               <Text style={S.name} numberOfLines={1}>{otherName}</Text>
               <Text style={S.time}>{timestamp}</Text>
             </View>
-            <Text style={S.jobLabel} numberOfLines={1}>{jobTitle}</Text>
+            <View style={S.jobRow}>
+              <Text style={S.jobLabel} numberOfLines={1}>{jobTitle}</Text>
+              <View style={S.roleChip}><Text style={S.roleChipText}>{roleTag}</Text></View>
+            </View>
             {lastMsg ? (
               <Text style={S.preview} numberOfLines={1}>
                 {lastMsg.is_mine ? "You: " : ""}{lastMsg.text}
@@ -147,7 +162,11 @@ export default function ChatsListScreen({ navigation }) {
 
     if (section.key === "waiting") {
       return (
-        <View style={[S.card, { opacity: 0.72 }]}>
+        <TouchableOpacity
+          style={[S.card, { opacity: 0.82 }]}
+          activeOpacity={0.75}
+          onPress={() => navigation.navigate("EngagementDetail", { id: item.id })}
+        >
           <View style={{ position: "relative" }}>
             <Avatar name={otherName} size={44} />
             <View style={[S.dot, { backgroundColor: "#9ca3af" }]} />
@@ -157,13 +176,17 @@ export default function ChatsListScreen({ navigation }) {
               <Text style={S.name} numberOfLines={1}>{otherName}</Text>
               <Text style={S.time}>{timestamp}</Text>
             </View>
-            <Text style={S.jobLabel} numberOfLines={1}>{jobTitle}</Text>
+            <View style={S.jobRow}>
+              <Text style={S.jobLabel} numberOfLines={1}>{jobTitle}</Text>
+              <View style={S.roleChip}><Text style={S.roleChipText}>{roleTag}</Text></View>
+            </View>
             <View style={[S.badge, { backgroundColor: "#f3f4f6" }]}>
               <Ionicons name="time-outline" size={10} color="#6b7280" />
               <Text style={[S.badgeText, { color: "#6b7280" }]}>Awaiting response</Text>
             </View>
           </View>
-        </View>
+          <Ionicons name="chevron-forward" size={16} color={colors.outline} style={{ marginLeft: 4 }} />
+        </TouchableOpacity>
       );
     }
 
@@ -180,7 +203,10 @@ export default function ChatsListScreen({ navigation }) {
             <Text style={[S.name, { color: colors.outline }]} numberOfLines={1}>{otherName}</Text>
             <Text style={S.time}>{timestamp}</Text>
           </View>
-          <Text style={S.jobLabel} numberOfLines={1}>{jobTitle}</Text>
+          <View style={S.jobRow}>
+            <Text style={S.jobLabel} numberOfLines={1}>{jobTitle}</Text>
+            <View style={S.roleChip}><Text style={S.roleChipText}>{roleTag}</Text></View>
+          </View>
           <View style={[S.badge, { backgroundColor: "#dbeafe" }]}>
             <Ionicons name="checkmark-circle-outline" size={10} color="#1d4ed8" />
             <Text style={[S.badgeText, { color: "#1d4ed8" }]}>Completed</Text>
@@ -274,13 +300,16 @@ const S = StyleSheet.create({
   rowTop:   { flexDirection: "row", justifyContent: "space-between", marginBottom: 2 },
   name:     { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.textHeading, flex: 1, marginRight: 8 },
   time:     { fontFamily: fonts.body, fontSize: 11, color: colors.outline },
-  jobLabel: { fontFamily: fonts.bodySemi, fontSize: 12, color: colors.primary, marginBottom: 3 },
+  jobRow:   { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 3 },
+  jobLabel: { fontFamily: fonts.bodySemi, fontSize: 12, color: colors.primary, flexShrink: 1 },
+  roleChip: { backgroundColor: "#F3F4F6", borderRadius: 20, paddingHorizontal: 7, paddingVertical: 2 },
+  roleChipText: { fontFamily: fonts.bodyBold, fontSize: 9, color: "#6B7280", textTransform: "uppercase", letterSpacing: 0.4 },
   preview:  { fontFamily: fonts.body, fontSize: 13, color: colors.outline },
 
   badge:     { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3, marginTop: 5 },
   badgeText: { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 0.3 },
 
-  actionRow: { flexDirection: "row", gap: 8, marginTop: 10 },
+  actionRow: { flexDirection: "row", gap: 8, marginTop: 10, alignItems: "center" },
   acceptBtn: {
     flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5,
     backgroundColor: "#10b981", borderRadius: 10, paddingVertical: 9,
@@ -292,6 +321,8 @@ const S = StyleSheet.create({
     borderWidth: 1.5, borderColor: "#e5e7eb",
   },
   declineBtnText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.outline },
+  detailsBtn: { flexDirection: "row", alignItems: "center", gap: 2, paddingHorizontal: 4, paddingVertical: 9 },
+  detailsBtnText: { fontFamily: fonts.bodySemi, fontSize: 12, color: colors.primary },
 
   empty:     { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 40 },
   emptyIcon: { width: 80, height: 80, borderRadius: 24, backgroundColor: "#f0f0f5", alignItems: "center", justifyContent: "center", marginBottom: 20 },

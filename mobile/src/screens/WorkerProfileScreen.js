@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   View, Text, ScrollView, Image, ImageBackground, StyleSheet,
   Pressable, Alert, ActivityIndicator, Share, Platform,
+  TextInput, KeyboardAvoidingView, TouchableOpacity,
 } from "react-native";
 import { ResizeMode, Video } from "expo-av";
 import { Ionicons } from "@expo/vector-icons";
@@ -51,6 +52,12 @@ export default function WorkerProfileScreen({ route, navigation }) {
   const [booking, setBooking] = useState(false);
   const [saved,   setSaved]   = useState(false);
   const [saving,  setSaving]  = useState(false);
+
+  // Booking form sheet
+  const [bookingSheet, setBookingSheet] = useState(false);
+  const [bookDesc,    setBookDesc]    = useState("");
+  const [bookPrice,   setBookPrice]   = useState("");
+  const [bookAddress, setBookAddress] = useState("");
 
   useEffect(() => {
     setLoading(true);
@@ -107,23 +114,41 @@ export default function WorkerProfileScreen({ route, navigation }) {
 
   const isOwnProfile = user?.id && view?.userId === user.id;
 
-  const bookNow = async () => {
+  const bookNow = () => {
     if (!view?.userId) return;
-    if (!user) {
-      navigation.navigate("Login");
+    if (!user) { navigation.navigate("Login"); return; }
+    if (isOwnProfile) { Alert.alert("Your profile", "This is your own service profile."); return; }
+    setBookDesc("");
+    setBookPrice("");
+    setBookAddress("");
+    setBookingSheet(true);
+  };
+
+  const submitBooking = async () => {
+    const priceStr = bookPrice.trim();
+    const addr = bookAddress.trim();
+    const note = bookDesc.trim();
+
+    const priceNum = parseFloat(priceStr);
+    if (!priceStr || isNaN(priceNum) || priceNum <= 0) {
+      Alert.alert("Price required", "Please enter a proposed price.");
       return;
     }
-    if (isOwnProfile) {
-      Alert.alert("Your profile", "This is your own service profile.");
+    if (!addr) {
+      Alert.alert("Address required", "Please enter where the work needs to happen.");
       return;
     }
+
     setBooking(true);
     try {
       await api.post("/work-requests", {
         requested_to_user_id: view.userId,
         request_type: "direct_booking",
-        message: `Hi ${view.name}, I'd like to book your service.`,
+        message: note || `Hi ${view.name}, I'd like to book your service.`,
+        proposed_price: priceNum,
+        address: addr,
       });
+      setBookingSheet(false);
       Alert.alert("Request sent", "The Local Expert will respond shortly.");
       navigation.navigate("Tabs", { screen: "Activity", params: { initialTab: "sent" } });
     } catch (err) {
@@ -329,6 +354,72 @@ export default function WorkerProfileScreen({ route, navigation }) {
             {booking ? <ActivityIndicator color="#fff" /> : <Text style={s.bookButtonText}>Book Now</Text>}
           </Pressable>
         </View>
+      )}
+
+      {/* Booking form bottom sheet */}
+      {bookingSheet && (
+        <>
+          <TouchableOpacity
+            style={s.sheetOverlay}
+            activeOpacity={1}
+            onPress={() => { if (!booking) setBookingSheet(false); }}
+          />
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={s.sheetWrap}
+          >
+            <View style={[s.sheetInner, { paddingBottom: insets.bottom + 16 }]}>
+              <Text style={s.sheetTitle}>Book {view.name}</Text>
+              <Text style={s.sheetSubtitle}>
+                {view.uniqueSkills.length ? view.uniqueSkills.slice(0, 2).map(sk => sk.replace(/_/g, " ")).join(" · ") : "Local Expert"}
+              </Text>
+
+              <Text style={s.fieldLabel}>Your proposed price (₹) *</Text>
+              <TextInput
+                style={[s.fieldInput, s.fieldInputSingle]}
+                placeholder={view.rate ? `₹${view.rate} — their listed rate` : "e.g. 500"}
+                placeholderTextColor="#9CA3AF"
+                value={bookPrice}
+                onChangeText={setBookPrice}
+                keyboardType="numeric"
+                maxLength={10}
+              />
+
+              <Text style={s.fieldLabel}>Where is the work? *</Text>
+              <TextInput
+                style={s.fieldInput}
+                placeholder="House no., street, village / city, pincode"
+                placeholderTextColor="#9CA3AF"
+                value={bookAddress}
+                onChangeText={setBookAddress}
+                multiline
+                maxLength={300}
+              />
+
+              <Text style={s.fieldLabel}>Add a note (optional)</Text>
+              <TextInput
+                style={s.fieldInput}
+                placeholder="Any extra details for the expert…"
+                placeholderTextColor="#9CA3AF"
+                value={bookDesc}
+                onChangeText={setBookDesc}
+                multiline
+                maxLength={300}
+              />
+
+              <Pressable
+                style={[s.bookButton, { marginTop: 8 }, booking && { opacity: 0.6 }]}
+                onPress={submitBooking}
+                disabled={booking}
+              >
+                {booking
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={s.bookButtonText}>Send Booking Request</Text>
+                }
+              </Pressable>
+            </View>
+          </KeyboardAvoidingView>
+        </>
       )}
     </View>
   );
@@ -589,4 +680,41 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   bookButtonText: { fontFamily: fonts.bodyBold, fontSize: 20, color: "#fff" },
+
+  // Booking form sheet
+  sheetOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    zIndex: 20,
+  },
+  sheetWrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 21,
+  },
+  sheetInner: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: spacing.md,
+    paddingTop: 20,
+  },
+  sheetTitle:    { fontFamily: fonts.bodyBold, fontSize: 18, color: "#111827", marginBottom: 4 },
+  sheetSubtitle: { fontFamily: fonts.body,     fontSize: 13, color: "#6B7280", marginBottom: 20 },
+  fieldLabel:    { fontFamily: fonts.bodyBold, fontSize: 13, color: "#374151", marginBottom: 6, marginTop: 4 },
+  fieldInput: {
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    borderRadius: 12,
+    padding: 12,
+    fontFamily: fonts.body,
+    fontSize: 14,
+    color: "#111827",
+    minHeight: 72,
+    textAlignVertical: "top",
+    marginBottom: 12,
+  },
+  fieldInputSingle: { minHeight: 48, textAlignVertical: "center" },
 });

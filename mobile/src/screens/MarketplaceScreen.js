@@ -65,6 +65,13 @@ export default function MarketplaceScreen({ navigation, route }) {
   const [gpsLoading, setGpsLoading]   = useState(false);
   const [showLocModal, setShowLocModal] = useState(false);
   const [tempPincode, setTempPincode] = useState("");
+
+  // Booking form sheet
+  const [bookingTarget, setBookingTarget] = useState(null);
+  const [bookPrice,     setBookPrice]     = useState("");
+  const [bookAddress,   setBookAddress]   = useState("");
+  const [bookNote,      setBookNote]      = useState("");
+  const [bookSubmitting, setBookSubmitting] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const searchRef = useRef(null);
 
@@ -152,7 +159,6 @@ export default function MarketplaceScreen({ navigation, route }) {
   const openProfile = (item) => navigation.navigate("WorkerProfile", { id: item.id });
 
   const bookExpert = (item) => {
-    const name = item.name || item.display_name || "this Local Expert";
     if (!user) {
       Alert.alert("Log in required", "Please log in to send a booking request.", [
         { text: "Cancel", style: "cancel" },
@@ -164,29 +170,44 @@ export default function MarketplaceScreen({ navigation, route }) {
       Alert.alert("Your profile", "You cannot book your own service profile.");
       return;
     }
-    Alert.alert(
-      "Book now?",
-      `Send a booking request to ${name}?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Send Request",
-          onPress: async () => {
-            try {
-              await api.post("/work-requests", {
-                requested_to_user_id: item.user_id,
-                request_type: "direct_booking",
-                message: `Hi ${name}, I'd like to book your service.`,
-              });
-              Alert.alert("Request sent", `${name} will respond shortly.`);
-              navigation.navigate("Tabs", { screen: "Activity", params: { initialTab: "sent" } });
-            } catch (err) {
-              Alert.alert("Could not book", err?.response?.data?.detail || err?.message || "Please try again.");
-            }
-          },
-        },
-      ],
-    );
+    setBookPrice("");
+    setBookAddress("");
+    setBookNote("");
+    setBookingTarget(item);
+  };
+
+  const submitBooking = async () => {
+    const priceStr = bookPrice.trim();
+    const addr     = bookAddress.trim();
+    const note     = bookNote.trim();
+    const name     = bookingTarget?.name || bookingTarget?.display_name || "this Local Expert";
+
+    const priceNum = parseFloat(priceStr);
+    if (!priceStr || isNaN(priceNum) || priceNum <= 0) {
+      Alert.alert("Price required", "Please enter a proposed price.");
+      return;
+    }
+    if (!addr) {
+      Alert.alert("Address required", "Please enter where the work needs to happen.");
+      return;
+    }
+    setBookSubmitting(true);
+    try {
+      await api.post("/work-requests", {
+        requested_to_user_id: bookingTarget.user_id,
+        request_type: "direct_booking",
+        message: note || `Hi ${name}, I'd like to book your service.`,
+        proposed_price: priceNum,
+        address: addr,
+      });
+      setBookingTarget(null);
+      Alert.alert("Request sent", `${name} will respond shortly.`);
+      navigation.navigate("Tabs", { screen: "Activity", params: { initialTab: "sent" } });
+    } catch (err) {
+      Alert.alert("Could not book", err?.response?.data?.detail || err?.message || "Please try again.");
+    } finally {
+      setBookSubmitting(false);
+    }
   };
 
   // ── Render ───────────────────────────────────────────────────
@@ -360,6 +381,71 @@ export default function MarketplaceScreen({ navigation, route }) {
           </Pressable>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Booking form sheet */}
+      {bookingTarget && (
+        <Modal visible transparent animationType="slide" onRequestClose={() => setBookingTarget(null)}>
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+            <Pressable style={s.bookSheetOverlay} onPress={() => { if (!bookSubmitting) setBookingTarget(null); }} />
+            <View style={s.bookSheetInner}>
+              <Text style={s.bookSheetTitle}>
+                Book {bookingTarget?.name || bookingTarget?.display_name || "Expert"}
+              </Text>
+              <Text style={s.bookSheetSub}>
+                {prettySkill(bookingTarget?.skills?.[0] || bookingTarget?.categories?.[0])}
+              </Text>
+
+              <Text style={s.bookFieldLabel}>Your proposed price (₹) *</Text>
+              <TextInput
+                style={[s.bookField, s.bookFieldSingle]}
+                placeholder={
+                  (bookingTarget?.hourly_rate || bookingTarget?.daily_rate)
+                    ? `₹${bookingTarget.hourly_rate || bookingTarget.daily_rate}${bookingTarget.hourly_rate ? "/hr" : "/day"} — their listed rate`
+                    : "e.g. 500"
+                }
+                placeholderTextColor={colors.outline}
+                value={bookPrice}
+                onChangeText={setBookPrice}
+                keyboardType="numeric"
+                maxLength={10}
+              />
+
+              <Text style={s.bookFieldLabel}>Where is the work? *</Text>
+              <TextInput
+                style={s.bookField}
+                placeholder="House no., street, village / city, pincode"
+                placeholderTextColor={colors.outline}
+                value={bookAddress}
+                onChangeText={setBookAddress}
+                multiline
+                maxLength={300}
+              />
+
+              <Text style={s.bookFieldLabel}>Add a note (optional)</Text>
+              <TextInput
+                style={s.bookField}
+                placeholder="Any extra details for the expert…"
+                placeholderTextColor={colors.outline}
+                value={bookNote}
+                onChangeText={setBookNote}
+                multiline
+                maxLength={300}
+              />
+
+              <Pressable
+                style={[s.bookSubmitBtn, bookSubmitting && { opacity: 0.6 }]}
+                onPress={submitBooking}
+                disabled={bookSubmitting}
+              >
+                {bookSubmitting
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={s.bookSubmitText}>Send Booking Request</Text>
+                }
+              </Pressable>
+            </View>
+          </KeyboardAvoidingView>
+        </Modal>
+      )}
     </AppScreen>
   );
 }
@@ -594,4 +680,26 @@ const s = StyleSheet.create({
   modalClearTxt:  { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.textBody },
   modalApplyBtn:  { flex: 1, backgroundColor: INDIGO, paddingVertical: 15, borderRadius: radius.xxl, alignItems: "center" },
   modalApplyTxt:  { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.onPrimary },
+
+  // Booking sheet
+  bookSheetOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)" },
+  bookSheetInner: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    paddingHorizontal: 20, paddingTop: 20, paddingBottom: 40,
+  },
+  bookSheetTitle:  { fontFamily: fonts.bodyBold, fontSize: 18, color: "#111827", marginBottom: 2 },
+  bookSheetSub:    { fontFamily: fonts.body,     fontSize: 13, color: "#6B7280", marginBottom: 20 },
+  bookFieldLabel:  { fontFamily: fonts.bodyBold, fontSize: 13, color: "#374151", marginBottom: 6, marginTop: 4 },
+  bookField: {
+    borderWidth: 1, borderColor: "#D1D5DB", borderRadius: 12,
+    padding: 12, fontFamily: fonts.body, fontSize: 14, color: "#111827",
+    minHeight: 72, textAlignVertical: "top", marginBottom: 12,
+  },
+  bookFieldSingle: { minHeight: 48, textAlignVertical: "center" },
+  bookSubmitBtn: {
+    backgroundColor: "#000", borderRadius: radius.xxl,
+    height: 54, alignItems: "center", justifyContent: "center", marginTop: 8,
+  },
+  bookSubmitText: { fontFamily: fonts.bodyBold, fontSize: 18, color: "#fff" },
 });

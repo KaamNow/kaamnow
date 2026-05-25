@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Alert,
+  ActivityIndicator, Alert, Modal, TextInput,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -29,6 +29,19 @@ export default function JobDetailScreen({ route, navigation }) {
   const [loading, setLoading]       = useState(true);
   const [applying, setApplying]     = useState(false);
   const [acting, setActing]         = useState(null);
+  const [editVisible, setEditVisible] = useState(false);
+  const [editForm, setEditForm] = useState({
+    title: "",
+    category: "",
+    description: "",
+    daily_rate: "",
+    workers_needed: "1",
+    job_date: "",
+    village: "",
+    pincode: "",
+  });
+  const [savingJob, setSavingJob] = useState(false);
+  const [cancellingJob, setCancellingJob] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -69,6 +82,86 @@ export default function JobDetailScreen({ route, navigation }) {
     } finally { setApplying(false); }
   };
 
+  const openEdit = () => {
+    const address = job?.address || {};
+    setEditForm({
+      title: job?.title || "",
+      category: job?.category || "",
+      description: job?.description || "",
+      daily_rate: job?.daily_rate != null ? String(job.daily_rate) : "",
+      workers_needed: job?.workers_needed != null ? String(job.workers_needed) : "1",
+      job_date: job?.job_date || "",
+      village: job?.village || address.village || "",
+      pincode: job?.pincode || address.pincode || "",
+    });
+    setEditVisible(true);
+  };
+
+  useEffect(() => {
+    if (job && route.params?.openEdit) {
+      openEdit();
+      navigation.setParams({ openEdit: false });
+    }
+  }, [job, route.params?.openEdit]);
+
+  const saveJobEdits = async () => {
+    if (!editForm.title.trim() || !editForm.description.trim()) {
+      Alert.alert("Missing details", "Title and description are required.");
+      return;
+    }
+    setSavingJob(true);
+    try {
+      const payload = {
+        title: editForm.title.trim(),
+        category: editForm.category.trim() || "other",
+        description: editForm.description.trim(),
+        daily_rate: Number(editForm.daily_rate || 0),
+        workers_needed: Number(editForm.workers_needed || 1),
+        job_date: editForm.job_date.trim(),
+        village: editForm.village.trim(),
+        pincode: editForm.pincode.trim(),
+        address: {
+          ...(job?.address || {}),
+          village: editForm.village.trim(),
+          pincode: editForm.pincode.trim(),
+        },
+      };
+      const { data } = await api.patch(`/jobs/${jobId}`, payload);
+      setJob(data);
+      setEditVisible(false);
+      await load();
+    } catch (e) {
+      Alert.alert("Could not update job", e?.response?.data?.detail || "Please try again.");
+    } finally {
+      setSavingJob(false);
+    }
+  };
+
+  const cancelJob = () => {
+    Alert.alert(
+      "Cancel this job?",
+      "Pending applications will be cancelled and this job will stop appearing in Find Work.",
+      [
+        { text: "Keep Job", style: "cancel" },
+        {
+          text: "Cancel Job",
+          style: "destructive",
+          onPress: async () => {
+            setCancellingJob(true);
+            try {
+              await api.post(`/jobs/${jobId}/cancel`);
+              await load();
+            } catch (e) {
+              Alert.alert("Could not cancel job", e?.response?.data?.detail || "Please try again.");
+            } finally {
+              setCancellingJob(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   if (loading) {
     return <View style={s.center}><ActivityIndicator color={colors.primary} /></View>;
   }
@@ -80,6 +173,7 @@ export default function JobDetailScreen({ route, navigation }) {
   const myApp    = applications[0];
   const hasApplied = !!myApp && ["requested", "accepted"].includes(myApp.status);
   const canApply = !isMyJob && !hasApplied && status === "open";
+  const canManageJob = isMyJob && status === "open";
 
   const pay = job.budget_min
     ? `₹${job.budget_min}${job.budget_max ? ` – ₹${job.budget_max}` : ""}`
@@ -147,6 +241,37 @@ export default function JobDetailScreen({ route, navigation }) {
                 <Text style={s.statValue}>{job.job_date}</Text>
               </View>
             )}
+          </View>
+        )}
+
+        {/* ── Owner controls ─────────────────────────────────────────── */}
+        {canManageJob && (
+          <View style={s.ownerCard}>
+            <View style={{ flex: 1 }}>
+              <Text style={s.ownerTitle}>Manage this job</Text>
+              <Text style={s.ownerSub}>Edit details or cancel before accepting a worker.</Text>
+            </View>
+            <View style={s.ownerActions}>
+              <TouchableOpacity style={s.editJobBtn} onPress={openEdit} activeOpacity={0.85}>
+                <Ionicons name="create-outline" size={15} color="#111" />
+                <Text style={s.editJobTxt}>Edit</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.cancelJobBtn, cancellingJob && { opacity: 0.55 }]}
+                onPress={cancelJob}
+                disabled={cancellingJob}
+                activeOpacity={0.85}
+              >
+                {cancellingJob ? (
+                  <ActivityIndicator size="small" color="#dc2626" />
+                ) : (
+                  <>
+                    <Ionicons name="trash-outline" size={15} color="#dc2626" />
+                    <Text style={s.cancelJobTxt}>Cancel</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 
@@ -269,6 +394,75 @@ export default function JobDetailScreen({ route, navigation }) {
           </TouchableOpacity>
         </View>
       )}
+
+      <Modal visible={editVisible} animationType="slide" transparent onRequestClose={() => setEditVisible(false)}>
+        <View style={s.modalScrim}>
+          <View style={[s.editSheet, { paddingBottom: insets.bottom + 16 }]}>
+            <View style={s.sheetHandle} />
+            <View style={s.sheetHeader}>
+              <Text style={s.sheetTitle}>Edit Job</Text>
+              <TouchableOpacity onPress={() => setEditVisible(false)} style={s.sheetClose}>
+                <Ionicons name="close" size={20} color="#111" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingBottom: 14 }}>
+              <EditField label="Title" value={editForm.title} onChangeText={(title) => setEditForm(v => ({ ...v, title }))} />
+              <EditField label="Category" value={editForm.category} onChangeText={(category) => setEditForm(v => ({ ...v, category }))} />
+              <EditField
+                label="Description"
+                value={editForm.description}
+                onChangeText={(description) => setEditForm(v => ({ ...v, description }))}
+                multiline
+              />
+              <View style={s.twoCol}>
+                <EditField
+                  label="Daily rate"
+                  value={editForm.daily_rate}
+                  onChangeText={(daily_rate) => setEditForm(v => ({ ...v, daily_rate }))}
+                  keyboardType="number-pad"
+                  style={{ flex: 1 }}
+                />
+                <EditField
+                  label="Workers"
+                  value={editForm.workers_needed}
+                  onChangeText={(workers_needed) => setEditForm(v => ({ ...v, workers_needed }))}
+                  keyboardType="number-pad"
+                  style={{ flex: 1 }}
+                />
+              </View>
+              <EditField label="Job date" value={editForm.job_date} onChangeText={(job_date) => setEditForm(v => ({ ...v, job_date }))} placeholder="YYYY-MM-DD" />
+              <View style={s.twoCol}>
+                <EditField label="Village" value={editForm.village} onChangeText={(village) => setEditForm(v => ({ ...v, village }))} style={{ flex: 1 }} />
+                <EditField label="Pincode" value={editForm.pincode} onChangeText={(pincode) => setEditForm(v => ({ ...v, pincode }))} keyboardType="number-pad" style={{ flex: 1 }} />
+              </View>
+            </ScrollView>
+
+            <TouchableOpacity
+              style={[s.saveJobBtn, savingJob && { opacity: 0.6 }]}
+              onPress={saveJobEdits}
+              disabled={savingJob}
+              activeOpacity={0.9}
+            >
+              {savingJob ? <ActivityIndicator color="#fff" /> : <Text style={s.saveJobTxt}>Save Changes</Text>}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
+function EditField({ label, style, multiline, ...props }) {
+  return (
+    <View style={[s.fieldWrap, style]}>
+      <Text style={s.fieldLabel}>{label}</Text>
+      <TextInput
+        {...props}
+        multiline={multiline}
+        placeholderTextColor="#9ca3af"
+        style={[s.input, multiline && s.inputMulti]}
+      />
     </View>
   );
 }
@@ -326,6 +520,40 @@ const s = StyleSheet.create({
   },
   statLabel: { fontFamily: fonts.body, fontSize: 10, color: "#9ca3af", marginTop: 2 },
   statValue: { fontFamily: fonts.bodyBold, fontSize: 14, color: "#111" },
+
+  // Owner controls
+  ownerCard: {
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    padding: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    ...SHADOW,
+  },
+  ownerTitle: { fontFamily: fonts.bodyBold, fontSize: 15, color: "#111", marginBottom: 3 },
+  ownerSub: { fontFamily: fonts.body, fontSize: 12, color: "#6b7280", lineHeight: 17 },
+  ownerActions: { flexDirection: "row", gap: 8 },
+  editJobBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    height: 38,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: "#f3f4f6",
+  },
+  editJobTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: "#111" },
+  cancelJobBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    height: 38,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: "#fef2f2",
+  },
+  cancelJobTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: "#dc2626" },
 
   // Sections
   section: {
@@ -387,4 +615,70 @@ const s = StyleSheet.create({
     height: 52, backgroundColor: "#1a1c2e", borderRadius: 14,
   },
   applyBtnTxt: { fontFamily: fonts.bodyBold, fontSize: 16, color: "#fff" },
+
+  // Edit sheet
+  modalScrim: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(0,0,0,0.35)",
+  },
+  editSheet: {
+    maxHeight: "88%",
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+  },
+  sheetHandle: {
+    alignSelf: "center",
+    width: 44,
+    height: 5,
+    borderRadius: 10,
+    backgroundColor: "#d1d5db",
+    marginBottom: 14,
+  },
+  sheetHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 14,
+  },
+  sheetTitle: { fontFamily: fonts.bodyBold, fontSize: 20, color: "#111" },
+  sheetClose: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#f3f4f6",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  twoCol: { flexDirection: "row", gap: 10 },
+  fieldWrap: { gap: 6 },
+  fieldLabel: { fontFamily: fonts.bodyBold, fontSize: 12, color: "#6b7280" },
+  input: {
+    minHeight: 48,
+    borderRadius: 12,
+    backgroundColor: "#f5f5fa",
+    borderWidth: 1,
+    borderColor: "#ececf2",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontFamily: fonts.body,
+    fontSize: 15,
+    color: "#111",
+  },
+  inputMulti: {
+    minHeight: 108,
+    textAlignVertical: "top",
+  },
+  saveJobBtn: {
+    height: 54,
+    borderRadius: 14,
+    backgroundColor: "#000",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 4,
+  },
+  saveJobTxt: { fontFamily: fonts.bodyBold, fontSize: 16, color: "#fff" },
 });

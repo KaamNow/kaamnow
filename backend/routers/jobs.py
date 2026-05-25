@@ -3,7 +3,7 @@ import math
 import uuid
 from typing import List, Optional, Union
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
 
 from ..auth import get_current_user, get_optional_user
 from ..db import db
@@ -169,29 +169,146 @@ async def create_job(body: JobIn, user: dict = Depends(get_current_user)):
     return {k: job_doc.get(k) for k in JobOut.model_fields.keys()}
 
 
-@router.delete("/{job_id}")
-async def delete_job(job_id: str, user: dict = Depends(get_current_user)):
-    """Customer can delete their own job if it's not yet booked/completed."""
+def _job_out(job: dict) -> dict:
+    return {k: job.get(k) for k in JobOut.model_fields.keys()}
+
+
+async def _owned_job(job_id: str, user: dict) -> dict:
     job = await db.jobs.find_one({"id": job_id}, {"_id": 0})
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
-    owner_id = job.get("posted_by_user_id")
-    if owner_id != user["id"]:
-        raise HTTPException(status_code=403, detail="You can only delete your own jobs")
+    if job.get("posted_by_user_id") != user["id"]:
+        raise HTTPException(status_code=403, detail="You can only manage your own jobs")
+    return job
+
+
+def _coerce_int(value, field_name: str) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail=f"{field_name} must be a number")
+    if parsed < 0:
+        raise HTTPException(status_code=400, detail=f"{field_name} cannot be negative")
+    return parsed
+
+
+@router.patch("/{job_id}", response_model=JobOut)
+async def update_job(
+    job_id: str,
+    body: dict = Body(...),
+    user: dict = Depends(get_current_user),
+):
+    """Job poster can edit an open job before it is accepted/started."""
+    job = await _owned_job(job_id, user)
+    if job.get("status") != "open":
+        raise HTTPException(status_code=400, detail="Only open jobs can be edited")
+
+    active_acceptance = await db.work_requests.find_one(
+        {"job_id": job_id, "status": {"$in": ["accepted", "completed"]}},
+        {"_id": 0, "id": 1},
+    )
+    if active_acceptance:
+        raise HTTPException(status_code=400, detail="Cannot edit after a worker is accepted")
+
+    updates: dict = {}
+    text_fields = {
+        "title": 120,
+        "category": 80,
+        "description": 1000,
+        "village": 80,
+        "urgency": 20,
+        "recurrence": 20,
+        "photo_url": 500,
+    }
+    for field, max_len in text_fields.items():
+        if field in body:
+            value = (body.get(field) or "").strip()
+            if field in {"title", "category", "description", "village"} and not value:
+                raise HTTPException(status_code=400, detail=f"{field} is required")
+            updates[field] = value[:max_len]
+
+    if "job_date" in body:
+        from datetime import date as _date
+
+        job_date = (body.get("job_date") or "").strip()
+        try:
+            if _date.fromisoformat(job_date) < _date.today():
+                raise HTTPException(status_code=400, detail="Job date cannot be in the past")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Job date must be YYYY-MM-DD")
+        updates["job_date"] = job_date
+
+    for field in ("daily_rate", "workers_needed"):
+        if field in body:
+            value = _coerce_int(body.get(field), field)
+            if field == "workers_needed" and value < 1:
+                raise HTTPException(status_code=400, detail="workers_needed must be at least 1")
+            updates[field] = value
+
+    if "required_skills" in body and isinstance(body.get("required_skills"), list):
+        updates["required_skills"] = body.get("required_skills")[:20]
+
+    if "address" in body and isinstance(body.get("address"), dict):
+        address = {**(job.get("address") or {}), **body["address"]}
+        updates["address"] = _legacy_address({"address": address, "village": updates.get("village") or job.get("village")})
+        if updates["address"].get("village"):
+            updates["village"] = updates["address"]["village"]
+        if updates["address"].get("pincode"):
+            updates["pincode"] = updates["address"]["pincode"]
+
+    if "pincode" in body:
+        pincode = str(body.get("pincode") or "").strip()
+        if pincode and (not pincode.isdigit() or len(pincode) != 6):
+            raise HTTPException(status_code=400, detail="Pincode must be 6 digits")
+        address = {**(job.get("address") or {}), "pincode": pincode or None}
+        updates["address"] = _legacy_address({"address": address, "village": updates.get("village") or job.get("village")})
+        updates["pincode"] = pincode or None
+
+    if not updates:
+        return _job_out(job)
+
+    updates["updated_at"] = utc_now_iso()
+    await db.jobs.update_one({"id": job_id}, {"$set": updates})
+    updated = await db.jobs.find_one({"id": job_id}, {"_id": 0})
+    return _job_out(updated or {**job, **updates})
+
+
+async def _cancel_owned_job(job_id: str, user: dict) -> dict:
+    job = await _owned_job(job_id, user)
     if job.get("status") == "completed":
-        raise HTTPException(
-            status_code=400,
-            detail="Cannot delete a completed job.",
-        )
+        raise HTTPException(status_code=400, detail="Cannot cancel a completed job")
+    if job.get("status") == "cancelled":
+        return {"ok": True, "status": "cancelled"}
+
+    accepted = await db.work_requests.find_one(
+        {"job_id": job_id, "status": {"$in": ["accepted", "completed"]}},
+        {"_id": 0, "id": 1},
+    )
+    if accepted:
+        raise HTTPException(status_code=400, detail="Cannot cancel after a worker is accepted")
 
     now = utc_now_iso()
     cancel_set = {"status": "cancelled", "cancelled_at": now, "updated_at": now}
     await db.work_requests.update_many(
-        {"job_id": job_id, "status": {"$in": ["requested", "accepted"]}},
+        {"job_id": job_id, "status": "requested"},
         {"$set": cancel_set},
     )
-    await db.jobs.delete_one({"id": job_id})
-    return {"ok": True}
+    await db.jobs.update_one(
+        {"id": job_id},
+        {"$set": {"status": "cancelled", "cancelled_at": now, "updated_at": now}},
+    )
+    return {"ok": True, "status": "cancelled"}
+
+
+@router.post("/{job_id}/cancel")
+async def cancel_job(job_id: str, user: dict = Depends(get_current_user)):
+    return await _cancel_owned_job(job_id, user)
+
+
+@router.delete("/{job_id}")
+async def delete_job(job_id: str, user: dict = Depends(get_current_user)):
+    """Backwards-compatible delete URL: cancel the job without removing history."""
+    return await _cancel_owned_job(job_id, user)
 
 
 async def _alert_matching_workers(job: dict) -> None:

@@ -238,14 +238,15 @@ async def create_work_request(body: dict, user: dict = Depends(get_current_user)
     if not recipient:
         raise HTTPException(status_code=404, detail="Recipient user not found")
 
-    # Prevent duplicate active requests
+    # Prevent duplicate pending requests. Accepted requests are already active work;
+    # they should not block a user from sending a new hire request later.
     dup = await db.work_requests.find_one(
         {
             "requested_by_user_id": uid,
             "requested_to_user_id": requested_to,
             "job_id": job_id,
             "request_type": request_type,
-            "status": {"$in": ["requested", "accepted"]},
+            "status": "requested",
         }
     )
     if dup:

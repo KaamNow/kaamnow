@@ -430,9 +430,16 @@ function JobCard({ job, request, bookmarked, onOpen, onApply, onWithdraw, onBook
         </View>
 
         {request ? (
-          <Pressable style={s.pendingBtn} onPress={request.status === "requested" ? onWithdraw : onOpen}>
-            <Text style={s.pendingBtnText}>{request.status === "accepted" ? "Accepted" : "Pending"}</Text>
-          </Pressable>
+          <View style={s.requestActions}>
+            <Pressable style={s.pendingBtn} onPress={onOpen}>
+              <Text style={s.pendingBtnText}>{request.status === "accepted" ? "Accepted" : "Pending"}</Text>
+            </Pressable>
+            {request.status === "requested" ? (
+              <Pressable style={s.withdrawBtn} onPress={onWithdraw}>
+                <Text style={s.withdrawBtnText}>Withdraw</Text>
+              </Pressable>
+            ) : null}
+          </View>
         ) : (
           <Pressable style={s.applyBtn} onPress={onApply}>
             <Text style={s.applyBtnText}>Apply Now</Text>
@@ -676,9 +683,8 @@ const s = StyleSheet.create({
   },
   applyBtnText: { fontFamily: fonts.bodyBold, fontSize: 15, color: "#fff", includeFontPadding: false, textAlign: "center" },
   pendingBtn: {
-    flexShrink: 0,
     width: 132,
-    height: 48,
+    height: 42,
     borderRadius: 10,
     backgroundColor: "#FFFBEB",
     borderWidth: 1,
@@ -687,6 +693,18 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   pendingBtnText: { fontFamily: fonts.bodyBold, fontSize: 15, color: "#92400E" },
+  requestActions: { flexShrink: 0, alignItems: "stretch", gap: 8 },
+  withdrawBtn: {
+    width: 132,
+    height: 42,
+    borderRadius: 10,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#CFC4C5",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  withdrawBtnText: { fontFamily: fonts.bodyBold, fontSize: 14, color: "#1A1C1F", includeFontPadding: false },
 
   footerWrap: { marginTop: spacing.sm },
   emptyWrap: { flexGrow: 1, justifyContent: "center" },

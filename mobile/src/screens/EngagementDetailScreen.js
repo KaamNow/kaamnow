@@ -13,15 +13,136 @@ import api from "../lib/api";
 import { track } from "../lib/analytics";
 
 const STATUS_COLORS = {
-  requested:  { bg: "#fef3c7", text: "#92400e" },
-  accepted:   { bg: "#d1fae5", text: "#065f46" },
-  completed:  { bg: "#dbeafe", text: "#1d4ed8" },
-  rejected:   { bg: "#fee2e2", text: "#991b1b" },
-  cancelled:  { bg: "#f3f4f6", text: "#6b7280" },
+  requested:  { bg: "#EDEDF2", text: "#5E5E60" },
+  accepted:   { bg: "#E3F2FD", text: "#0D47A1" },
+  completed:  { bg: "#F0FDF4", text: "#166534" },
+  rejected:   { bg: "#FFDAD6", text: "#93000A" },
+  cancelled:  { bg: "#F3F3F8", text: "#6B7280" },
 };
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function getBannerText(engagement, isSentByMe, otherName, isExpert) {
+  const status = engagement.status;
+  const rt = engagement.request_type;
+  const name = otherName || "them";
+
+  if (status === "accepted") {
+    return isExpert
+      ? `You are working for ${name}. Mark as done when the work is complete.`
+      : `${name} is working on your job. You'll be notified when it's done.`;
+  }
+  if (status === "completed") {
+    return isExpert
+      ? `You worked for ${name}. Leave your review below.`
+      : `${name} completed your job. Leave a review below.`;
+  }
+  if (status === "rejected")  return "This request was declined.";
+  if (status === "cancelled") return "This request was cancelled.";
+
+  if (rt === "job_application") {
+    return isSentByMe
+      ? `You applied for ${name}'s job. Waiting for them to respond.`
+      : `${name} applied for your job. Accept or decline below.`;
+  }
+  if (rt === "direct_booking") {
+    return isSentByMe
+      ? `You sent a booking request to ${name}. Waiting for their response.`
+      : `${name} wants to book you. Accept or decline below.`;
+  }
+  if (rt === "job_invitation") {
+    return isSentByMe
+      ? `You invited ${name} to your job. Waiting for their response.`
+      : `${name} invited you to their job. Accept or decline below.`;
+  }
+  return "";
+}
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function BannerCard({ text, status }) {
+  if (!text) return null;
+  const isGreen = status === "completed";
+  const isRed   = status === "rejected" || status === "cancelled";
+  const bgColor = isGreen ? "#F0FDF4" : isRed ? "#FFF1F2" : "#F3F3F8";
+  const txColor = isGreen ? "#166534" : isRed ? "#9F1239" : "#4C4546";
+  return (
+    <View style={[bannerS.wrap, { backgroundColor: bgColor }]}>
+      <Text style={[bannerS.text, { color: txColor }]}>{text}</Text>
+    </View>
+  );
+}
+
+const bannerS = StyleSheet.create({
+  wrap: { borderRadius: 12, padding: 14, marginBottom: 16 },
+  text: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20 },
+});
+
+function StatusTracker({ engagement, isSentByMe }) {
+  const rt = engagement.request_type;
+  const status = engagement.status;
+  let labels;
+  if (rt === "job_application") {
+    labels = isSentByMe ? ["Applied", "Accepted", "Done"] : ["Received", "Accepted", "Done"];
+  } else if (rt === "direct_booking") {
+    labels = isSentByMe ? ["Booked", "Accepted", "Done"] : ["Received", "Accepted", "Done"];
+  } else {
+    labels = isSentByMe ? ["Invited", "Accepted", "Done"] : ["Received", "Accepted", "Done"];
+  }
+  const states = [
+    true,
+    ["accepted", "completed"].includes(status),
+    status === "completed",
+  ];
+  const isTerminal = status === "rejected" || status === "cancelled";
+  const activeWidth = isTerminal ? "0%" : states[2] ? "100%" : states[1] ? "50%" : "0%";
+  return (
+    <View style={trackerS.wrap}>
+      <View style={trackerS.lineWrap}>
+        <View style={trackerS.lineBase} />
+        <View style={[trackerS.lineActive, { width: activeWidth }]} />
+      </View>
+      {labels.map((label, i) => (
+        <View key={label} style={trackerS.step}>
+          <View style={[trackerS.dot, states[i] && !isTerminal && trackerS.dotDone]}>
+            {states[i] && !isTerminal
+              ? <Ionicons name="checkmark" size={14} color="#fff" />
+              : null}
+          </View>
+          <Text style={[trackerS.label, states[i] && !isTerminal && trackerS.labelDone]}>{label}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const trackerS = StyleSheet.create({
+  wrap: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    position: "relative",
+    marginBottom: 24,
+    paddingHorizontal: 4,
+  },
+  lineWrap: { position: "absolute", left: 20, right: 20, top: 13, height: 2 },
+  lineBase: { ...StyleSheet.absoluteFillObject, backgroundColor: "#E2E2E7" },
+  lineActive: { height: 2, backgroundColor: "#000" },
+  step: { alignItems: "center", width: 80 },
+  dot: {
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: "#E2E2E7",
+    alignItems: "center", justifyContent: "center", marginBottom: 6,
+  },
+  dotDone: { backgroundColor: "#000" },
+  label: {
+    fontFamily: fonts.bodyBold, fontSize: 11,
+    color: "#9CA3AF", textAlign: "center", includeFontPadding: false,
+  },
+  labelDone: { color: "#1A1C1F" },
+});
+
 export default function EngagementDetailScreen({ route, navigation }) {
-  const { id } = route.params || {};
+  const { id, openComplete } = route.params || {};
   const { user } = useAuth();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
@@ -54,6 +175,10 @@ export default function EngagementDetailScreen({ route, navigation }) {
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (openComplete) setShowCompleteModal(true);
+  }, [openComplete]);
 
   const act = async (action) => {
     if (acting) return;
@@ -149,12 +274,15 @@ export default function EngagementDetailScreen({ route, navigation }) {
 
   const canAcceptReject = isReceivedByMe && status === "requested";
 
-  const otherPartyName = engagement.other_user?.name
-    || (isSentByMe ? (engagement.requested_to_name || "—") : (engagement.requested_by_name || "—"));
+  const otherPartyName =
+    (isSentByMe ? engagement.requested_to_name : engagement.requested_by_name) ||
+    engagement.other_user?.name ||
+    "—";
 
   // Rating: sender_rating = left by requested_by; receiver_rating = left by requested_to
-  const myRating = isSentByMe ? engagement.sender_rating : engagement.receiver_rating;
-  const canRate  = status === "completed" && !myRating;
+  const myRating    = isSentByMe ? engagement.sender_rating    : engagement.receiver_rating;
+  const theirRating = isSentByMe ? engagement.receiver_rating  : engagement.sender_rating;
+  const canRate     = status === "completed" && !myRating;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -169,30 +297,46 @@ export default function EngagementDetailScreen({ route, navigation }) {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: insets.bottom + 32 }}>
-        {/* Direction badge */}
-        <View style={[styles.roleBadge, { backgroundColor: isSentByMe ? "#ede9fe" : "#fef3c7", borderColor: isSentByMe ? "#c4b5fd" : "#fde68a" }]}>
-          <Ionicons name={isSentByMe ? "arrow-up-outline" : "arrow-down-outline"} size={13} color={isSentByMe ? "#7c3aed" : "#b45309"} style={{ marginRight: 4 }} />
-          <Text style={[styles.roleText, { color: isSentByMe ? "#7c3aed" : "#b45309" }]}>
-            {isSentByMe ? "You sent this request" : "You received this request"}
-          </Text>
-        </View>
+      <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: insets.bottom + 40 }}>
+        {/* Context banner */}
+        <BannerCard text={getBannerText(engagement, isSentByMe, otherPartyName, isExpert)} status={status} />
+
+        {/* Status tracker */}
+        <StatusTracker engagement={engagement} isSentByMe={isSentByMe} />
 
         {/* Job info */}
         <View style={styles.card}>
           <Text style={styles.jobTitle}>{jobTitle}</Text>
           {jobDate ? (
-            <Text style={styles.meta}><Ionicons name="calendar-outline" size={13} /> {jobDate}</Text>
+            <View style={styles.metaRow}>
+              <Ionicons name="calendar-outline" size={14} color={colors.outline} />
+              <Text style={styles.meta}>{jobDate}</Text>
+            </View>
           ) : null}
           {dailyRate ? (
-            <Text style={styles.meta}><Ionicons name="cash-outline" size={13} /> ₹{dailyRate}/day</Text>
+            <View style={styles.metaRow}>
+              <Ionicons name="cash-outline" size={14} color={colors.outline} />
+              <Text style={styles.meta}>₹{dailyRate}/day</Text>
+            </View>
           ) : null}
         </View>
 
         {/* Other party */}
         <View style={styles.card}>
-          <Text style={styles.sectionLabel}>Other party</Text>
-          <Text style={styles.partyName}>{otherPartyName}</Text>
+          <Text style={styles.sectionLabel}>
+            {isExpert ? "You worked for" : "Expert handling your job"}
+          </Text>
+          <View style={styles.partyRow}>
+            <View style={styles.partyAvatar}>
+              <Text style={styles.partyAvatarText}>{(otherPartyName[0] || "?").toUpperCase()}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.partyName}>{otherPartyName}</Text>
+              <Text style={styles.partyRole}>
+                {isExpert ? "Customer" : "Expert / Worker"}
+              </Text>
+            </View>
+          </View>
         </View>
 
         {/* Actions */}
@@ -206,14 +350,15 @@ export default function EngagementDetailScreen({ route, navigation }) {
           {status === "requested" && isSentByMe && (
             <ActionBtn label={t("engagement_cancel")} onPress={() => act("cancel")} color={colors.error} loading={acting} outline />
           )}
-          {status === "accepted" && (
+          {/* Chat — available after acceptance; archived after completion */}
+          {(status === "accepted" || status === "completed") ? (
             <ActionBtn
-              label={t("chat_open")}
+              label={status === "accepted" ? `Chat with ${otherPartyName}` : `View chat with ${otherPartyName}`}
               icon="chatbubble-outline"
               onPress={() => navigation.navigate("Chat", { engagementId: id })}
-              color={colors.primary}
+              color={status === "accepted" ? colors.primary : "#6B7280"}
             />
-          )}
+          ) : null}
           {/* Only the expert (person who does the work) can mark done */}
           {status === "accepted" && isExpert && (
             <ActionBtn
@@ -227,40 +372,58 @@ export default function EngagementDetailScreen({ route, navigation }) {
 
         {/* Rating section — shown after completion */}
         {status === "completed" && (
-          <View style={styles.card}>
-            {canRate ? (
-              <>
-                <Text style={styles.ratingTitle}>
-                  {isCustomer ? "Rate the Expert" : "Rate the Customer"}
-                </Text>
-                <Text style={styles.ratingSubtitle}>How was your experience?</Text>
-                <StarPicker value={ratingStars} onChange={setRatingStars} />
-                <TextInput
-                  style={styles.commentInput}
-                  placeholder="Leave a comment (optional)"
-                  placeholderTextColor={colors.outline}
-                  value={ratingComment}
-                  onChangeText={setRatingComment}
-                  multiline
-                  maxLength={300}
-                />
-                <ActionBtn
-                  label={submittingRating ? "Submitting…" : "Submit Rating"}
-                  onPress={submitRating}
-                  color={colors.primary}
-                  loading={submittingRating}
-                />
-              </>
-            ) : myRating ? (
-              <>
-                <Text style={styles.ratingTitle}>Your Rating</Text>
-                <StarPicker value={myRating.rating} onChange={() => {}} readonly />
-                {myRating.comment ? (
-                  <Text style={styles.ratingCommentText}>"{myRating.comment}"</Text>
+          <>
+            <View style={styles.card}>
+              {canRate ? (
+                <>
+                  <Text style={styles.ratingTitle}>
+                    {isCustomer ? "Rate the Expert" : "Rate the Customer"}
+                  </Text>
+                  <Text style={styles.ratingSubtitle}>How was your experience with {otherPartyName}?</Text>
+                  <StarPicker value={ratingStars} onChange={setRatingStars} />
+                  <TextInput
+                    style={styles.commentInput}
+                    placeholder="Leave a comment (optional)"
+                    placeholderTextColor={colors.outline}
+                    value={ratingComment}
+                    onChangeText={setRatingComment}
+                    multiline
+                    maxLength={300}
+                  />
+                  <ActionBtn
+                    label={submittingRating ? "Submitting…" : "Submit Review"}
+                    onPress={submitRating}
+                    color={colors.primary}
+                    loading={submittingRating}
+                  />
+                </>
+              ) : myRating ? (
+                <>
+                  <Text style={styles.ratingTitle}>Your Review</Text>
+                  <StarPicker value={myRating.rating} onChange={() => {}} readonly />
+                  {myRating.comment ? (
+                    <Text style={styles.ratingCommentText}>"{myRating.comment}"</Text>
+                  ) : null}
+                </>
+              ) : null}
+            </View>
+
+            {theirRating ? (
+              <View style={styles.card}>
+                <Text style={styles.ratingTitle}>{otherPartyName}'s Review</Text>
+                <StarPicker value={theirRating.rating} onChange={() => {}} readonly />
+                {theirRating.comment ? (
+                  <Text style={styles.ratingCommentText}>"{theirRating.comment}"</Text>
                 ) : null}
-              </>
-            ) : null}
-          </View>
+              </View>
+            ) : !myRating ? null : (
+              <View style={styles.card}>
+                <Text style={[styles.ratingSubtitle, { textAlign: "center" }]}>
+                  {otherPartyName} hasn't left a review yet.
+                </Text>
+              </View>
+            )}
+          </>
         )}
       </ScrollView>
 
@@ -368,37 +531,36 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   backBtn:     { padding: 4 },
-  headerTitle: { flex: 1, fontFamily: fonts.bodyBold, fontSize: 16, color: colors.textHeading },
-  statusBadge: { paddingHorizontal: spacing.sm, paddingVertical: 3, borderRadius: radius.pill },
-  statusText:  { fontFamily: fonts.bodyBold, fontSize: 12 },
+  headerTitle: { flex: 1, fontFamily: fonts.bodyBold, fontSize: 18, color: colors.textHeading },
+  statusBadge: { paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: radius.pill },
+  statusText:  { fontFamily: fonts.bodyBold, fontSize: 13 },
 
   card: {
     backgroundColor: colors.surfaceCard, borderRadius: radius.xxl,
     padding: spacing.md, marginBottom: spacing.md,
     borderWidth: 1, borderColor: colors.borderSubtle,
   },
-  jobTitle:     { fontFamily: fonts.bodyBold, fontSize: 17, color: colors.textHeading, marginBottom: 6 },
-  meta:         { fontFamily: fonts.body, fontSize: 13, color: colors.outline, marginTop: 3 },
-  sectionLabel: { fontFamily: fonts.body, fontSize: 12, color: colors.outline, marginBottom: 4 },
-  partyName:    { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.textHeading },
+  jobTitle:     { fontFamily: fonts.bodyBold, fontSize: 18, color: colors.textHeading, marginBottom: 10 },
+  metaRow:      { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 },
+  meta:         { fontFamily: fonts.body, fontSize: 14, color: colors.outline },
+  sectionLabel: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.outline, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 10 },
 
-  roleBadge: {
-    borderRadius: radius.pill, paddingHorizontal: spacing.md, paddingVertical: 6,
-    alignSelf: "flex-start", marginBottom: spacing.md,
-    borderWidth: 1, flexDirection: "row", alignItems: "center",
-  },
-  roleText: { fontFamily: fonts.bodyMedium, fontSize: 12 },
+  partyRow:        { flexDirection: "row", alignItems: "center", gap: 12 },
+  partyAvatar:     { width: 44, height: 44, borderRadius: 22, backgroundColor: "#E0E7FF", alignItems: "center", justifyContent: "center" },
+  partyAvatarText: { fontFamily: fonts.bodyBold, fontSize: 18, color: "#4F46E5" },
+  partyName:       { fontFamily: fonts.bodyBold, fontSize: 17, color: colors.textHeading },
+  partyRole:       { fontFamily: fonts.body, fontSize: 13, color: colors.outline, marginTop: 2 },
 
   actionsWrap: { gap: spacing.sm, marginBottom: spacing.md },
   actionBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
     borderRadius: radius.xxl, paddingVertical: 14,
   },
-  actionBtnText: { fontFamily: fonts.bodyBold, fontSize: 15 },
+  actionBtnText: { fontFamily: fonts.bodyBold, fontSize: 16 },
 
   // Rating
-  ratingTitle:       { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.textHeading, marginBottom: 4 },
-  ratingSubtitle:    { fontFamily: fonts.body, fontSize: 13, color: colors.outline, marginBottom: spacing.sm },
+  ratingTitle:       { fontFamily: fonts.bodyBold, fontSize: 17, color: colors.textHeading, marginBottom: 4 },
+  ratingSubtitle:    { fontFamily: fonts.body, fontSize: 14, color: colors.outline, marginBottom: spacing.sm },
   starsRow:          { flexDirection: "row", marginBottom: spacing.md },
   commentInput: {
     borderWidth: 1, borderColor: colors.borderSubtle, borderRadius: radius.lg,
@@ -427,7 +589,7 @@ const styles = StyleSheet.create({
     gap: 8, borderWidth: 1.5, borderColor: colors.primary,
     borderRadius: radius.lg, paddingVertical: 12,
   },
-  photoBtnText:    { fontFamily: fonts.bodyMedium, fontSize: 14, color: colors.primary },
+  photoBtnText:    { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.primary },
   proofPreviewWrap: { position: "relative", marginBottom: spacing.md },
   proofPreview:    { width: "100%", height: 180, borderRadius: radius.lg },
   removePhoto:     { position: "absolute", top: 8, right: 8 },

@@ -135,6 +135,7 @@ class JobOut(BaseModel):
     category: Optional[str] = None
     description: Optional[str] = None
     daily_rate: Optional[int] = None
+    workers_needed: Optional[int] = 1
     job_date: Optional[str] = None
     village: Optional[str] = None
     pincode: Optional[str] = None
