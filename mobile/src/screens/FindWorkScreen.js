@@ -20,6 +20,8 @@ import { Ionicons } from "@expo/vector-icons";
 import api, { formatApiError } from "../api";
 import { useAuth } from "../contexts/AuthContext";
 import { useLanguage } from "../contexts/LanguageContext";
+import { useLocationContext } from "../contexts/LocationContext";
+import LocationPickerSheet from "../components/LocationPickerSheet";
 import { colors, fonts, shadow, spacing } from "../theme";
 
 const CATEGORIES = [
@@ -32,6 +34,31 @@ const CATEGORIES = [
   { v: "home", label: "Home", icon: "home-outline" },
   { v: "other", label: "Other", icon: "cube-outline" },
 ];
+
+// Maps Hindi/regional search terms → English equivalents for search expansion
+const SEARCH_SYNONYMS = {
+  safai: ["cleaning", "cleaner"], "सफाई": ["cleaning", "cleaner"],
+  rangai: ["painting", "painter"], rang: ["painting", "painter"],
+  "रंगाई": ["painting", "painter"],
+  bijli: ["electrical", "electrician"], "बिजली": ["electrical", "electrician"],
+  nali: ["plumbing", "plumber"], "नाली": ["plumbing", "plumber"],
+  mistri: ["mason", "construction"], "मिस्त्री": ["mason", "construction"],
+  barhai: ["carpenter", "carpentry"], "बढ़ई": ["carpenter", "carpentry"],
+  darzi: ["tailor", "tailoring"], "दर्जी": ["tailor", "tailoring"],
+  dhobi: ["laundry", "washing"], "धोबी": ["laundry", "washing"],
+  mali: ["gardener", "gardening"], "माली": ["gardener", "gardening"],
+  kisan: ["farm", "farmer", "farming"], kheti: ["farm", "farmer", "farming"],
+  "किसान": ["farm", "farmer"], "खेती": ["farm", "farming"],
+  chalak: ["driver", "transport"], "चालक": ["driver", "transport"],
+  rasoia: ["cook", "cooking"], "रसोइया": ["cook", "cooking"],
+  mazdoor: ["labour", "labourer"], "मजदूर": ["labour", "labourer"],
+  chowkidar: ["security", "guard"], "चौकीदार": ["security", "guard"],
+  welder: ["welding", "welder"], weldar: ["welding", "welder"],
+  painting: ["painter", "painting"],
+  plumbing: ["plumber", "plumbing"],
+  electrical: ["electrician", "electrical"],
+  carpentry: ["carpenter", "carpentry"],
+};
 
 function timeAgo(iso) {
   if (!iso) return "";
@@ -83,6 +110,7 @@ function payText(job) {
 export default function FindWorkScreen({ navigation }) {
   const { user, refreshUser } = useAuth();
   const { lang } = useLanguage();
+  const { location } = useLocationContext();
   const insets = useSafeAreaInsets();
   const inputRef = useRef(null);
 
@@ -92,27 +120,17 @@ export default function FindWorkScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const [query, setQuery] = useState("");
-  const [pincode, setPincode] = useState("");
   const [category, setCategory] = useState("");
   const [skills, setSkills] = useState("");
   const [filterOpen, setFilterOpen] = useState(false);
-  const [draftPincode, setDraftPincode] = useState("");
+  const [locPickerVisible, setLocPickerVisible] = useState(false);
   const [draftCategory, setDraftCategory] = useState("");
   const [draftSkills, setDraftSkills] = useState("");
 
-  useEffect(() => {
-    if (!user?.id) return;
-    api.get("/service-profiles/mine")
-      .then((r) => {
-        const pc = r.data?.pincode || r.data?.address?.pincode || "";
-        if (pc) setPincode(pc);
-      })
-      .catch(() => {});
-  }, [user?.id]);
-
   const load = useCallback(async () => {
     const params = {};
-    if (pincode.length === 6) params.pincode = pincode;
+    const locPincode = location?.pincode || "";
+    if (locPincode.length === 6) params.pincode = locPincode;
     if (category) params.category = category;
     if (skills.trim()) params.skills = skills.trim();
 
@@ -129,13 +147,30 @@ export default function FindWorkScreen({ navigation }) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [category, pincode, skills, user]);
+  }, [category, location, skills, user]);
 
   useEffect(() => { load(); }, [load]);
+
+  const [aiExpandedTerms, setAiExpandedTerms] = useState([]);
+
+  // When query changes, resolve unknown terms via AI
+  useEffect(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) { setAiExpandedTerms([]); return; }
+    const localSynonyms = SEARCH_SYNONYMS[q];
+    if (localSynonyms) { setAiExpandedTerms([]); return; } // local map handled it
+    let cancelled = false;
+    api.get("/ai/resolve-skill", { params: { q } })
+      .then(r => { if (!cancelled && r.data?.resolved) setAiExpandedTerms([r.data.skill]); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [query]);
 
   const visibleJobs = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return jobs;
+    const localSynonyms = SEARCH_SYNONYMS[q] || [];
+    const terms = [q, ...localSynonyms.map(s => s.toLowerCase()), ...aiExpandedTerms];
     return jobs.filter((job) => {
       const haystack = [
         job.title,
@@ -144,9 +179,9 @@ export default function FindWorkScreen({ navigation }) {
         locationText(job),
         ...jobSkills(job),
       ].filter(Boolean).join(" ").toLowerCase();
-      return haystack.includes(q);
+      return terms.some(t => haystack.includes(t));
     });
-  }, [jobs, query]);
+  }, [jobs, query, aiExpandedTerms]);
 
   const requestFor = (jobId) =>
     requests.find((r) => r.job_id === jobId && ["requested", "accepted"].includes(r.status));
@@ -214,7 +249,6 @@ export default function FindWorkScreen({ navigation }) {
   };
 
   const openFilter = () => {
-    setDraftPincode(pincode);
     setDraftCategory(category);
     setDraftSkills(skills);
     setFilterOpen(true);
@@ -222,7 +256,6 @@ export default function FindWorkScreen({ navigation }) {
 
   const applyFilters = () => {
     Keyboard.dismiss();
-    setPincode(draftPincode);
     setCategory(draftCategory);
     setSkills(draftSkills);
     setLoading(true);
@@ -231,17 +264,15 @@ export default function FindWorkScreen({ navigation }) {
 
   const clearFilters = () => {
     setQuery("");
-    setPincode("");
     setCategory("");
     setSkills("");
-    setDraftPincode("");
     setDraftCategory("");
     setDraftSkills("");
     setLoading(true);
     setFilterOpen(false);
   };
 
-  const hasFilters = !!(query.trim() || pincode || category || skills.trim());
+  const hasFilters = !!(query.trim() || location || category || skills.trim());
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
@@ -257,6 +288,15 @@ export default function FindWorkScreen({ navigation }) {
             </Pressable>
             <Text style={s.title}>Find Jobs</Text>
           </View>
+
+          {/* Location chip */}
+          <Pressable style={s.locChip} onPress={() => setLocPickerVisible(true)}>
+            <Ionicons name="location-outline" size={14} color={colors.primary} />
+            <Text style={s.locChipTxt} numberOfLines={1}>
+              {location?.label || (location?.pincode ? `Near ${location.pincode}` : "Set location")}
+            </Text>
+            <Ionicons name="chevron-down" size={13} color="#6B7280" />
+          </Pressable>
 
           <View style={s.searchRow}>
             <Pressable
@@ -283,6 +323,9 @@ export default function FindWorkScreen({ navigation }) {
             </Pressable>
             <Pressable style={s.filterBtn} onPress={openFilter}>
               <Ionicons name="options-outline" size={25} color="#fff" />
+              {(category || skills.trim()) ? (
+                <View style={s.filterBadge} />
+              ) : null}
             </Pressable>
           </View>
         </View>
@@ -299,11 +342,30 @@ export default function FindWorkScreen({ navigation }) {
             />
           }
           ListHeaderComponent={
-            <View style={s.feedHeader}>
-              <Text style={s.feedTitle}>Available Jobs</Text>
-              <Pressable onPress={clearFilters} disabled={!hasFilters} hitSlop={8}>
-                <Text style={[s.viewAllText, !hasFilters && s.viewAllMuted]}>View All</Text>
-              </Pressable>
+            <View>
+              <View style={s.feedHeader}>
+                <View>
+                  <Text style={s.feedTitle}>
+                    {visibleJobs.length > 0 ? `${visibleJobs.length} Jobs Found` : "Available Jobs"}
+                  </Text>
+                  {location?.pincode ? <Text style={s.feedSub}>Near {location.pincode}</Text> : null}
+                </View>
+                <Pressable onPress={clearFilters} disabled={!hasFilters} hitSlop={8}>
+                  <Text style={[s.viewAllText, !hasFilters && s.viewAllMuted]}>View All</Text>
+                </Pressable>
+              </View>
+
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}
+                contentContainerStyle={s.quickPills} style={s.quickPillsWrap}>
+                {CATEGORIES.map(cat => (
+                  <Pressable key={cat.v || "all"}
+                    style={[s.quickPill, category === cat.v && s.quickPillActive]}
+                    onPress={() => { setCategory(cat.v); setLoading(true); }}>
+                    <Ionicons name={cat.icon} size={13} color={category === cat.v ? "#fff" : "#4B5563"} />
+                    <Text style={[s.quickPillText, category === cat.v && s.quickPillTextActive]}>{cat.label}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
             </View>
           }
           renderItem={({ item }) => (
@@ -334,8 +396,6 @@ export default function FindWorkScreen({ navigation }) {
 
         <FilterModal
           visible={filterOpen}
-          pincode={draftPincode}
-          setPincode={setDraftPincode}
           category={draftCategory}
           setCategory={setDraftCategory}
           skills={draftSkills}
@@ -343,6 +403,11 @@ export default function FindWorkScreen({ navigation }) {
           onClose={() => setFilterOpen(false)}
           onClear={clearFilters}
           onApply={applyFilters}
+        />
+
+        <LocationPickerSheet
+          visible={locPickerVisible}
+          onClose={() => setLocPickerVisible(false)}
         />
       </SafeAreaView>
     </KeyboardAvoidingView>
@@ -388,7 +453,14 @@ function JobCard({ job, request, bookmarked, onOpen, onApply, onWithdraw, onBook
         </Pressable>
       </View>
 
-      <Text style={s.jobTitle} numberOfLines={2}>{job.title || "Untitled Job"}</Text>
+      <View style={s.titleRow}>
+        <Text style={[s.jobTitle, { flex: 1 }]} numberOfLines={2}>{job.title || "Untitled Job"}</Text>
+        {job.urgency === "asap" || job.urgency === "urgent" ? (
+          <View style={[s.urgencyBadge, job.urgency === "asap" && s.urgencyBadgeAsap]}>
+            <Text style={s.urgencyBadgeText}>{job.urgency === "asap" ? "URGENT" : "SOON"}</Text>
+          </View>
+        ) : null}
+      </View>
 
       <View style={s.metaRow}>
         <View style={s.metaItem}>
@@ -477,8 +549,6 @@ function NoMoreJobs({ onAdjust }) {
 
 function FilterModal({
   visible,
-  pincode,
-  setPincode,
   category,
   setCategory,
   skills,
@@ -494,21 +564,7 @@ function FilterModal({
           <Pressable style={s.modalSheet} onPress={() => {}}>
             <View style={s.modalHandle} />
             <Text style={s.modalTitle}>Filter Jobs</Text>
-            <Text style={s.modalSub}>Use pincode, category, and skills to find better matches.</Text>
-
-            <Text style={s.fieldLabel}>Pincode</Text>
-            <View style={s.modalInputRow}>
-              <Ionicons name="location-outline" size={18} color="#111827" />
-              <TextInput
-                style={s.modalInput}
-                value={pincode}
-                onChangeText={(v) => setPincode(v.replace(/\D/g, "").slice(0, 6))}
-                placeholder="6-digit pincode"
-                placeholderTextColor="#9CA3AF"
-                keyboardType="number-pad"
-                maxLength={6}
-              />
-            </View>
+            <Text style={s.modalSub}>Filter by category and skill to find better matches.</Text>
 
             <Text style={s.fieldLabel}>Category</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.modalChips}>
@@ -524,18 +580,31 @@ function FilterModal({
               ))}
             </ScrollView>
 
-            <Text style={s.fieldLabel}>Skills</Text>
-            <View style={s.modalInputRow}>
-              <Ionicons name="hammer-outline" size={18} color="#111827" />
-              <TextInput
-                style={s.modalInput}
-                value={skills}
-                onChangeText={setSkills}
-                placeholder="electrician, plumber..."
-                placeholderTextColor="#9CA3AF"
-                returnKeyType="done"
-              />
-            </View>
+            <Text style={s.fieldLabel}>Skill</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.modalChips}>
+              {[
+                { v: "", l: "Any",          icon: "apps-outline" },
+                { v: "electrician", l: "Electrician", icon: "flash-outline" },
+                { v: "plumber",     l: "Plumber",     icon: "water-outline" },
+                { v: "mason",       l: "Mason",        icon: "construct-outline" },
+                { v: "carpenter",   l: "Carpenter",   icon: "hammer-outline" },
+                { v: "painter",     l: "Painter",     icon: "color-palette-outline" },
+                { v: "driver",      l: "Driver",      icon: "car-outline" },
+                { v: "cleaner",     l: "Cleaner",     icon: "sparkles-outline" },
+                { v: "cook",        l: "Cook",        icon: "restaurant-outline" },
+                { v: "welder",      l: "Welder",      icon: "flame-outline" },
+                { v: "farmer",      l: "Farmer",      icon: "leaf-outline" },
+              ].map(sk => (
+                <Pressable
+                  key={sk.v || "any"}
+                  style={[s.modalChip, skills === sk.v && s.modalChipActive]}
+                  onPress={() => setSkills(sk.v)}
+                >
+                  <Ionicons name={sk.icon} size={13} color={skills === sk.v ? "#fff" : "#111827"} />
+                  <Text style={[s.modalChipText, skills === sk.v && s.modalChipTextActive]}>{sk.l}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
 
             <View style={s.modalButtons}>
               <Pressable style={s.clearBtn} onPress={onClear}>
@@ -568,6 +637,14 @@ const s = StyleSheet.create({
   titleRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginBottom: 22 },
   backBtn: { width: 38, height: 38, alignItems: "center", justifyContent: "center" },
   title: { fontFamily: fonts.bodyBold, fontSize: 28, color: "#111827", letterSpacing: 0 },
+
+  locChip: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    backgroundColor: "#EEF2FF", borderRadius: 20,
+    paddingHorizontal: 12, paddingVertical: 6,
+    alignSelf: "flex-start", marginBottom: spacing.md,
+  },
+  locChipTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.primary, maxWidth: 220 },
 
   searchRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   searchBox: {
@@ -603,14 +680,29 @@ const s = StyleSheet.create({
     backgroundColor: "#000",
     alignItems: "center",
     justifyContent: "center",
+    position: "relative",
   },
+  filterBadge: { position: "absolute", top: 10, right: 10, width: 8, height: 8, borderRadius: 4, backgroundColor: "#ef4444", borderWidth: 1.5, borderColor: "#000" },
 
   list: { paddingHorizontal: spacing.md, paddingTop: 26 },
   headerWrap: { marginBottom: spacing.lg },
-  feedHeader: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" },
+  feedHeader: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 12 },
   feedTitle: { fontFamily: fonts.bodyBold, fontSize: 22, color: "#1A1C1F" },
+  feedSub: { fontFamily: fonts.body, fontSize: 13, color: "#6B7280", marginTop: 2 },
   viewAllText: { fontFamily: fonts.bodyMedium, fontSize: 16, color: "#111827" },
   viewAllMuted: { color: "#9CA3AF" },
+
+  quickPillsWrap: { marginBottom: 20 },
+  quickPills: { gap: 8, paddingVertical: 2 },
+  quickPill: { flexDirection: "row", alignItems: "center", gap: 5, height: 34, paddingHorizontal: 12, borderRadius: 999, backgroundColor: "#F3F3F8", borderWidth: 1, borderColor: "#E8E8ED" },
+  quickPillActive: { backgroundColor: "#111827", borderColor: "#111827" },
+  quickPillText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: "#4B5563" },
+  quickPillTextActive: { color: "#fff" },
+
+  titleRow: { flexDirection: "row", alignItems: "flex-start", gap: 8, marginBottom: 10 },
+  urgencyBadge: { flexShrink: 0, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: "#FEF3C7", marginTop: 3 },
+  urgencyBadgeAsap: { backgroundColor: "#FEE2E2" },
+  urgencyBadgeText: { fontFamily: fonts.bodyBold, fontSize: 10, color: "#B45309", letterSpacing: 0.5 },
 
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -646,7 +738,7 @@ const s = StyleSheet.create({
   ratingRow: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 },
   posterRating: { fontFamily: fonts.bodyMedium, fontSize: 13, color: "#4C4546", includeFontPadding: false },
 
-  jobTitle: { fontFamily: fonts.bodyBold, fontSize: 21, lineHeight: 28, color: "#111827", marginBottom: 10, includeFontPadding: false },
+  jobTitle: { fontFamily: fonts.bodyBold, fontSize: 21, lineHeight: 28, color: "#111827", includeFontPadding: false },
   metaRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: spacing.md, marginBottom: spacing.md },
   metaItem: { flexDirection: "row", alignItems: "center", gap: 5, maxWidth: "100%" },
   metaText: { fontFamily: fonts.body, fontSize: 14, color: "#4C4546", flexShrink: 1 },

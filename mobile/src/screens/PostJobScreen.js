@@ -115,6 +115,7 @@ export default function PostJobScreen({ navigation }) {
   const [step, setStep]             = useState(1);
   const [saving, setSaving]         = useState(false);
   const [aiLoading, setAiLoading]   = useState(false);
+  const [jobPhotoUri, setJobPhotoUri] = useState(null);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [recording, setRecording]   = useState(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -255,18 +256,25 @@ export default function PostJobScreen({ navigation }) {
     if (status !== "granted") { Alert.alert("Photo permission denied."); return; }
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
     if (result.canceled) return;
+    const uri = result.assets[0].uri;
+    setJobPhotoUri(uri);
     setAiLoading(true);
     try {
-      const uri = result.assets[0].uri;
       const fd = new FormData();
       fd.append("file", { uri, name: "job_photo.jpg", type: "image/jpeg" });
       const r = await api.post("/ai/photo-to-job", fd, { headers: { "Content-Type": "multipart/form-data" } });
       const fields = r.data || {};
-      if (fields.category) setForm(f => ({ ...f, category: fields.category, categoryLabel: fields.category, skill: fields.skill || f.skill, description: fields.description || f.description }));
-      Alert.alert("Photo analyzed", "Review the auto-filled fields and continue.");
+      if (fields.category) {
+        setForm(f => ({ ...f, category: fields.category, categoryLabel: fields.category, skill: fields.skill || f.skill, description: fields.description || f.description }));
+        if (step === 1) setStep(2);
+      } else {
+        Alert.alert("Couldn't detect category", "Please select a category below.");
+      }
     } catch { Alert.alert("Photo analysis failed. Please fill the form manually."); }
     finally { setAiLoading(false); }
   };
+
+  const [posted, setPosted] = useState(false);
 
   const submit = async () => {
     setSaving(true);
@@ -282,12 +290,42 @@ export default function PostJobScreen({ navigation }) {
         address: { village: form.village, post: pinResult?.name || "", block: pinResult?.block || "", district: pinResult?.district || "", state: pinResult?.state || "", pincode: form.pincode },
         required_skills: [{ category: form.categoryLabel, skill: effectiveSkill }],
       });
-      Alert.alert("Job posted!", "Local Experts nearby will be notified.", [
-        { text: "OK", onPress: () => navigation.navigate("FindWork") },
-      ]);
+      setPosted(true);
     } catch (e) { Alert.alert("Failed", formatApiError(e)); }
     finally { setSaving(false); }
   };
+
+  if (posted) {
+    return (
+      <AppScreen edges={["top", "bottom"]} style={[S.safe, { justifyContent: "center", alignItems: "center", padding: 32 }]}>
+        <View style={S.successCircle}>
+          <Ionicons name="checkmark" size={48} color="#fff" />
+        </View>
+        <Text style={S.successTitle}>Job Posted!</Text>
+        <Text style={S.successSub}>
+          Nearby Local Experts have been notified. You'll hear back soon in your Activity tab.
+        </Text>
+        <View style={S.successSteps}>
+          {[
+            { icon: "notifications-outline", text: "Experts near you are being alerted" },
+            { icon: "chatbubble-outline",    text: "They'll message you to confirm" },
+            { icon: "checkmark-circle-outline", text: "You accept who to hire" },
+          ].map((step, i) => (
+            <View key={i} style={S.successStep}>
+              <Ionicons name={step.icon} size={20} color="#16a34a" />
+              <Text style={S.successStepText}>{step.text}</Text>
+            </View>
+          ))}
+        </View>
+        <TouchableOpacity style={S.successBtn} onPress={() => navigation.navigate("Activity")}>
+          <Text style={S.successBtnText}>View My Jobs</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={S.successBtnSecondary} onPress={() => navigation.navigate("Tabs", { screen: "Home" })}>
+          <Text style={S.successBtnSecondaryText}>Back to Home</Text>
+        </TouchableOpacity>
+      </AppScreen>
+    );
+  }
 
   return (
     <AppScreen edges={["top"]} style={S.safe}>
@@ -331,6 +369,19 @@ export default function PostJobScreen({ navigation }) {
                 </TouchableOpacity>
                 {aiLoading && <ActivityIndicator color={colors.primary} />}
               </View>
+
+              {jobPhotoUri ? (
+                <View style={S.photoPreviewRow}>
+                  <Image source={{ uri: jobPhotoUri }} style={S.photoPreview} resizeMode="cover" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={S.photoPreviewLabel}>Photo uploaded</Text>
+                    <Text style={S.photoPreviewSub}>AI is analyzing the job site</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => setJobPhotoUri(null)}>
+                    <Ionicons name="close-circle" size={22} color={colors.outline} />
+                  </TouchableOpacity>
+                </View>
+              ) : null}
 
               <View style={S.catGrid}>
                 {CATEGORIES.map(c => (
@@ -822,6 +873,20 @@ const S = StyleSheet.create({
   aiBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 14, paddingHorizontal: 10, borderRadius: 16, borderWidth: 1, borderColor: "#e8e8ed", backgroundColor: "#ffffff", ...shadow.xs },
   aiBtnRec: { backgroundColor: colors.error, borderColor: colors.error },
   aiBtnText: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.primary, letterSpacing: 1 },
+  successCircle: { width: 96, height: 96, borderRadius: 48, backgroundColor: "#16a34a", alignItems: "center", justifyContent: "center", marginBottom: 24 },
+  successTitle: { fontFamily: fonts.bodyBold, fontSize: 30, color: "#111827", textAlign: "center", marginBottom: 10 },
+  successSub: { fontFamily: fonts.body, fontSize: 16, color: "#4B5563", textAlign: "center", lineHeight: 24, marginBottom: 32 },
+  successSteps: { width: "100%", gap: 14, marginBottom: 36 },
+  successStep: { flexDirection: "row", alignItems: "center", gap: 12 },
+  successStepText: { fontFamily: fonts.body, fontSize: 15, color: "#374151", flex: 1 },
+  successBtn: { width: "100%", height: 52, borderRadius: 14, backgroundColor: "#111827", alignItems: "center", justifyContent: "center", marginBottom: 12 },
+  successBtnText: { fontFamily: fonts.bodyBold, fontSize: 16, color: "#fff" },
+  successBtnSecondary: { width: "100%", height: 52, borderRadius: 14, borderWidth: 1, borderColor: "#D1D5DB", alignItems: "center", justifyContent: "center" },
+  successBtnSecondaryText: { fontFamily: fonts.bodyBold, fontSize: 16, color: "#374151" },
+  photoPreviewRow: { flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: "#f0fdf4", borderRadius: 12, padding: 10, marginBottom: 16, borderWidth: 1, borderColor: "#bbf7d0" },
+  photoPreview: { width: 56, height: 56, borderRadius: 8 },
+  photoPreviewLabel: { fontFamily: fonts.bodyBold, fontSize: 13, color: "#166534" },
+  photoPreviewSub: { fontFamily: fonts.body, fontSize: 11, color: "#15803d", marginTop: 2 },
 
   /* Step 1 — Category grid */
   catGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 16 },

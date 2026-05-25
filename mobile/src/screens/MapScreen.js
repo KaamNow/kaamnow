@@ -55,7 +55,7 @@ export default function MapScreen({ navigation }) {
       <MapView style={styles.map} region={region} showsUserLocation>
         {workers.filter((w) => w.lat && w.lng).map((w) => (
           <Marker key={w.id} coordinate={{ latitude: w.lat, longitude: w.lng }}>
-            <View style={styles.pin}>
+            <View style={[styles.pin, w.is_available_now && styles.pinActive]}>
               <Ionicons name="person" size={12} color="#fff" />
             </View>
             <Callout onPress={() => navigation.navigate("WorkerProfile", { id: w.id })}>
@@ -87,6 +87,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.xxl, justifyContent: "center", alignItems: "center",
     borderWidth: 2, borderColor: colors.surfaceCard,
   },
+  pinActive: { backgroundColor: "#16a34a" },
   callout: { width: 140, padding: spacing.xs },
   calloutName:  { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.textHeading },
   calloutSkill: { fontFamily: fonts.body, fontSize: 11, color: colors.outline },

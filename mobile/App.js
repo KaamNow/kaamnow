@@ -26,6 +26,7 @@ import * as Sentry from "@sentry/react-native";
 
 import { AuthProvider, useAuth } from "./src/contexts/AuthContext";
 import { LanguageProvider } from "./src/contexts/LanguageContext";
+import { LocationProvider } from "./src/contexts/LocationContext";
 import { useTranslation } from "./src/i18n";
 import { colors, fonts } from "./src/theme";
 
@@ -341,15 +342,17 @@ export default Sentry.wrap(function App() {
   return (
     <LanguageProvider>
       <AuthProvider>
-        <NavigationContainer linking={linking}>
-          <StatusBar style="light" backgroundColor={colors.primary} />
-          <RootNavigator />
-        </NavigationContainer>
-        {!ready && (
-          <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}>
-            <AnimatedSplash onDone={() => setSplashDone(true)} />
-          </View>
-        )}
+        <LocationProvider>
+          <NavigationContainer linking={linking}>
+            <StatusBar style="light" backgroundColor={colors.primary} />
+            <RootNavigator />
+          </NavigationContainer>
+          {!ready && (
+            <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }}>
+              <AnimatedSplash onDone={() => setSplashDone(true)} />
+            </View>
+          )}
+        </LocationProvider>
       </AuthProvider>
     </LanguageProvider>
   );

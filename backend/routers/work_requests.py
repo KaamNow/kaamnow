@@ -298,7 +298,7 @@ async def list_my_requests(user: dict = Depends(get_current_user)):
         .to_list(200)
     )
 
-    return [await _enrich(d, uid) for d in docs]
+    return list(await asyncio.gather(*[_enrich(d, uid) for d in docs]))
 
 
 # ── GET /work-requests/{id} ──────────────────────────────────────────────────

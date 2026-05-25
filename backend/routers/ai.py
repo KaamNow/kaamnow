@@ -9,6 +9,7 @@ from ..ai_service import (
     extract_job_fields,
     generate_bio,
     price_stats,
+    resolve_skill,
     transcribe_audio,
 )
 from ..auth import get_current_user
@@ -96,6 +97,13 @@ async def photo_to_job(file: UploadFile = File(...), user: dict = Depends(get_cu
     if result is None:
         raise HTTPException(status_code=503, detail="Photo description unavailable")
     return result
+
+
+@router.get("/resolve-skill")
+async def resolve_skill_endpoint(q: str):
+    """Resolve any Hindi/English search query to a standard skill name."""
+    skill = resolve_skill(q)
+    return {"skill": skill, "resolved": skill is not None}
 
 
 @router.get("/suggest-price")

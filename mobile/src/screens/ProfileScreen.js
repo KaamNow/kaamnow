@@ -59,8 +59,11 @@ export default function ProfileScreen({ navigation }) {
   const { user, logout, refreshUser } = useAuth();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const [availableNow, setAvailableNow] = useState(user?.is_available_now || false);
+  const [availableNow, setAvailableNow] = useState(false);
   const [toggling, setToggling] = useState(false);
+  const [broadcastOn, setBroadcastOn] = useState(false);
+  const [broadcastExpiry, setBroadcastExpiry] = useState(null);
+  const [broadcasting, setBroadcasting] = useState(false);
 
   const isWorker = user?.has_service_profile === true;
   const [serviceProfile, setServiceProfile] = useState(null);
@@ -77,7 +80,9 @@ export default function ProfileScreen({ navigation }) {
     api.get("/service-profiles/mine")
       .then(r => {
         setServiceProfile(r.data);
-        setAvailableNow(r.data?.is_available_now || false);
+        setAvailableNow(r.data?.available || false);
+        setBroadcastOn(r.data?.is_available_now || false);
+        setBroadcastExpiry(r.data?.available_now_expires_at || null);
       })
       .catch(() => {});
   }, [isWorker]);
@@ -95,6 +100,43 @@ export default function ProfileScreen({ navigation }) {
       setToggling(false);
     }
   }, [availableNow, toggling]);
+
+  // Tick every 60s so formatExpiry re-evaluates while broadcast is active
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!broadcastOn || !broadcastExpiry) return;
+    const id = setInterval(() => setTick(t => t + 1), 60000);
+    return () => clearInterval(id);
+  }, [broadcastOn, broadcastExpiry]);
+
+  const formatExpiry = (iso) => {
+    if (!iso) return "";
+    const mins = Math.round((new Date(iso).getTime() - Date.now()) / 60000);
+    if (mins <= 0) return "Expired";
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return h > 0 ? `Expires in ${h}h ${m}m` : `Expires in ${m}m`;
+  };
+
+  const toggleBroadcast = useCallback(async () => {
+    if (broadcasting) return;
+    setBroadcasting(true);
+    try {
+      if (broadcastOn) {
+        await api.delete("/service-profiles/mine/available-now");
+        setBroadcastOn(false);
+        setBroadcastExpiry(null);
+      } else {
+        const res = await api.post("/service-profiles/mine/available-now");
+        setBroadcastOn(true);
+        setBroadcastExpiry(res.data?.expires_at || null);
+      }
+    } catch {
+      Alert.alert(t("err_generic"));
+    } finally {
+      setBroadcasting(false);
+    }
+  }, [broadcastOn, broadcasting]);
 
   const shareReferral = async () => {
     if (!user?.referral_code) return;
@@ -201,6 +243,32 @@ export default function ProfileScreen({ navigation }) {
               thumbColor="#fff"
               disabled={toggling}
             />
+          </Card>
+
+          <Card style={[styles.availCard, { marginTop: 10 }]}>
+            <View style={styles.availLeft}>
+              <View style={[styles.availDot, { backgroundColor: broadcastOn ? "#10b981" : colors.outlineVariant, width: 10, height: 10, borderRadius: 5 }]} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.availTitle}>Available Now</Text>
+                <Text style={styles.availSub}>
+                  {broadcastOn
+                    ? (broadcastExpiry ? formatExpiry(broadcastExpiry) : "Notifying saved customers")
+                    : "Broadcast for 4h · Alerts saved customers"}
+                </Text>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={[styles.broadcastBtn, broadcastOn && styles.broadcastBtnOff]}
+              onPress={toggleBroadcast}
+              disabled={broadcasting}
+            >
+              {broadcasting
+                ? <ActivityIndicator size="small" color={broadcastOn ? "#ef4444" : "#fff"} />
+                : <Text style={[styles.broadcastBtnText, broadcastOn && { color: "#ef4444" }]}>
+                    {broadcastOn ? "Turn Off" : "Go Live"}
+                  </Text>
+              }
+            </TouchableOpacity>
           </Card>
         </View>
       )}
@@ -422,6 +490,9 @@ const styles = StyleSheet.create({
   availDot:   { width: 8, height: 8, borderRadius: 4 },
   availTitle: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.textHeading },
   availSub:   { fontFamily: fonts.body, fontSize: 12, color: colors.outline, marginTop: 1 },
+  broadcastBtn: { backgroundColor: "#10b981", borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, minWidth: 80, alignItems: "center" },
+  broadcastBtnOff: { backgroundColor: "#fee2e2" },
+  broadcastBtnText: { fontFamily: fonts.bodyBold, fontSize: 13, color: "#fff" },
 
   // ── Expert Tools grid ─────────────────────────────────────────
   toolsCard: { padding: 0, overflow: "hidden", borderRadius: 18, backgroundColor: "#F3F4F6" },

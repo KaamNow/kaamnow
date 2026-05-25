@@ -103,6 +103,7 @@ export default function WorkerProfileScreen({ route, navigation }) {
       heroPhoto, avatar, name, uniqueSkills, rating, ratingCount, completed,
       experience, rate, rateLabel, location, reviews, initials,
       available: profile.availability !== false && profile.is_active !== false,
+      isAvailableNow: profile.is_available_now || false,
       verified: profile.verification_status === "verified" || profile.selfie_verified || profile.trust_tier >= 2,
       trustTier: profile.trust_tier || 1,
       videoUrl: fullUrl(profile.video_url || profile.intro_video_url || profile.intro_video),
@@ -265,6 +266,12 @@ export default function WorkerProfileScreen({ route, navigation }) {
                 <Ionicons name="location-outline" size={15} color="#6B7280" />
                 <Text style={s.locationText} numberOfLines={2}>{view.location}</Text>
               </View>
+              {view.isAvailableNow && (
+                <View style={s.availNowChip}>
+                  <View style={s.availNowDot} />
+                  <Text style={s.availNowChipText}>Available Now</Text>
+                </View>
+              )}
             </View>
             <TrustBadge tier={view.trustTier} />
           </View>
@@ -660,6 +667,9 @@ const s = StyleSheet.create({
     marginTop: -spacing.sm,
   },
   moreReviewsText: { fontFamily: fonts.bodyBold, fontSize: 14, color: "#111827" },
+  availNowChip: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#dcfce7", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4, alignSelf: "flex-start", marginTop: 6 },
+  availNowDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: "#16a34a" },
+  availNowChipText: { fontFamily: fonts.bodyBold, fontSize: 11, color: "#16a34a" },
 
   stickyBar: {
     position: "absolute",

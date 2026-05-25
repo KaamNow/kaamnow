@@ -446,6 +446,7 @@ async def job_feed(
     pincode: Optional[str] = None,
     skills: Optional[str] = None,
     category: Optional[str] = None,
+    search: Optional[str] = None,
     user: Optional[dict] = Depends(get_optional_user),
 ):
     user = user or {}
@@ -499,6 +500,17 @@ async def job_feed(
     if skills:
         selected_set = set(selected_skills)
         active_jobs = [j for j in active_jobs if _job_skill_names(j).intersection(selected_set)]
+
+    if search:
+        sq = search.strip().lower()
+        def _job_matches_search(j: dict) -> bool:
+            haystack = " ".join(filter(None, [
+                j.get("title", ""), j.get("description", ""),
+                j.get("category", ""), j.get("village", ""),
+                " ".join(str(s) for s in (_job_skill_names(j))),
+            ])).lower()
+            return sq in haystack
+        active_jobs = [j for j in active_jobs if _job_matches_search(j)]
 
     active_jobs.sort(key=lambda job: _rank_job(job, worker_lat, worker_lng, selected_skills))
     return [

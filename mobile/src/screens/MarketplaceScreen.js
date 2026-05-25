@@ -6,39 +6,56 @@ import {
   StyleSheet, Text, TextInput, View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import * as Location from "expo-location";
 import { setCache, getCache } from "../lib/cache";
 import api, { API_URL } from "../api";
 import AppScreen from "../components/AppScreen";
 import EmptyState from "../components/EmptyState";
 import { useAuth } from "../contexts/AuthContext";
 import { useLanguage } from "../contexts/LanguageContext";
+import { useLocationContext } from "../contexts/LocationContext";
+import LocationPickerSheet from "../components/LocationPickerSheet";
 import { colors, fonts, radius, shadow, spacing } from "../theme";
 
 const INDIGO = colors.primary;
 
 /* ─── Skill options ────────────────────────────────────────────── */
 const SKILLS = [
-  { v: "all",            l: "All Experts" },
-  { v: "electrician",    l: "Electrician" },
-  { v: "plumber",        l: "Plumber" },
-  { v: "carpenter",      l: "Carpenter" },
-  { v: "painter",        l: "Painter" },
-  { v: "driver",         l: "Driver" },
-  { v: "security_guard", l: "Security" },
-  { v: "cook",           l: "Cook" },
-  { v: "mason",          l: "Mason" },
-  { v: "welder",         l: "Welder" },
+  { v: "all",            l: "All",         icon: "apps-outline" },
+  { v: "electrician",    l: "Electrician", icon: "flash-outline" },
+  { v: "plumber",        l: "Plumber",     icon: "water-outline" },
+  { v: "carpenter",      l: "Carpenter",   icon: "hammer-outline" },
+  { v: "painter",        l: "Painter",     icon: "color-palette-outline" },
+  { v: "driver",         l: "Driver",      icon: "car-outline" },
+  { v: "security_guard", l: "Security",    icon: "shield-outline" },
+  { v: "cook",           l: "Cook",        icon: "restaurant-outline" },
+  { v: "mason",          l: "Mason",       icon: "construct-outline" },
+  { v: "welder",         l: "Welder",      icon: "flame-outline" },
+  { v: "cleaner",        l: "Cleaner",     icon: "sparkles-outline" },
+  { v: "gardener",       l: "Gardener",    icon: "leaf-outline" },
 ];
 
 const SKILL_ALIASES = {
-  electrical: "electrician",
-  plumbing: "plumber",
-  carpentry: "carpenter",
-  painting: "painter",
-  cooking: "cook",
-  welding: "welder",
-  "farm work": "gardener",
+  // English variants
+  electrical: "electrician", plumbing: "plumber", carpentry: "carpenter",
+  painting: "painter", cooking: "cook", welding: "welder", "farm work": "gardener",
+  cleaning: "cleaner", driving: "driver", farming: "farmer",
+  masonry: "mason", tailoring: "tailor", security: "security guard",
+  // Hindi / Bhojpuri / regional terms
+  safai: "cleaner", "साफाई": "cleaner", "सफाई": "cleaner",
+  rangai: "painter", rang: "painter", "रंगाई": "painter", "रंग": "painter",
+  bijli: "electrician", "बिजली": "electrician",
+  nali: "plumber", "नाली": "plumber",
+  mistri: "mason", "मिस्त्री": "mason",
+  barhai: "carpenter", "बढ़ई": "carpenter",
+  darzi: "tailor", "दर्जी": "tailor",
+  dhobi: "laundry", "धोबी": "laundry",
+  mali: "gardener", "माली": "gardener",
+  kisan: "farmer", kheti: "farmer", "किसान": "farmer", "खेती": "farmer",
+  chalak: "driver", "चालक": "driver",
+  rasoia: "cook", khana: "cook", "रसोइया": "cook",
+  mazdoor: "labour", "मजदूर": "labour",
+  chowkidar: "security guard", "चौकीदार": "security guard",
+  weldar: "welder", "वेल्डर": "welder",
 };
 
 const fullUrl = (url) => !url ? null : url.startsWith("http") ? url : `${API_URL}${url}`;
@@ -51,6 +68,7 @@ const prettySkill = (value) => {
 export default function MarketplaceScreen({ navigation, route }) {
   const { lang } = useLanguage();
   const { user } = useAuth();
+  const { location, clearLocation } = useLocationContext();
 
   // ── State ────────────────────────────────────────────────────
   const [workers, setWorkers]         = useState([]);
@@ -58,13 +76,8 @@ export default function MarketplaceScreen({ navigation, route }) {
   const initialSkill = SKILL_ALIASES[route?.params?.skill] || route?.params?.skill || "all";
   const [skill, setSkill]             = useState(initialSkill);
   const [q, setQ]                     = useState(route?.params?.search || "");
-  const [pincode, setPincode]         = useState(route?.params?.filterPincode || "");
   const [availOnly, setAvailOnly]     = useState(false);
-  const [nearMeLat, setNearMeLat]     = useState(null);
-  const [nearMeLng, setNearMeLng]     = useState(null);
-  const [gpsLoading, setGpsLoading]   = useState(false);
-  const [showLocModal, setShowLocModal] = useState(false);
-  const [tempPincode, setTempPincode] = useState("");
+  const [locPickerVisible, setLocPickerVisible] = useState(false);
 
   // Booking form sheet
   const [bookingTarget, setBookingTarget] = useState(null);
@@ -79,27 +92,43 @@ export default function MarketplaceScreen({ navigation, route }) {
   useEffect(() => {
     if (route?.params?.skill) setSkill(SKILL_ALIASES[route.params.skill] || route.params.skill);
     if (route?.params?.search) setQ(route.params.search);
-    if (route?.params?.filterPincode) setPincode(route.params.filterPincode);
-  }, [route?.params?.skill, route?.params?.search, route?.params?.filterPincode]);
+  }, [route?.params?.skill, route?.params?.search]);
 
   // ── Load workers ─────────────────────────────────────────────
   const load = useCallback(() => {
     setLoading(true);
-    const params = {};
-    if (skill !== "all")      params.skills = skill;
-    if (q.trim())             params.q = q.trim();
-    if (pincode.length === 6) params.pincode = pincode;
-    if (availOnly)            params.available_only = true;
-    if (nearMeLat && nearMeLng) { params.lat = nearMeLat; params.lng = nearMeLng; params.radius = 20; }
+    const locPincode = location?.pincode || "";
+    const locLat = location?.lat;
+    const locLng = location?.lng;
 
     const spParams = {};
-    if (params.skills) spParams.skill = params.skills;
-    if (params.pincode) spParams.pincode = params.pincode;
-    if (params.available_only) spParams.available_only = true;
-    if (params.q) spParams.search = params.q;
+    if (skill !== "all") spParams.skill = skill;
+    if (locPincode.length === 6) spParams.pincode = locPincode;
+    if (availOnly) spParams.available_only = true;
+    if (locLat && locLng) { spParams.lat = locLat; spParams.lng = locLng; spParams.radius = 20; }
 
-    api.get("/service-profiles", { params: spParams })
-      .then(r => {
+    const runSearch = async () => {
+      try {
+        if (q.trim()) {
+          const rawQ = q.toLowerCase().trim();
+          const localResolved = SKILL_ALIASES[rawQ];
+          if (localResolved) {
+            if (!spParams.skill) spParams.skill = localResolved;
+          } else {
+            try {
+              const aiRes = await api.get("/ai/resolve-skill", { params: { q: q.trim() } });
+              if (aiRes.data?.resolved && !spParams.skill) {
+                spParams.skill = aiRes.data.skill;
+              } else {
+                spParams.search = q.trim();
+              }
+            } catch {
+              spParams.search = q.trim();
+            }
+          }
+        }
+
+        const r = await api.get("/service-profiles", { params: spParams });
         const raw = Array.isArray(r.data) ? r.data : [];
         const list = raw.map(sp => ({
           ...sp,
@@ -114,47 +143,30 @@ export default function MarketplaceScreen({ navigation, route }) {
         }));
         setWorkers(list);
         if (list.length > 0) setCache("worker_list", list);
-      })
-      .catch(async () => {
+      } catch {
         const cached = await getCache("worker_list");
         setWorkers(cached || []);
-      })
-      .finally(() => setLoading(false));
-  }, [skill, q, pincode, availOnly, nearMeLat, nearMeLng]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    runSearch();
+  }, [skill, q, location, availOnly]);
 
   useEffect(() => { load(); }, [load]);
 
-  // ── GPS ──────────────────────────────────────────────────────
-  const useNearMe = async () => {
-    setGpsLoading(true);
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") return;
-      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      setNearMeLat(loc.coords.latitude);
-      setNearMeLng(loc.coords.longitude);
-      setPincode(""); // clear pincode when using GPS
-    } catch {}
-    finally { setGpsLoading(false); }
-  };
-
   // ── Helpers ──────────────────────────────────────────────────
-  const hasFilter = skill !== "all" || q.trim() || pincode || availOnly || nearMeLat;
+  const hasFilter = skill !== "all" || q.trim() || location || availOnly;
 
   const clearAll = () => {
     setSkill("all");
     setQ("");
-    setPincode("");
     setAvailOnly(false);
-    setNearMeLat(null);
-    setNearMeLng(null);
+    clearLocation();
   };
 
-  const locationLabel = nearMeLat
-    ? "Using GPS location"
-    : pincode
-    ? `Pincode: ${pincode}`
-    : null;
+  const locationLabel = location?.label || (location?.pincode ? `Pincode: ${location.pincode}` : null);
 
   const openProfile = (item) => navigation.navigate("WorkerProfile", { id: item.id });
 
@@ -229,6 +241,15 @@ export default function MarketplaceScreen({ navigation, route }) {
           <Text style={s.title}>Find Experts</Text>
         </View>
 
+        {/* Location chip — Flipkart-style */}
+        <Pressable style={s.locChip} onPress={() => setLocPickerVisible(true)}>
+          <Ionicons name="location-outline" size={14} color={colors.primary} />
+          <Text style={s.locChipTxt} numberOfLines={1}>
+            {locationLabel || "Set location"}
+          </Text>
+          <Ionicons name="chevron-down" size={13} color="#6B7280" />
+        </Pressable>
+
         <View style={s.searchRow}>
           <Pressable
             style={[s.searchBox, searchFocused && s.searchBoxFocused]}
@@ -254,33 +275,36 @@ export default function MarketplaceScreen({ navigation, route }) {
           </Pressable>
           <Pressable
             style={s.filterBtn}
-            onPress={() => { setTempPincode(pincode); setShowLocModal(true); }}
+            onPress={() => setLocPickerVisible(true)}
           >
             <Ionicons name="options-outline" size={24} color="#fff" />
+            {location ? (
+              <View style={s.filterBadge} />
+            ) : null}
           </Pressable>
         </View>
-
-        {locationLabel && (
-          <View style={s.locLabel}>
-            <Ionicons name="location-outline" size={12} color="#5E5E60" />
-            <Text style={s.locLabelTxt}>{locationLabel}</Text>
-            <Pressable onPress={clearAll} hitSlop={8}>
-              <Ionicons name="close" size={13} color="#5E5E60" />
-            </Pressable>
-          </View>
-        )}
       </View>
 
-      {/* Skill filter pills */}
+      {/* Skill filter pills + Available Now toggle */}
       <View style={s.chipsWrap}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View style={s.pillRow}>
+            {/* Available Now toggle — first pill */}
+            <Pressable
+              style={[s.pill, s.pillAvail, availOnly && s.pillAvailActive]}
+              onPress={() => setAvailOnly(v => !v)}
+            >
+              <View style={[s.availDot, availOnly && s.availDotActive]} />
+              <Text style={[s.pillTxt, availOnly && s.pillTxtActive]}>Available Now</Text>
+            </Pressable>
+
             {SKILLS.map(sk => (
               <Pressable
                 key={sk.v}
                 style={[s.pill, skill === sk.v && s.pillActive]}
                 onPress={() => setSkill(sk.v)}
               >
+                <Ionicons name={sk.icon} size={13} color={skill === sk.v ? "#fff" : "#4B5563"} />
                 <Text style={[s.pillTxt, skill === sk.v && s.pillTxtActive]}>{sk.l}</Text>
               </Pressable>
             ))}
@@ -300,87 +324,45 @@ export default function MarketplaceScreen({ navigation, route }) {
             onBook={() => bookExpert(item)}
           />
         )}
-        ListHeaderComponent={loading ? (
-          <View style={s.loadingRow}>
-            <ActivityIndicator size="small" color={INDIGO} />
-            <Text style={s.loadingTxt}>Finding experts…</Text>
+        ListHeaderComponent={
+          <View>
+            {loading ? (
+              <View style={s.loadingRow}>
+                <ActivityIndicator size="small" color={INDIGO} />
+                <Text style={s.loadingTxt}>Finding experts…</Text>
+              </View>
+            ) : (
+              <View style={s.resultsRow}>
+                <Text style={s.resultsCount}>
+                  {workers.length > 0
+                    ? `${workers.length} Expert${workers.length === 1 ? "" : "s"} Found`
+                    : "Local Experts"}
+                </Text>
+                {workers.length > 0 && (
+                  <Text style={s.resultsSub}>Sorted by rating</Text>
+                )}
+              </View>
+            )}
           </View>
-        ) : null}
+        }
         ListEmptyComponent={!loading ? (
           <EmptyState
-            icon="search-outline"
-            title="No Local Experts found"
-            subtitle="Try a different skill or location"
-            actionLabel={hasFilter ? "Clear filters" : undefined}
+            icon="people-outline"
+            title={hasFilter ? "No experts match your filters" : "No experts in this area yet"}
+            subtitle={hasFilter
+              ? "Try clearing filters or searching a nearby pincode"
+              : "Be the first expert here — create your profile to show up"}
+            actionLabel={hasFilter ? "Clear filters" : "Become an Expert"}
             onAction={hasFilter ? clearAll : undefined}
           />
         ) : null}
       />
 
-      {/* ── Location modal ───────────────────────────────────── */}
-      <Modal visible={showLocModal} transparent animationType="slide"
-        onRequestClose={() => setShowLocModal(false)}>
-        <KeyboardAvoidingView style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}>
-          <Pressable style={s.modalBg} onPress={() => setShowLocModal(false)}>
-            <Pressable style={s.modalSheet} onPress={() => {}}>
-              <View style={s.modalHandle} />
-              <Text style={s.modalTitle}>Set location</Text>
-              <Text style={s.modalSub}>Filter experts by area</Text>
-
-              {/* GPS option */}
-              <Pressable style={s.gpsRow} onPress={() => { useNearMe(); setShowLocModal(false); }}>
-                <View style={s.gpsIcon}>
-                  <Ionicons name="locate-outline" size={18} color={INDIGO} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.gpsTxt}>Use my current location</Text>
-                  <Text style={s.gpsSub}>Uses GPS to find experts near you</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={16} color={colors.outline} />
-              </Pressable>
-
-              <Text style={s.orDivider}>— or enter pincode —</Text>
-
-              {/* Pincode input */}
-              <View style={s.pincodeRow}>
-                <Ionicons name="location-outline" size={18} color={INDIGO} />
-                <TextInput
-                  style={s.pincodeInput}
-                  value={tempPincode}
-                  onChangeText={v => setTempPincode(v.replace(/\D/g, "").slice(0, 6))}
-                  placeholder="6-digit pincode"
-                  placeholderTextColor={colors.outline}
-                  keyboardType="number-pad"
-                  maxLength={6}
-                  autoFocus
-                />
-                {tempPincode.length > 0 && (
-                  <Pressable onPress={() => setTempPincode("")} hitSlop={8}>
-                    <Ionicons name="close-circle" size={18} color={colors.outline} />
-                  </Pressable>
-                )}
-              </View>
-
-              <View style={s.modalBtns}>
-                {pincode.length > 0 && (
-                  <Pressable style={s.modalClearBtn}
-                    onPress={() => { setPincode(""); setNearMeLat(null); setNearMeLng(null); setShowLocModal(false); }}>
-                    <Text style={s.modalClearTxt}>Clear</Text>
-                  </Pressable>
-                )}
-                <Pressable
-                  style={[s.modalApplyBtn, tempPincode.length !== 6 && { opacity: 0.4 }]}
-                  disabled={tempPincode.length !== 6}
-                  onPress={() => { setPincode(tempPincode); setNearMeLat(null); setNearMeLng(null); setShowLocModal(false); }}
-                >
-                  <Text style={s.modalApplyTxt}>Search here</Text>
-                </Pressable>
-              </View>
-            </Pressable>
-          </Pressable>
-        </KeyboardAvoidingView>
-      </Modal>
+      {/* ── Location picker sheet ────────────────────────────── */}
+      <LocationPickerSheet
+        visible={locPickerVisible}
+        onClose={() => setLocPickerVisible(false)}
+      />
 
       {/* Booking form sheet */}
       {bookingTarget && (
@@ -496,6 +478,12 @@ function ExpertCard({ item, onProfile, onBook }) {
               </Text>
             </View>
           ) : null}
+          {item.is_available_now ? (
+            <View style={s.availNowChip}>
+              <View style={s.availNowDot} />
+              <Text style={s.availNowText}>Available Now</Text>
+            </View>
+          ) : null}
         </View>
       </View>
 
@@ -536,8 +524,13 @@ const s = StyleSheet.create({
   titleRow: { flexDirection: "row", alignItems: "center", marginBottom: spacing.lg },
   backBtn: { width: 40, height: 36, alignItems: "center", justifyContent: "center" },
   title: { flex: 1, fontFamily: fonts.bodyBold, fontSize: 24, color: "#111827", marginLeft: spacing.sm },
-  locLabel: { flexDirection: "row", alignItems: "center", gap: 5, marginTop: spacing.sm },
-  locLabelTxt: { fontFamily: fonts.bodyMedium, fontSize: 12, color: "#5E5E60" },
+  locChip: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    backgroundColor: "#EEF2FF", borderRadius: 20,
+    paddingHorizontal: 12, paddingVertical: 6,
+    alignSelf: "flex-start", marginBottom: spacing.sm,
+  },
+  locChipTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.primary, maxWidth: 220 },
 
   /* Search */
   searchRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
@@ -567,8 +560,9 @@ const s = StyleSheet.create({
     width: 50, height: 50, borderRadius: radius.xl,
     backgroundColor: "#000",
     alignItems: "center", justifyContent: "center",
-    flexShrink: 0,
+    flexShrink: 0, position: "relative",
   },
+  filterBadge: { position: "absolute", top: 8, right: 8, width: 8, height: 8, borderRadius: 4, backgroundColor: "#ef4444", borderWidth: 1.5, borderColor: "#000" },
 
   /* Skill pills */
   chipsWrap: {
@@ -578,10 +572,15 @@ const s = StyleSheet.create({
   },
   pillRow: { flexDirection: "row", gap: spacing.sm },
   pill: {
-    paddingHorizontal: 17, paddingVertical: 9, borderRadius: radius.pill,
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 14, paddingVertical: 9, borderRadius: radius.pill,
     backgroundColor: "#E8E8ED",
   },
   pillActive: { backgroundColor: "#000" },
+  pillAvail: { backgroundColor: "#dcfce7", borderWidth: 1, borderColor: "#bbf7d0" },
+  pillAvailActive: { backgroundColor: "#16a34a", borderColor: "#16a34a" },
+  availDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#86efac" },
+  availDotActive: { backgroundColor: "#fff" },
   pillTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: "#1A1C1F" },
   pillTxtActive: { color: "#fff" },
 
@@ -592,6 +591,9 @@ const s = StyleSheet.create({
     gap: 8, paddingVertical: spacing.md,
   },
   loadingTxt: { fontFamily: fonts.body, fontSize: 13, color: colors.outline },
+  resultsRow: { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", marginBottom: 12 },
+  resultsCount: { fontFamily: fonts.bodyBold, fontSize: 18, color: "#111827" },
+  resultsSub: { fontFamily: fonts.body, fontSize: 12, color: "#6B7280" },
 
   expertCard: {
     backgroundColor: "#fff",
@@ -645,42 +647,6 @@ const s = StyleSheet.create({
   },
   bookNowText: { fontFamily: fonts.bodyBold, fontSize: 14, color: "#fff", textAlign: "center", includeFontPadding: false },
 
-  /* Location modal */
-  modalBg:     { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
-  modalSheet:  { backgroundColor: colors.surfaceCard, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 44 },
-  modalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: colors.borderSubtle, alignSelf: "center", marginBottom: 20 },
-  modalTitle:  { fontFamily: fonts.display, fontSize: 22, color: colors.textHeading, marginBottom: 4 },
-  modalSub:    { fontFamily: fonts.body, fontSize: 13, color: colors.textBody, marginBottom: 20 },
-
-  gpsRow: {
-    flexDirection: "row", alignItems: "center", gap: 12,
-    backgroundColor: colors.primaryFixed, borderRadius: radius.xxl,
-    borderWidth: 1, borderColor: INDIGO + "30",
-    padding: 14, marginBottom: 20,
-  },
-  gpsIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: colors.surfaceCard, alignItems: "center", justifyContent: "center" },
-  gpsTxt:  { fontFamily: fonts.bodyBold, fontSize: 14, color: INDIGO },
-  gpsSub:  { fontFamily: fonts.body, fontSize: 12, color: colors.textBody, marginTop: 2 },
-
-  orDivider: { fontFamily: fonts.body, fontSize: 12, color: colors.outline, textAlign: "center", marginBottom: 16 },
-
-  pincodeRow: {
-    flexDirection: "row", alignItems: "center", gap: 10,
-    backgroundColor: colors.surfaceContainerLow, borderRadius: radius.xxl,
-    borderWidth: 1.5, borderColor: INDIGO,
-    paddingHorizontal: 14, paddingVertical: 12, marginBottom: 20,
-  },
-  pincodeInput: { flex: 1, fontFamily: fonts.body, fontSize: 18, color: colors.textHeading, letterSpacing: 2 },
-
-  modalBtns: { flexDirection: "row", gap: 10 },
-  modalClearBtn: {
-    paddingVertical: 15, paddingHorizontal: 18,
-    borderRadius: radius.xxl, borderWidth: 1.5, borderColor: colors.borderSubtle, justifyContent: "center",
-  },
-  modalClearTxt:  { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.textBody },
-  modalApplyBtn:  { flex: 1, backgroundColor: INDIGO, paddingVertical: 15, borderRadius: radius.xxl, alignItems: "center" },
-  modalApplyTxt:  { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.onPrimary },
-
   // Booking sheet
   bookSheetOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)" },
   bookSheetInner: {
@@ -702,4 +668,7 @@ const s = StyleSheet.create({
     height: 54, alignItems: "center", justifyContent: "center", marginTop: 8,
   },
   bookSubmitText: { fontFamily: fonts.bodyBold, fontSize: 18, color: "#fff" },
+  availNowChip: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#dcfce7", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3, alignSelf: "flex-start", marginTop: 5 },
+  availNowDot:  { width: 7, height: 7, borderRadius: 3.5, backgroundColor: "#16a34a" },
+  availNowText: { fontFamily: fonts.bodyBold, fontSize: 10, color: "#16a34a" },
 });

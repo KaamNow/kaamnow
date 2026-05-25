@@ -110,8 +110,13 @@ async def browse(
         q["availability"] = True
     if search:
         import re
-
-        q["display_name"] = {"$regex": re.escape(search), "$options": "i"}
+        pat = {"$regex": re.escape(search), "$options": "i"}
+        q["$or"] = [
+            {"display_name": pat},
+            {"bio": pat},
+            {"skills": {"$elemMatch": pat}},
+            {"categories": {"$elemMatch": pat}},
+        ]
 
     docs = (
         await db.service_profiles.find(q, {"_id": 0})

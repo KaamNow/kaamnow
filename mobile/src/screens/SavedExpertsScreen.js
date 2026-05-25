@@ -36,6 +36,12 @@ export default function SavedExpertsScreen({ navigation }) {
         <Text style={styles.name}>{item.display_name || item.name}</Text>
         <Text style={styles.skills}>{(item.skills || []).slice(0, 3).join(" · ")}</Text>
         {item.daily_rate ? <Text style={styles.rate}>₹{item.daily_rate}/day</Text> : null}
+        {item.is_available_now ? (
+          <View style={styles.availChip}>
+            <View style={styles.availDot} />
+            <Text style={styles.availChipText}>Available Now</Text>
+          </View>
+        ) : null}
       </View>
     </TouchableOpacity>
   );
@@ -69,4 +75,7 @@ const styles = StyleSheet.create({
   rate:     { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.statusSuccess },
   empty:    { alignItems: "center", marginTop: 80 },
   emptyText:{ fontFamily: fonts.body, fontSize: 14, color: colors.outline },
+  availChip: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#dcfce7", borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3, alignSelf: "flex-start", marginTop: 4 },
+  availDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#16a34a" },
+  availChipText: { fontFamily: fonts.bodyBold, fontSize: 10, color: "#16a34a" },
 });

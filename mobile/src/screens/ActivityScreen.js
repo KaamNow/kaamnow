@@ -222,7 +222,10 @@ export default function ActivityScreen({ navigation }) {
   const [detail, setDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  const load = useCallback(async () => {
+  const hasData = jobs.length > 0 || requests.length > 0;
+
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const [reqRes, jobsRes] = await Promise.all([
         api.get("/work-requests/mine").catch(() => ({ data: [] })),
@@ -237,9 +240,9 @@ export default function ActivityScreen({ navigation }) {
   }, []);
 
   useFocusEffect(useCallback(() => {
-    setLoading(true);
-    load();
-  }, [load]));
+    // First load: show spinner. Re-focus: keep showing existing data, refresh quietly.
+    load(!hasData ? false : true);
+  }, [load, hasData]));
 
   const activities = useMemo(() => {
     const merged = [

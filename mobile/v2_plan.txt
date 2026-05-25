@@ -1,0 +1,2487 @@
+# KaamNow v2 — Master Implementation Plan
+**Deadline:** June 15, 2026 | **Dev DB:** kaamnow-dev cluster | **Schema: LOCKED**
+
+---
+
+## Context
+
+KaamNow is migrating from a hard role-split (customer OR worker) to an OLX-style unified model where any user can both hire and work. Workers are now called "Local Experts" throughout. Simultaneously adding: GPS, free AI (Gemini Flash + Groq Whisper), in-app chat (Chatwoot self-hosted), worker certifications + video profile, gender, payments (Razorpay test mode), wallet credits (refer & earn ₹100/₹50, 90-day expiry), dispute/report system, portfolio photos, urgent/asap jobs, saved Local Experts, KYC (DigiLocker), offline mode, job templates, recurring bookings, photo-to-job AI, voice-to-job AI, earnings calendar + goal, available-from scheduling, "Available Now" broadcast, OTP for job start (Swiggy-style), GPS check-in, before/after job photos, job progress updates, completion certificate PDF, quick re-hire, post job anonymously, waiting list for Local Experts, QR code profile, in-app referral wallet screen, T&C + Privacy Policy in-app, unified FAQ, report an issue, emergency contact, saved addresses, seasonal job templates, nudge notifications, skill badges auto-award, profile verification selfie, first-time walkthrough, PostHog analytics, Sentry monitoring, English + Hindi + Bhojpuri + Maithili i18n (centralized), and a fully simplified mobile app (18 screens → 13, single unified nav).
+
+The WhatsApp onboarding bot is NOT touched. Only push + in-app notifications are used for engagement events.
+
+---
+
+## Core UX & Language Principles (NON-NEGOTIABLE)
+
+These apply to every screen, every string, every interaction across mobile and web.
+
+### 1. Plain English — Simple Language Only
+
+Every label, button, message, and error must use the simplest possible English. No jargon, no technical terms, no complex sentences. Write as if explaining to someone who learned English as a second language.
+
+**Examples:**
+| ❌ Don't use | ✅ Use instead |
+|---|---|
+| "Initiate Engagement" | "Send Request" |
+| "Terminate Contract" | "Cancel Job" |
+| "Verified Professional" | "Trusted Worker" |
+| "Authentication Required" | "Please log in first" |
+| "Availability Status" | "Are you free?" |
+| "Submit Application" | "Apply for Job" |
+| "Profile Completion" | "Your Profile" |
+| "Insufficient Permissions" | "You can't do this" |
+
+### 2. Respectful Naming — Always Dignified
+
+This app serves blue-collar workers. Every label, heading, and piece of copy must treat them with full dignity. Never use words that feel condescending or transactional.
+
+**Rules:**
+- Workers are called **"Workers"** or by their name — never "labourers", "help", "servants", "maids" (use "Home Helper", "Cleaner")
+- Customers are called **"Customers"** or by their name — never "employers", "owners", "masters"
+- Job categories use respectful names: "Home Cleaning" not "Maid Work", "Cooking Help" not "Cook Servant"
+- Ratings ask "How was your experience?" not "Rate this worker"
+- Earnings shown as "You earned ₹500" not "Payment sent to worker"
+- Profile shown as "Your Skills" not "Worker Skills"
+- Trust tier names: "New" (1), "Trusted" (2), "Pro" (3), "Star" (4) — not "Basic/Verified/Pro/Elite"
+
+### 3. English-Hindi Toggle — Centralized i18n System
+
+**Single source of truth:** One file `mobile/src/i18n/translations.js` contains ALL strings for both languages. No hardcoded strings anywhere in mobile or frontend.
+
+**Architecture:**
+
+```
+mobile/src/i18n/
+  translations.js       ← ALL strings, both languages, keyed
+  index.js              ← exports useTranslation() hook
+
+frontend/src/i18n/
+  translations.js       ← same structure, web-specific strings added
+  index.js              ← exports useTranslation() hook
+```
+
+**Translation file structure:**
+```javascript
+export const translations = {
+  en: {
+    // Navigation
+    nav_home: "Home",
+    nav_find_work: "Find Work",
+    nav_post_job: "Post a Job",
+    nav_activity: "My Activity",
+    nav_profile: "My Profile",
+
+    // Landing
+    landing_guest_title: "Find trusted workers near you",
+    landing_guest_subtitle: "Plumbers, painters, cooks and more — book in minutes",
+    landing_become_worker: "Start Earning — Become a Worker",
+    landing_find_work: "Find Work Near You",
+    landing_post_job: "Post a Job",
+
+    // Jobs
+    job_title_label: "What do you need done?",
+    job_urgency_normal: "Normal",
+    job_urgency_urgent: "Urgent",
+    job_urgency_asap: "Need it Today",
+    job_recurrence_once: "One Time",
+    job_recurrence_weekly: "Every Week",
+    job_recurrence_monthly: "Every Month",
+
+    // Worker profile
+    worker_availability_available: "Available for Work",
+    worker_availability_busy: "Not Available",
+    worker_trust_1: "New",
+    worker_trust_2: "Trusted",
+    worker_trust_3: "Pro",
+    worker_trust_4: "Star",
+
+    // Engagement actions
+    engagement_accept: "Accept",
+    engagement_reject: "Decline",
+    engagement_cancel: "Cancel",
+    engagement_complete: "Mark as Done",
+    engagement_rate: "Leave a Review",
+
+    // Chat
+    chat_placeholder: "Type a message...",
+    chat_send: "Send",
+
+    // Errors (plain language)
+    error_network: "No internet. Please check your connection.",
+    error_generic: "Something went wrong. Please try again.",
+    error_login_required: "Please log in to continue.",
+
+    // ... every string in the app
+  },
+
+  hi: {
+    // Navigation
+    nav_home: "होम",
+    nav_find_work: "काम खोजें",
+    nav_post_job: "काम पोस्ट करें",
+    nav_activity: "मेरी गतिविधि",
+    nav_profile: "मेरी प्रोफ़ाइल",
+
+    // Landing
+    landing_guest_title: "अपने पास भरोसेमंद कारीगर खोजें",
+    landing_guest_subtitle: "प्लंबर, पेंटर, कुक और बहुत कुछ — मिनटों में बुक करें",
+    landing_become_worker: "कमाई शुरू करें — वर्कर बनें",
+    landing_find_work: "अपने पास काम खोजें",
+    landing_post_job: "काम पोस्ट करें",
+
+    // ... every string translated to Hindi
+  }
+}
+```
+
+**Toggle placement:**
+- Mobile: top-right corner of `AppHeader` component (globe icon → "EN | हिं" toggle)
+- Web: top-right corner of `Navbar` (same toggle)
+- Guest landing screen: prominent toggle so first-time Hindi users can switch immediately
+
+**How it works:**
+- `LanguageContext.js` already exists — expand it
+- `useTranslation()` hook returns `t(key)` function
+- Every component uses `const { t } = useTranslation()` then `t('nav_home')`
+- Language persisted in `SecureStore` (mobile) / `localStorage` (web)
+- On change: syncs to `PATCH /api/auth/me` (`preferred_language` field) if user is logged in
+- Server-generated content (notification text) uses `user.preferred_language` from DB — already stored
+
+**Backend notifications — Hindi support:**
+- `_notify()` in `engagements.py` already sends title+body
+- Add `lang` parameter to all notification text functions
+- Hindi notification copy: maintain in `backend/i18n/notifications_hi.py`
+- English copy: `backend/i18n/notifications_en.py`
+- Selection: `lang = user.get("preferred_language", "en")`
+
+### 4. UX Simplicity Rules
+
+Every screen must follow these rules without exception:
+
+**Maximum 3 actions per screen.** If a screen has more than 3 buttons/actions, split it or hide secondary actions behind a "More" button.
+
+**One primary action per screen.** The most important action gets the big button. Everything else is secondary.
+
+**No modals on top of modals.** Max 1 level of overlay.
+
+**No forms longer than 4 fields visible at once.** Use steps/wizard if more fields needed.
+
+**Every action has feedback within 300ms.** Loading spinner, disabled state, or visual change immediately on tap.
+
+**Error messages are always actionable.** Never just "Error". Always "No internet — tap to retry" or "Name is required — please add your name".
+
+**Empty states always have a CTA.** Never just "No results". Always "No jobs near you yet — try a different pincode" with a button.
+
+**Numbers are always formatted for India:** ₹ prefix, Indian number system (1,00,000 not 100,000), dates in DD MMM format ("15 Jun").
+
+### 5. Backend-Heavy Architecture
+
+**The mobile app and web frontend are thin clients.** All business logic lives in the backend. Frontend/mobile responsibilities are limited to:
+- Displaying data returned by the API
+- Capturing user input
+- Showing loading/error/empty states
+- Navigation
+
+**Forbidden in frontend/mobile:**
+- Business rule calculations (ratings, tier logic, matching algorithms)
+- Data validation beyond basic "field is required"
+- Price calculations
+- Permission checks (always re-verified by backend)
+- Engagement state machine logic
+
+**Every user action triggers an API call.** Nothing is computed locally and then assumed correct. The backend is the single source of truth.
+
+---
+
+## Dev Environment
+
+```
+MONGO_URL=mongodb+srv://kaamnow-dev:KaamNowDev123@kaamnow-dev.p0wka3b.mongodb.net/?appName=KaamNow-Dev
+DB_NAME=kaamnow_dev
+```
+
+All work targets the dev cluster. Never touch production until user approves.
+
+---
+
+## Sprint Scope (Locked)
+
+| Layer | In Sprint | Notes |
+|---|---|---|
+| **Backend** | ✅ Full build | All features, all routers |
+| **Mobile** | ✅ Full build | Premium Expo libraries, all screens |
+| **Admin Dashboard** | ✅ Enhance existing `AdminDashboard.jsx` only | Reports queue, FAQ mgmt, users, wallet audit, broadcast |
+| **Web Frontend** | ❌ Deferred after June 15 | Admin page kept, rest deferred |
+| **Credential Store** | ✅ Doppler — set up Day 1 | All secrets via Doppler, never in code |
+
+---
+
+## Credential Store — Doppler Setup
+
+**All secrets managed through Doppler (free forever, up to 3 projects).** No `.env` files in repo. No hardcoded values anywhere.
+
+```bash
+# Local dev
+doppler run -- uvicorn backend.app:app --reload
+
+# k8s
+# Doppler operator syncs → k8s Secret → pod env vars automatically
+
+# EAS mobile build
+# Doppler secrets → EAS environment variables via CLI
+```
+
+**Rule:** Gemini, Groq, Razorpay, Cloudinary, MongoDB credentials — **backend Doppler only**.
+Mobile app only receives: `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_SENTRY_DSN`, `EXPO_PUBLIC_POSTHOG_KEY` — safe to expose in bundle.
+
+**Setup steps (Day 1 before any code):**
+1. Create Doppler account → new project `kaamnow`
+2. Create environments: `dev`, `staging`, `production`
+3. Add all env vars from `.env.dev` into Doppler `dev`
+4. Add all new env vars (Gemini, Groq, Razorpay, PostHog, Sentry, Chatwoot)
+5. Install Doppler CLI + k8s operator
+6. Delete all `.env` files from repo — add to `.gitignore`
+7. Update `README.md` with Doppler setup instructions
+
+---
+
+## No Hardcoded Values — Absolute Rule
+
+```
+❌ Never hardcode anywhere in the codebase:
+   - API URLs              → EXPO_PUBLIC_API_URL / settings.api_url
+   - Credentials/keys      → Doppler only
+   - Colors                → theme.js only
+   - Strings/labels        → translations.js only
+   - Feature flags         → settings.feature_* from env
+   - Phone numbers         → env / config
+   - Rupee amounts (₹100 referral reward, ₹50 bonus) → settings.referral_reward_amount
+   - Expiry days (90-day wallet) → settings.wallet_credit_expiry_days
+   - File size limits (5MB) → settings.max_upload_bytes
+   - GPS radius (1km)       → settings.checkin_radius_km
+   - Available-now duration (4hrs) → settings.available_now_hours
+   - OTP length, expiry     → settings.otp_*
+   - Max certs per worker   → settings.max_certifications
+   - Max portfolio photos   → settings.max_portfolio_items
+```
+
+---
+
+## What to Remove First (Before Building Anything)
+
+### Backend — Delete
+| Item | Location | Reason |
+|---|---|---|
+| `bookings.py` router | `backend/routers/bookings.py` | Legacy, fully superseded by engagements |
+| `bookings` import | `backend/app.py` line ~45 | Router deleted |
+| `seed.py`, `seed_bulk.py` | `backend/` root | Move to `scripts/seed/` |
+| `pandas`, `numpy` | `backend/requirements.txt` | Unused |
+
+### Test Scripts — Delete (Stale)
+| Item | Location | Reason |
+|---|---|---|
+| `test_phase_2_progressive_profiling.py` | `tests/` | Phase 2 onboarding no longer exists — replaced by BecomeExpertSheet |
+| `test_customer_cannot_apply_as_worker()` | `tests/test_current_flows.py` | Test case deleted — dual role now allowed |
+| `test_booking_lifecycle_current_customer_to_worker_flow()` | `tests/test_current_flows.py` | Booking router deleted |
+
+### Test Scripts — Keep (Still Valid)
+| Item | Reason |
+|---|---|
+| `tests/test_current_flows.py` | Core flows — update DummyDb + fix broken tests |
+| `tests/test_auth_phone_first.py` | Auth flow unchanged |
+| `tests/test_phases_4_to_9.py` | Engagement logic — update role checks |
+| `tests/test_whatsapp.py` | WhatsApp bot untouched |
+| `scripts/test_gupshup_interactive.py` | Live Gupshup test — keep |
+| `scripts/test_whatsapp_bot_flow.py` | WhatsApp bot flow — keep |
+
+### Frontend — Defer (Not Delete)
+| Item | Action |
+|---|---|
+| All pages except `AdminDashboard.jsx` | Do not touch — deferred to post-June 15 |
+| `WorkerSetup.jsx` | Delete — legacy |
+| `Strategy.jsx` | Delete — not user-facing |
+| Routes `/worker/setup`, `/strategy` | Remove from `App.js` |
+| All planning `.md` in root | Move to `docs/archive/` |
+
+### Mobile — Delete
+| Item | Reason |
+|---|---|
+| `RoleSelectionScreen.js` | No role at signup |
+| `CustomerOnboardingScreen.js` | Merged into ProfileScreen |
+| `WorkerOnboardingScreen.js` | Merged into ProfileScreen |
+| `CustomerProfileScreen.js` | Merged into ProfileScreen |
+| `WorkerMyProfileScreen.js` | Merged into ProfileScreen |
+| All `user?.role === "worker"` navigation branches | Replaced with `is_worker` |
+| Hardcoded URL `http://13.207.54.156` in `app.json` | Replace with Doppler env |
+| Hardcoded support phone `9999999999` | Replace with config |
+| Hardcoded Gupshup sandbox `917834811114` | Replace with env |
+
+---
+
+## LOCKED SCHEMA — DO NOT CHANGE AFTER IMPLEMENTATION
+
+### MongoDB Collections
+
+#### 1. `users` (modified)
+
+```python
+{
+  # Existing (keep all)
+  "id": str,                          # UUID
+  "phone_primary": str,               # +91XXXXXXXXXX
+  "phone_verified": bool,
+  "name": str,
+  "pincode": Optional[str],
+  "village": Optional[str],
+  "address": Optional[Address],
+  "photo_url": Optional[str],
+  "preferred_language": str,          # "en" | "hi"
+  "avatar_color": str,
+  "created_at": str,                  # ISO UTC
+  "is_active": bool,
+  "deleted_at": Optional[str],
+  "migration_status": str,
+  "push_token": Optional[str],
+  "password_hash": Optional[str],
+
+  # CHANGED
+  "role": str,                        # COMPUTED ONLY — "worker" if is_worker else "customer"
+                                      # Kept for WhatsApp bot backwards compat. Never write manually.
+
+  # NEW
+  "is_worker": bool,                  # Default: False. True when Local Expert profile created.
+  "is_customer": bool,                # Default: True. Everyone can post jobs.
+  "gender": Optional[str],            # "male" | "female" | "other" | None
+  "saved_workers": List[str],         # Local Expert IDs. Default: []
+  "referral_code": str,               # Unique 8-char code generated at signup
+  "referred_by": Optional[str],       # user_id of referrer. Default: None
+  "referral_count": int,              # How many users they referred. Default: 0
+  "wallet_balance": int,              # Credits in rupees. Default: 0. Never negative.
+  "saved_addresses": List[SavedAddress],  # Default: []
+  "emergency_contact": Optional[EmergencyContact],  # Default: None
+  "tc_accepted_at": Optional[str],    # ISO timestamp of T&C acceptance at signup
+  "tc_version": str,                  # Version of T&C accepted. Default: "1.0"
+  "selfie_verified": bool,            # Default: False. True after liveness check.
+  "posthog_id": Optional[str],        # PostHog distinct_id for analytics
+}
+
+# Nested models for users:
+class SavedAddress:
+  id: str                             # UUID
+  label: str                          # "Home" | "Work" | "Farm" | "Site" | "Other"
+  address: Address                    # reuse existing Address model
+  lat: Optional[float]
+  lng: Optional[float]
+  is_default: bool                    # Default: False. Only one can be True.
+
+class EmergencyContact:
+  name: str                           # Max 100 chars
+  phone: str                          # +91XXXXXXXXXX
+```
+
+**Indexes:**
+```python
+db.users.create_index("phone_primary", unique=True)
+db.users.create_index("referral_code", unique=True)
+db.users.create_index("is_worker")
+db.users.create_index("is_active")
+```
+
+---
+
+#### 2. `workers` (modified)
+
+```python
+{
+  # Existing (keep all)
+  "id": str,                          # UUID (different from user_id)
+  "user_id": str,                     # FK → users.id
+  "name": str,
+  "skills": List[str],
+  "daily_rate": Optional[int],
+  "bio": Optional[str],
+  "village": Optional[str],
+  "district": Optional[str],
+  "state": Optional[str],
+  "lat": Optional[float],
+  "lng": Optional[float],
+  "available": bool,
+  "availability_status": str,         # "available"|"not_available"|"flagged"|"restricted"
+  "structured_skills": List[StructuredSkill],
+  "address": Optional[Address],
+  "trust_tier": int,                  # 1-4
+  "avg_rating": float,
+  "total_jobs": int,
+  "photo_url": Optional[str],
+  "last_active_at": str,
+  "created_at": str,
+
+  # NEW
+  "gender": Optional[str],            # Mirrored from users.gender
+  "certifications": List[Certification],  # Default: []
+  "portfolio": List[PortfolioItem],   # Up to 6 photos. Default: []
+  "response_time_minutes": Optional[int],  # Avg mins from request→accept. Recalculated on accept.
+  "available_from": Optional[str],    # ISO date. "I'm free from this date." Default: None
+  "team_size": int,                   # 1 = solo, 2+ = brings helpers. Default: 1
+  "is_kyc_verified": bool,            # DigiLocker verified. Default: False
+  "kyc_doc_type": Optional[str],      # "aadhaar" | "driving_licence" | "voter_id"
+  "kyc_verified_at": Optional[str],
+  "monthly_cancellations": int,       # Reset monthly. Default: 0
+  "cancellation_warned_at": Optional[str],
+  "video_url": Optional[str],         # 30-second intro video. Cloudinary URL. Default: None
+  "is_available_now": bool,           # Broadcasting availability. Default: False
+  "available_now_expires_at": Optional[str],  # Auto-expires 4 hours after broadcast
+}
+```
+
+**Nested Models:**
+
+```python
+class Certification:
+  id: str                             # UUID
+  skill: str                          # e.g. "Electrician"
+  cert_name: str                      # e.g. "ITI Certificate"
+  cert_url: str                       # Cloudinary URL
+  issued_by: Optional[str]            # e.g. "Govt. ITI Pune"
+  year: Optional[int]
+  verified: bool                      # Admin verifies. Default: False
+  verified_at: Optional[str]
+
+class PortfolioItem:
+  id: str                             # UUID
+  image_url: str                      # Cloudinary URL
+  caption: Optional[str]              # Max 100 chars
+  created_at: str
+
+class SkillBadge:
+  id: str                             # e.g. "jobs_100", "streak_5star", "fast_responder"
+  label: str                          # e.g. "100 Jobs Done"
+  label_hi: str                       # e.g. "100 काम पूरे"
+  icon: str                           # emoji or icon key
+  earned_at: str                      # ISO timestamp
+```
+
+**Indexes:**
+```python
+db.workers.create_index("user_id", unique=True)
+db.workers.create_index([("lat", 1), ("lng", 1)])  # geo queries
+db.workers.create_index("available")
+db.workers.create_index("trust_tier")
+db.workers.create_index([("skills", 1), ("available", 1)])
+```
+
+---
+
+#### 3. `jobs` (modified)
+
+```python
+{
+  # Existing (keep all)
+  "id": str,
+  "customer_id": str,
+  "customer_name": str,
+  "title": str,
+  "category": str,
+  "description": str,
+  "workers_needed": int,
+  "daily_rate": int,
+  "job_date": str,                    # ISO date. Validated: must be >= today.
+  "village": str,
+  "lat": float,
+  "lng": float,
+  "status": str,                      # "open"|"booked"|"completed"|"cancelled"|"expired"
+  "created_at": str,
+  "required_skills": List[StructuredSkill],
+  "address": Optional[Address],
+  "urgency": str,                     # "normal" | "urgent" | "asap"
+  "filled_count": int,
+  "accepted_worker_ids": List[str],
+
+  # NEW
+  "recurrence": str,                  # "once" | "weekly" | "monthly". Default: "once"
+  "is_template": bool,                # If True, not a live job — just a saved template. Default: False
+  "template_name": Optional[str],     # Human name for template. Max 60 chars.
+  "photo_url": Optional[str],         # Job site photo (from photo-to-job flow). Default: None
+  "ai_generated": bool,               # True if AI filled the form. Default: False
+  "is_anonymous": bool,               # Customer hidden until Local Expert selected. Default: False
+}
+```
+
+**Indexes:**
+```python
+db.jobs.create_index([("status", 1), ("job_date", 1)])
+db.jobs.create_index([("lat", 1), ("lng", 1)])
+db.jobs.create_index("customer_id")
+db.jobs.create_index("is_template")
+db.jobs.create_index([("category", 1), ("status", 1)])
+```
+
+---
+
+#### 4. `engagements` (modified)
+
+```python
+{
+  # Existing (keep all)
+  "id": str,
+  "job_id": str,
+  "worker_id": str,
+  "customer_id": str,
+  "source": str,                      # "worker_interest" | "customer_booking"
+  "status": str,                      # "requested"|"accepted"|"completed"|"rejected"|"cancelled"
+  "worker_name": str,
+  "customer_name": str,
+  "job_title": str,
+  "job_date": Optional[str],
+  "daily_rate": Optional[int],
+  "worker_rating": Optional[RatingEmbed],
+  "customer_rating": Optional[RatingEmbed],
+  "created_by": str,
+  "created_at": str,
+  "updated_at": str,
+
+  # NEW
+  "chat_enabled": bool,               # Always True for accepted engagements. Default: True
+  "payment_status": str,              # "unpaid" | "paid". Default: "unpaid"
+  "payment_id": Optional[str],        # Razorpay payment_id after successful payment
+  "payment_amount": Optional[int],    # In rupees. Set at acceptance.
+  "before_photos": List[str],         # Cloudinary URLs. Up to 3. Uploaded when job starts.
+  "after_photos": List[str],          # Cloudinary URLs. Up to 3. Uploaded when job completes.
+  "start_otp": Optional[str],         # 4-digit OTP. Generated on acceptance. Entered by Local Expert to start.
+  "otp_verified_at": Optional[str],   # ISO timestamp when OTP was verified.
+  "checkin_lat": Optional[float],     # GPS lat at job site check-in.
+  "checkin_lng": Optional[float],     # GPS lng at job site check-in.
+  "progress_updates": List[ProgressUpdate],  # Default: []
+}
+
+class ProgressUpdate:
+  id: str                             # UUID
+  status: str                         # "on_the_way" | "arrived" | "in_progress" | "done"
+  note: Optional[str]                 # Max 200 chars
+  photo_url: Optional[str]            # Optional progress photo
+  created_at: str
+```
+
+---
+
+#### 5. `messages` (NEW collection)
+
+```python
+{
+  "id": str,                          # UUID
+  "engagement_id": str,               # FK → engagements.id
+  "sender_id": str,                   # FK → users.id
+  "receiver_id": str,                 # FK → users.id
+  "text": Optional[str],              # Max 2000 chars
+  "image_url": Optional[str],         # Cloudinary URL
+  "voice_url": Optional[str],         # Cloudinary URL (audio/m4a)
+  "read": bool,                       # Default: False
+  "read_at": Optional[str],
+  "created_at": str,
+}
+```
+
+**Indexes:**
+```python
+db.messages.create_index([("engagement_id", 1), ("created_at", -1)])
+db.messages.create_index("receiver_id")
+db.messages.create_index([("receiver_id", 1), ("read", 1)])  # unread count
+```
+
+---
+
+#### 6. `reports` (NEW collection)
+
+```python
+{
+  "id": str,
+  "reporter_id": str,                 # FK → users.id
+  "reported_user_id": str,            # FK → users.id
+  "engagement_id": Optional[str],     # Context if within an engagement
+  "reason": str,                      # "fraud"|"no_show"|"abuse"|"fake_profile"|"other"
+  "details": Optional[str],           # Max 500 chars
+  "status": str,                      # "pending" | "resolved" | "dismissed"
+  "created_at": str,
+  "resolved_at": Optional[str],
+  "resolved_by": Optional[str],       # Admin user_id
+  "admin_note": Optional[str],
+}
+```
+
+**Indexes:**
+```python
+db.reports.create_index("reported_user_id")
+db.reports.create_index([("status", 1), ("created_at", -1)])
+```
+
+---
+
+#### 7. `payments` (NEW collection)
+
+```python
+{
+  "id": str,
+  "engagement_id": str,
+  "payer_id": str,                    # customer user_id
+  "payee_id": str,                    # worker user_id
+  "amount": int,                      # rupees
+  "razorpay_order_id": str,
+  "razorpay_payment_id": Optional[str],
+  "razorpay_signature": Optional[str],
+  "status": str,                      # "created" | "paid" | "failed" | "refunded"
+  "created_at": str,
+  "paid_at": Optional[str],
+}
+```
+
+---
+
+#### 8. `wallet_transactions` (NEW collection)
+
+```python
+{
+  "id": str,
+  "user_id": str,                     # FK → users.id
+  "type": str,                        # "credit" | "debit"
+  "amount": int,                      # Rupees (always positive)
+  "reason": str,                      # "referral_reward" | "referral_bonus" | "job_boost" | "priority_listing" | "expiry"
+  "ref_id": Optional[str],            # engagement_id or job_id for context
+  "expires_at": Optional[str],        # ISO timestamp. 90 days from credit_at. Null for debits.
+  "expired": bool,                    # Default: False. Set True by daily expiry job.
+  "created_at": str,
+}
+```
+
+**Indexes:**
+```python
+db.wallet_transactions.create_index([("user_id", 1), ("created_at", -1)])
+db.wallet_transactions.create_index([("expires_at", 1), ("expired", 1)])  # expiry job
+```
+
+---
+
+#### 9. `worker_waitlist` (NEW collection)
+
+```python
+{
+  "id": str,
+  "worker_id": str,                   # Local Expert being waited for
+  "user_id": str,                     # Customer on the waitlist
+  "job_category": Optional[str],      # What category they need
+  "created_at": str,
+}
+```
+
+**Indexes:**
+```python
+db.worker_waitlist.create_index([("worker_id", 1), ("user_id", 1)], unique=True)
+```
+
+---
+
+#### 10. `faqs` (NEW collection)
+
+```python
+{
+  "id": str,
+  "question_en": str,                 # English question
+  "question_hi": str,                 # Hindi question
+  "answer_en": str,                   # English answer — plain language, max 500 chars
+  "answer_hi": str,                   # Hindi answer
+  "category": str,                    # "general" | "local_expert" | "customer" | "payments" | "safety"
+  "order": int,                       # Display order. Admin sets this.
+  "is_active": bool,                  # Default: True
+  "created_at": str,
+  "updated_at": str,
+}
+```
+
+**Indexes:**
+```python
+db.faqs.create_index([("category", 1), ("order", 1)])
+db.faqs.create_index("is_active")
+```
+
+---
+
+#### 11. `legal_docs` (NEW collection)
+
+```python
+{
+  "id": str,
+  "type": str,                        # "terms" | "privacy"
+  "version": str,                     # e.g. "1.0", "1.1"
+  "content_en": str,                  # Full plain-English text
+  "content_hi": str,                  # Full Hindi translation
+  "effective_date": str,              # ISO date when this version takes effect
+  "is_current": bool,                 # Only one per type can be True
+  "created_at": str,
+}
+```
+
+---
+
+#### 12. Existing collections kept unchanged
+- `notifications` — unchanged structure, new `kind` values added
+- `otps` — unchanged
+- `admin_logs` — unchanged
+- `deactivation_log` — unchanged
+- `bot_sessions` — unchanged (WhatsApp bot not touched)
+- `waitlist` — unchanged
+- `wa_notif_log` — unchanged
+
+---
+
+## Backend — Full Implementation Plan
+
+### A0. "Local Expert" — Global Rename
+
+Every occurrence of "worker" as a user-facing label must become "Local Expert" across the entire codebase. This includes:
+- All Pydantic response models: field labels (not field names — keep `worker_id` as internal key)
+- All notification copy in `backend/i18n/en.py` and `backend/i18n/hi.py`
+- All mobile screen titles, buttons, labels
+- All frontend page headings, nav items, copy
+- Trust tier display: "New Local Expert" | "Trusted Local Expert" | "Pro Local Expert" | "Star Local Expert"
+- Admin dashboard labels
+
+**Internal field names stay as `worker_id`, `is_worker` etc.** — only display strings change.
+
+### A. New requirements (add to `backend/requirements.txt`)
+
+```
+google-generativeai>=0.8.0
+groq>=0.11.0
+razorpay>=1.4.0
+sentry-sdk[fastapi]>=2.0.0
+posthog>=3.0.0
+httpx>=0.27.0
+reportlab>=4.0.0
+qrcode[pil]>=7.4.2
+pillow>=10.0.0
+```
+
+Remove from requirements:
+```
+pandas>=2.2.0    # unused
+numpy>=1.26.0    # unused
+```
+
+### B. New environment variables (add to `.env.dev` and k8s secrets)
+
+```bash
+# AI
+GEMINI_API_KEY=                        # Google AI Studio free key
+GROQ_API_KEY=                          # Groq free key
+
+# Payments
+RAZORPAY_KEY_ID=                       # Test mode key
+RAZORPAY_KEY_SECRET=                   # Test mode secret
+
+# Analytics & Monitoring
+POSTHOG_API_KEY=                       # PostHog cloud free tier
+SENTRY_DSN=                            # Sentry free tier
+
+# Feature flags
+FEATURE_AI=true
+FEATURE_CHAT=true
+FEATURE_PAYMENTS=false                 # Off until Razorpay approved
+FEATURE_VOICE=true
+```
+
+### C. `backend/config.py` — Add all new env vars with defaults
+
+```python
+# AI
+gemini_api_key: str = ""
+groq_api_key: str = ""
+
+# Payments
+razorpay_key_id: str = ""
+razorpay_key_secret: str = ""
+
+# Monitoring
+posthog_api_key: str = ""
+sentry_dsn: str = ""
+
+# Feature flags (all existing flags kept)
+feature_ai: bool = _to_bool(os.getenv("FEATURE_AI", "false"))
+feature_chat: bool = _to_bool(os.getenv("FEATURE_CHAT", "false"))
+feature_payments: bool = _to_bool(os.getenv("FEATURE_PAYMENTS", "false"))
+feature_voice: bool = _to_bool(os.getenv("FEATURE_VOICE", "false"))
+```
+
+### D. `backend/db.py` — Add new collections + all indexes on startup
+
+Add collections:
+```python
+db.messages     = db_instance["messages"]
+db.reports      = db_instance["reports"]
+db.payments     = db_instance["payments"]
+```
+
+Create all indexes defined in schema above inside `on_startup()` in `app.py`.
+
+### E. `backend/schemas.py` — Full rewrite of user/worker schemas
+
+**Changes:**
+1. Add `Certification`, `PortfolioItem` models
+2. Modify `UserOut`: add `is_worker`, `is_customer`, `gender`, `saved_workers`, `referral_code`, `referral_count`
+3. Remove `role` from `UserOut` — compute it server-side before returning: `role = "worker" if user.get("is_worker") else "customer"` (kept ONLY for WhatsApp bot compat, never store new role values)
+4. Modify `WorkerOut`: add `gender`, `certifications`, `portfolio`, `response_time_minutes`, `available_from`, `team_size`, `is_kyc_verified`, `kyc_doc_type`
+5. Modify `WorkerProfileIn`: add same new fields (all Optional)
+6. Modify `JobIn`: add `recurrence`, `photo_url`, `ai_generated`. Change `urgency` to `"normal" | "urgent" | "asap"`. Add validator: `job_date >= today`
+7. Modify `JobOut`: add `recurrence`, `photo_url`, `ai_generated`, `is_template`, `template_name`
+8. Modify `SignupCompleteRequest`: REMOVE `role`. ADD `gender: Optional[str]`.
+9. Add `MessageIn`, `MessageOut` models
+10. Add `ReportIn`, `ReportOut` models
+11. Add `PaymentOrderOut`, `PaymentVerifyIn` models
+12. Add `BecomeWorkerIn` model (skills, daily_rate, pincode/lat/lng)
+
+**Security validators to add:**
+```python
+# On all text fields with max length
+@field_validator("bio")
+def bio_max(cls, v): assert len(v) <= 500; return v
+
+@field_validator("description")  
+def desc_max(cls, v): assert len(v) <= 1000; return v
+
+# job_date must be today or future
+@field_validator("job_date")
+def validate_job_date(cls, v):
+    from datetime import date
+    assert date.fromisoformat(v) >= date.today(), "Job date cannot be in the past"
+    return v
+```
+
+### F. `backend/routers/auth.py` — Modify existing
+
+**`POST /api/auth/signup-complete`:**
+- Remove `role` from `SignupCompleteRequest`
+- Add `gender: Optional[str]`
+- Create user with `is_worker=False, is_customer=True`
+- Generate `referral_code` = `secrets.token_urlsafe(6).upper()` (8 chars, unique)
+- Handle `referred_by` query param: if referrer exists → increment `referral_count`
+- Keep computing `role` field in response: `"worker" if is_worker else "customer"` for WhatsApp bot
+
+**`PATCH /api/auth/me`:**
+- Allow updating `gender`, `saved_workers` (add/remove)
+- Sync `gender` to workers collection if `is_worker`
+- Change role check to `is_worker` check for worker sync
+
+**`GET /api/auth/check-phone`:**
+- Keep `role` in response (WhatsApp bot reads it)
+- Also return `is_worker`, `is_customer`
+
+**New endpoint `POST /api/auth/me/save-worker/{worker_id}`:**
+- Toggle save/unsave a worker (add/remove from `saved_workers`)
+
+**New endpoint `GET /api/auth/me/saved-workers`:**
+- Return list of full WorkerOut for all saved worker IDs
+
+### G. `backend/routers/workers.py` — Modify existing + add endpoints
+
+**All role guards change:**
+- `if user["role"] != "worker"` → `if not user.get("is_worker")`
+
+**New `POST /api/workers/become-worker`:**
+```python
+# Input: BecomeWorkerIn { skills, structured_skills, daily_rate, pincode, lat, lng, gender (optional), bio (optional) }
+# Steps:
+# 1. Check no existing worker profile for this user
+# 2. Create workers doc with user data + input fields
+# 3. Set users.is_worker = True, users.gender = gender (if provided)
+# 4. Return WorkerOut + updated UserOut
+```
+
+**New `POST /api/workers/me/portfolio`:**
+- Accept image file (image/*, max 5MB)
+- Upload to Cloudinary `kaamnow/portfolio`
+- Max 6 items; reject if at limit
+- Return updated portfolio array
+
+**New `DELETE /api/workers/me/portfolio/{item_id}`:**
+- Delete from Cloudinary, remove from array
+
+**New `POST /api/workers/me/certifications`:**
+- Accept: `skill`, `cert_name`, `issued_by`, `year` + cert image file
+- Upload to Cloudinary `kaamnow/certifications`
+- Optionally call `/api/ai/describe-cert` if FEATURE_AI=true to auto-fill fields from image
+- Add to certifications array
+- Return updated certifications
+
+**New `DELETE /api/workers/me/certifications/{cert_id}`:**
+- Delete from Cloudinary, remove from array
+
+**Modify `GET /api/workers/search`:**
+- Add filters: `gender`, `certified_only`, `kyc_verified`, `available_from`, `min_rating`, `max_rate`, `team_size`
+- Add `response_time_minutes` to returned data
+- Add `distance_km` if lat/lng provided
+
+**Modify `GET /api/workers` and `GET /api/workers/search`:**
+- Calculate and return `response_time_minutes` from engagement data
+
+### H. `backend/routers/jobs.py` — Modify existing
+
+**`POST /api/jobs`:**
+- REMOVE `if user["role"] != "customer"` guard → anyone can post
+- Add `photo_url` handling (optional Cloudinary URL from prior upload)
+- Add `recurrence` field storage
+- Validate `job_date >= today` (also in schema validator)
+
+**`POST /api/jobs/{job_id}/interest`:**
+- Change `if user["role"] != "worker"` → `if not user.get("is_worker")`
+
+**`GET /api/jobs/feed`:**
+- Remove role branch — always return ranked job feed
+- If `is_worker`: rank by skill match + distance (existing logic, keep)
+- Auth optional: unauthenticated users see basic public feed
+
+**New `GET /api/jobs/templates`:**
+- Return jobs where `customer_id = user.id AND is_template = True`
+
+**New `POST /api/jobs/templates`:**
+- Create a job with `is_template=True, status="template"` — not a real posting
+- Input: same as `JobIn` minus `job_date` (templates don't have dates)
+
+**New `DELETE /api/jobs/templates/{template_id}`:**
+- Hard delete (templates aren't real jobs)
+
+**New `POST /api/jobs/from-template/{template_id}`:**
+- Copy template → create real job with new `job_date`
+
+### I. `backend/engagements.py` + `backend/routers/engagements.py` — Modify
+
+**All role checks:**
+- `user["role"] != "customer"` → `not user.get("is_customer", True)` (everyone is customer by default)
+- `user["role"] != "worker"` → `not user.get("is_worker")`
+
+**`_notify()` function — add `deep_link` to push payload:**
+```python
+payload = {
+    "kind": kind,
+    "ref_id": ref_id,
+    "deep_link": f"kaamnow://engagement/{ref_id}"  # deep link scheme
+}
+```
+
+**`accept_engagement()` — calculate response_time_minutes:**
+```python
+# After accepting, update worker's response_time_minutes
+created_at = engagement["created_at"]  # ISO string
+accepted_at = utc_now_iso()
+delta_minutes = (parse_iso(accepted_at) - parse_iso(created_at)).seconds // 60
+# Update worker: rolling average of last 10 acceptances
+```
+
+**New notification kinds:**
+- `new_message` — fires when chat message sent
+- `payment_received` — fires when payment confirmed
+- `report_resolved` — fires when admin resolves report
+
+### J. `backend/routers/chat.py` (NEW file)
+
+```python
+# GET /api/chat/{engagement_id}/messages
+# - Auth required (must be engagement participant)
+# - Returns last 50 messages, sorted created_at asc
+# - Marks unread messages as read (read=True, read_at=now)
+
+# POST /api/chat/{engagement_id}/send
+# - Auth required (must be engagement participant)
+# - Input: { text?: str, image_url?: str, voice_url?: str } (at least one required)
+# - Validates text max 2000 chars
+# - Inserts message doc
+# - Fires _notify() to receiver with kind="new_message"
+# - Returns MessageOut
+
+# GET /api/chat/unread-count
+# - Returns count of messages where receiver_id=user.id AND read=False
+# - Used for tab badge
+
+# POST /api/chat/{engagement_id}/read-all
+# - Marks all messages in engagement where receiver_id=user.id as read
+```
+
+### K. `backend/routers/ai.py` (NEW file)
+
+**All endpoints gated by `if not settings.feature_ai: raise HTTPException(503)`**
+
+```python
+# POST /api/ai/generate-job
+# Input: { text: str }  — raw user text like "need painter tomorrow 500 rs"
+# Uses Gemini Flash to extract: title, category, skill, daily_rate, urgency, job_date
+# Returns: JobFormFields (partial JobIn)
+# Prompt: structured extraction, Hindi/English both supported
+
+# POST /api/ai/voice-to-job
+# Input: audio file (m4a/wav/webm, max 10MB)
+# Step 1: Groq Whisper transcription → text
+# Step 2: Gemini Flash extraction → JobFormFields
+# Returns: { transcript: str, job_fields: JobFormFields }
+
+# POST /api/ai/generate-bio
+# Input: { skills: List[str], daily_rate: int, total_jobs: int, avg_rating: float, gender: str }
+# Uses Gemini Flash to write a 2-sentence bio in user's preferred_language
+# Returns: { bio: str }
+
+# POST /api/ai/describe-cert
+# Input: cert image file
+# Uses Gemini Flash Vision to extract: cert_name, issued_by, year, skill
+# Returns: { cert_name: str, issued_by: str, year: int, skill: str }
+
+# POST /api/ai/photo-to-job
+# Input: job site photo file
+# Uses Gemini Flash Vision to identify: what needs doing, category, suggested skill
+# Returns: { title: str, category: str, skill: str, description: str }
+
+# GET /api/ai/suggest-price
+# Input: ?skill=Plumber&pincode=841215
+# Query workers in pincode with that skill → return { min, median, max, suggested }
+# Pure MongoDB aggregation — no AI needed
+```
+
+**AI service (`backend/ai_service.py`, NEW file):**
+```python
+import google.generativeai as genai
+from groq import Groq
+
+# genai client singleton
+# groq client singleton
+# transcribe_audio(audio_bytes) → str
+# extract_job_fields(text, language) → dict
+# generate_bio(worker_data, language) → str
+# describe_cert_image(image_bytes) → dict
+# describe_job_photo(image_bytes) → dict
+# All functions handle exceptions gracefully — return None on failure
+```
+
+### L. `backend/routers/reports.py` (NEW file)
+
+```python
+# POST /api/reports
+# Auth required
+# Input: { reported_user_id, reason, details, engagement_id? }
+# Creates report doc
+# If same user has 3+ reports in 30 days → auto-flag their account
+# Returns: { id, status: "pending" }
+
+# GET /api/reports/mine
+# Returns reports I filed (for transparency)
+
+# Admin-only (in admin.py):
+# GET /api/admin/reports — list pending reports
+# POST /api/admin/reports/{id}/resolve — resolve with note
+# POST /api/admin/reports/{id}/dismiss — dismiss with note
+```
+
+### M. `backend/routers/payments.py` (NEW file)
+
+**Gated by `if not settings.feature_payments: raise HTTPException(503)`**
+
+```python
+# POST /api/payments/create-order
+# Input: { engagement_id }
+# Auth: must be engagement customer
+# Creates Razorpay order for engagement daily_rate amount
+# Stores in payments collection with status="created"
+# Returns: { order_id, amount, currency, key_id }  — mobile uses this to open Razorpay SDK
+
+# POST /api/payments/verify
+# Input: { razorpay_order_id, razorpay_payment_id, razorpay_signature }
+# Verifies HMAC signature (never trust client-side)
+# Updates payment status="paid"
+# Updates engagement.payment_status="paid", engagement.payment_id
+# Fires _notify() to worker: kind="payment_received"
+# Returns: { success: true }
+
+# GET /api/payments/history
+# Returns payments where payer_id=user.id OR payee_id=user.id (worker earnings)
+```
+
+**Payment service (`backend/payment_service.py`, NEW file):**
+```python
+import razorpay
+# client singleton
+# create_order(amount_rupees) → { id, amount, currency }
+# verify_signature(order_id, payment_id, signature) → bool
+```
+
+### N. `backend/routers/referrals.py` (NEW file)
+
+```python
+# GET /api/referrals/my-code
+# Returns: { code, count, share_url }
+# share_url = "https://kaamnow.com/join?ref=CODE"
+
+# GET /api/referrals/stats
+# Returns: { referral_count, bonus_days_earned }
+```
+
+### O1. `backend/routers/wallet.py` (NEW file)
+
+```python
+# GET /api/wallet/balance
+# Returns: { balance: int, currency: "INR" }
+
+# GET /api/wallet/transactions
+# Returns last 50 transactions sorted by created_at desc
+# Each item: { id, type, amount, reason, ref_id, expires_at, expired, created_at }
+
+# Internal function: credit_wallet(user_id, amount, reason, ref_id)
+# - Adds wallet_transactions doc
+# - Increments users.wallet_balance atomically ($inc)
+# - Sets expires_at = now + 90 days for credits
+# - Fires _notify() kind="wallet_credited" if amount > 0
+
+# Internal function: debit_wallet(user_id, amount, reason, ref_id)
+# - Checks balance >= amount first → raise 400 if insufficient
+# - Adds wallet_transactions doc (type="debit", expires_at=None)
+# - Decrements users.wallet_balance atomically ($inc with negative)
+
+# Background job (daily, in app.py): expire_wallet_credits()
+# - Finds all transactions where expired=False AND expires_at < now
+# - For each: sets expired=True, debits the remaining balance
+# - Runs at midnight IST
+```
+
+**Referral reward logic (in auth.py, triggered on first booking completion):**
+```python
+# When engagement.status → "completed" for the first time for this user:
+# 1. Check if referred_user has completed_jobs == 1 (their first ever)
+# 2. If yes: credit_wallet(referrer_id, 100, "referral_reward", engagement_id)
+# 3. And: credit_wallet(referred_user_id, 50, "referral_bonus", engagement_id)
+# 4. Send notifications to both
+```
+
+### O2. `backend/routers/legal.py` (NEW file)
+
+```python
+# GET /api/legal/terms
+# Returns current T&C: { version, content_en, content_hi, effective_date }
+# No auth required — public endpoint
+
+# GET /api/legal/privacy
+# Returns current Privacy Policy: same shape
+# No auth required
+
+# POST /api/auth/accept-terms  (in auth.py, not legal.py)
+# Called at signup after user reads T&C
+# Stores: users.tc_accepted_at = now, users.tc_version = current version
+# Required before account is fully active
+
+# Admin only (in admin.py):
+# POST /api/admin/legal — create new version of T&C or Privacy Policy
+# GET /api/admin/legal — list all versions
+```
+
+### O3. `backend/routers/faq.py` (NEW file)
+
+```python
+# GET /api/faq
+# Optional query: ?category=general&lang=hi
+# Returns active FAQs sorted by category + order
+# No auth required — public endpoint
+
+# Admin only (in admin.py):
+# GET /api/admin/faq — all FAQs including inactive
+# POST /api/admin/faq — create new FAQ { question_en, question_hi, answer_en, answer_hi, category, order }
+# PATCH /api/admin/faq/{id} — edit existing
+# DELETE /api/admin/faq/{id} — soft delete (is_active=False)
+# POST /api/admin/faq/{id}/reorder — change display order
+```
+
+### O4. `backend/pdf_service.py` (NEW file)
+
+```python
+# generate_completion_certificate(engagement: dict, worker: dict, customer: dict) → bytes
+# Uses ReportLab to generate a clean PDF:
+# - KaamNow logo + branding
+# - "Job Completion Certificate" header
+# - Local Expert name, skill, trust tier
+# - Job title, date, location
+# - Amount paid
+# - Customer name
+# - Completion date and time
+# - Unique certificate ID (engagement_id)
+# Returns PDF bytes — caller sends as StreamingResponse
+
+# In engagements router:
+# GET /api/engagements/{id}/certificate
+# Auth required (must be engagement participant)
+# Status must be "completed"
+# Returns PDF as StreamingResponse with Content-Disposition: attachment
+```
+
+### O5. `backend/qr_service.py` (NEW file)
+
+```python
+# generate_profile_qr(worker_id: str, base_url: str) → bytes
+# Uses qrcode library to generate QR code PNG
+# QR encodes: "{base_url}/local-expert/{worker_id}"
+# Returns PNG bytes
+
+# In workers router:
+# GET /api/workers/me/qr-code
+# Auth required + is_worker check
+# Returns PNG as StreamingResponse
+```
+
+### O6. `backend/routers/workers.py` — Additional new endpoints
+
+```python
+# POST /api/workers/me/video
+# Auth + is_worker check
+# Accept video file (video/mp4 or video/quicktime, max 50MB, max 30 seconds)
+# Upload to Cloudinary kaamnow/videos with duration limit
+# Update workers.video_url
+# Return updated WorkerOut
+
+# POST /api/workers/me/available-now
+# Auth + is_worker check
+# Sets is_available_now=True, available_now_expires_at = now + 4 hours
+# Fires push notification to all users who have this worker in saved_workers
+# Returns: { expires_at }
+
+# DELETE /api/workers/me/available-now
+# Clears is_available_now=False, available_now_expires_at=None
+
+# Background job (hourly): expire_available_now()
+# Sets is_available_now=False for all workers where available_now_expires_at < now
+```
+
+### O7. `backend/routers/engagements.py` — Additional new endpoints
+
+```python
+# POST /api/engagements/{id}/generate-start-otp
+# Auth required (must be customer in this engagement)
+# Engagement must be "accepted"
+# Generates 4-digit OTP, stores in engagements.start_otp
+# Fires push to customer: "Your job start code is {otp} — share with Local Expert when they arrive"
+# Returns: { message: "OTP sent to you" }  — do NOT return OTP in response
+
+# POST /api/engagements/{id}/verify-start-otp
+# Auth required (must be Local Expert in this engagement)
+# Input: { otp: str }
+# Validates otp == engagements.start_otp
+# On success: sets otp_verified_at = now, clears start_otp (security), status stays "accepted"
+# Fires _notify() to customer: "Local Expert has arrived and started work"
+# Returns: { verified: true }
+
+# POST /api/engagements/{id}/checkin
+# Auth required (must be Local Expert)
+# Input: { lat: float, lng: float }
+# Validates: distance from job lat/lng <= 1km (generous for GPS drift)
+# Stores checkin_lat, checkin_lng
+# Returns: { checked_in: true, distance_m: int }
+
+# POST /api/engagements/{id}/progress
+# Auth required (must be Local Expert)
+# Input: { status: "on_the_way"|"arrived"|"in_progress"|"done", note?: str }
+# Optional file upload: progress photo
+# Appends to progress_updates array
+# Fires _notify() to customer with status text in their language
+# Returns updated engagement
+
+# POST /api/engagements/{id}/before-photo
+# POST /api/engagements/{id}/after-photo
+# Auth required (must be Local Expert)
+# Accept image file, upload to kaamnow/job-photos
+# Append URL to before_photos or after_photos (max 3 each)
+# Return updated engagement
+
+# POST /api/engagements/{id}/re-hire
+# Auth required (must be customer in original engagement)
+# Original must be "completed"
+# Creates a NEW job (copy of original) + NEW engagement request to same Local Expert
+# Input: { job_date: str }  — new date only, everything else copied
+# Returns new engagement
+```
+
+### O8. `backend/routers/admin.py` — Extend existing
+
+**Admin login change:** Admin currently has a separate bootstrap. Add email-based admin login:
+```python
+# POST /api/admin/login
+# Input: { identifier: str (email OR +91 phone), password: str }
+# Checks users collection for admin role
+# If identifier contains "@": match by email field (add email field to admin user only)
+# Else: match by phone_primary
+# Returns admin access_token (same JWT structure)
+```
+
+**New admin endpoints:**
+```python
+# GET /api/admin/reports — list reports by status (pending/resolved/dismissed)
+# POST /api/admin/reports/{id}/resolve — { admin_note: str }
+# POST /api/admin/reports/{id}/dismiss — { admin_note: str }
+
+# GET /api/admin/faq — all FAQs
+# POST /api/admin/faq — create
+# PATCH /api/admin/faq/{id} — update
+# DELETE /api/admin/faq/{id} — deactivate
+
+# POST /api/admin/legal — publish new T&C or Privacy Policy version
+# GET /api/admin/legal — all versions
+
+# GET /api/admin/wallet — platform-wide wallet stats (total credits outstanding)
+# GET /api/admin/referrals — referral audit log
+
+# POST /api/admin/broadcast
+# Input: { title, body, pincode?: str, lang?: str }
+# Sends push to: all users in pincode OR all users
+# Stores in admin_logs
+
+# POST /api/admin/workers/{id}/verify-cert/{cert_id}
+# Marks certification verified=True, verified_at=now
+
+# GET /api/admin/waitlist — view all active waitlists
+```
+
+### O. `backend/app.py` — Register all new routers
+
+```python
+from backend.routers import chat, ai, reports, payments, referrals, wallet, legal, faq
+
+app.include_router(chat.router, prefix="/api")
+app.include_router(ai.router, prefix="/api")
+app.include_router(reports.router, prefix="/api")
+app.include_router(payments.router, prefix="/api")
+app.include_router(referrals.router, prefix="/api")
+app.include_router(wallet.router, prefix="/api")
+app.include_router(legal.router, prefix="/api")
+app.include_router(faq.router, prefix="/api")
+```
+
+**Background jobs to add in `on_startup()`:**
+```python
+# Existing jobs kept:
+# - expire_old_engagements() — hourly
+# - weekly_analytics() — Monday 9am IST
+
+# New background jobs:
+# - expire_wallet_credits() — daily at midnight IST
+#   Finds expired credits, debits balance, marks expired=True
+# - expire_available_now() — hourly (alongside engagement expiry)
+#   Clears is_available_now for Local Experts past expires_at
+# - send_nudge_notifications() — daily at 10am IST
+#   Re-engage users inactive 7+ days with personalised push
+# - send_seasonal_suggestions() — 1st of each month
+#   Push seasonal job template suggestions to all active customers
+```
+
+Add Sentry init at top:
+```python
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+sentry_sdk.init(dsn=settings.sentry_dsn, integrations=[FastApiIntegration()])
+```
+
+Add all new indexes in `on_startup()`.
+
+### P2. Backend i18n — Notification Copy in Both Languages
+
+Create `backend/i18n/` directory with:
+
+**`backend/i18n/en.py`:**
+```python
+# All notification text in English — plain, respectful language
+BOOKING_REQUEST_TITLE = "New request for: {job_title}"
+BOOKING_REQUEST_BODY = "{name} wants to work on your job. Tap to review."
+BOOKING_ACCEPTED_TITLE = "Request accepted ✓"
+BOOKING_ACCEPTED_BODY = "{name} accepted. Here is their number: {phone}"
+BOOKING_REJECTED_TITLE = "Request not accepted"
+BOOKING_REJECTED_BODY = "{name} is not available for this job."
+BOOKING_COMPLETED_TITLE = "Job finished — {job_title}"
+BOOKING_COMPLETED_BODY = "Please leave a review for {name}."
+JOB_ALERT_TITLE = "New job near you"
+JOB_ALERT_BODY = "{job_title} in {village} — ₹{daily_rate}/day"
+NEW_MESSAGE_TITLE = "Message from {name}"
+NEW_MESSAGE_BODY = "{text}"
+PAYMENT_RECEIVED_TITLE = "Payment received ✓"
+PAYMENT_RECEIVED_BODY = "₹{amount} received for {job_title}"
+TIER_UPGRADED_TITLE = "You are now a {tier} Worker! 🌟"
+TIER_UPGRADED_BODY = "Keep up the great work."
+```
+
+**`backend/i18n/hi.py`:**
+```python
+# All notification text in Hindi — respectful, simple language
+BOOKING_REQUEST_TITLE = "नई रिक्वेस्ट: {job_title}"
+BOOKING_REQUEST_BODY = "{name} आपके काम के लिए आवेदन करना चाहते हैं। देखने के लिए टैप करें।"
+BOOKING_ACCEPTED_TITLE = "रिक्वेस्ट स्वीकार हुई ✓"
+BOOKING_ACCEPTED_BODY = "{name} ने स्वीकार किया। उनका नंबर: {phone}"
+BOOKING_REJECTED_TITLE = "रिक्वेस्ट स्वीकार नहीं हुई"
+BOOKING_REJECTED_BODY = "{name} इस काम के लिए उपलब्ध नहीं हैं।"
+BOOKING_COMPLETED_TITLE = "काम पूरा हुआ — {job_title}"
+BOOKING_COMPLETED_BODY = "{name} को रिव्यू दें।"
+JOB_ALERT_TITLE = "आपके पास नया काम"
+JOB_ALERT_BODY = "{job_title}, {village} में — ₹{daily_rate}/दिन"
+NEW_MESSAGE_TITLE = "{name} का संदेश"
+NEW_MESSAGE_BODY = "{text}"
+PAYMENT_RECEIVED_TITLE = "भुगतान मिला ✓"
+PAYMENT_RECEIVED_BODY = "{job_title} के लिए ₹{amount} मिले"
+TIER_UPGRADED_TITLE = "आप अब {tier} वर्कर हैं! 🌟"
+TIER_UPGRADED_BODY = "बहुत अच्छा काम कर रहे हैं।"
+```
+
+**`backend/i18n/__init__.py`:**
+```python
+from . import en, hi
+
+def get_strings(lang: str):
+    return hi if lang == "hi" else en
+```
+
+**Update `backend/engagements.py` — `_notify()` function:**
+- Fetch `user.preferred_language` for the recipient before building notification text
+- Use `strings = get_strings(lang)` to get correct copy
+- Format with the appropriate variables
+
+### P. Security Hardening (all in existing files)
+
+1. **`backend/routers/auth.py`** — CSRF: Add `X-Requested-With` header check on state-changing endpoints
+2. **`backend/schemas.py`** — Add `max_length` validators on all free-text fields (bio: 500, description: 1000, comment: 300, details: 500, caption: 100)
+3. **`backend/routers/jobs.py`** — File upload validation: verify actual MIME type via `python-magic` (not just Content-Type header) for photo uploads
+4. **`backend/cloudinary_service.py`** — Add new upload functions: `upload_portfolio_image()`, `upload_cert_image()`, `upload_voice_clip()` with appropriate folders and transforms
+5. **`backend/routers/workers.py`** — Rate limit cert uploads: max 5 certs per worker
+6. **`backend/routers/chat.py`** — Rate limit: 30 messages/minute per user
+7. **`backend/engagements.py`** — Fix phone normalization: enforce single `phone_primary` field lookup only
+
+---
+
+## Mobile — Full Implementation Plan
+
+### A. New packages (add to `mobile/package.json`)
+
+```json
+"expo-location": "~18.0.0",
+"react-native-reanimated": "~3.10.0",
+"react-native-gesture-handler": "~2.16.0",
+"lottie-react-native": "7.1.0",
+"@posthog/react-native": "^3.0.0",
+"@sentry/react-native": "^6.0.0",
+"@sentry/expo": "*",
+"react-native-webview": "13.8.6"
+```
+
+**Why each one:**
+- `react-native-reanimated` — animations run on UI thread not JS bridge → 60fps, no jank
+- `react-native-gesture-handler` — swipe-to-dismiss, drag, pull-to-refresh feel truly native
+- `lottie-react-native` — JSON animations from lottiefiles.com for empty states + success screens
+- `react-native-webview` — for Chatwoot support chat screen
+
+`react-native-maps` is already installed. `expo-av` is in Expo SDK already.
+
+**Lottie animations to source (free from lottiefiles.com):**
+- Empty job feed state
+- Empty notifications state
+- Successful job application
+- Payment success
+- OTP verified / job started
+- Upload in progress
+- Loading spinner (replace all ActivityIndicators)
+
+**Reanimated usage rules:**
+- All bottom sheets use `react-native-reanimated` + `react-native-gesture-handler`
+- All screen transitions use `react-native-reanimated`
+- All skeleton loaders use `react-native-reanimated` shimmer
+- Tab bar uses animated icons (scale + color transition on press)
+
+### A1. Chatwoot — Self-Hosted Support Chat
+
+**Setup:** Add Chatwoot as a new Deployment + Service in `deploy/k8s/dev/chatwoot.yaml`
+- Image: `chatwoot/chatwoot:latest`
+- Port: 3000
+- Persistent volume: 5Gi (for uploaded files)
+- Env: `SECRET_KEY_BASE`, `POSTGRES_*`, `REDIS_*` (add postgres + redis pods to dev cluster)
+- Ingress: route `/support/*` to Chatwoot service
+
+**Mobile integration (`mobile/src/screens/SupportChatScreen.js` NEW):**
+```javascript
+// Uses React Native WebView to load Chatwoot widget
+// Pre-fills: user name, email (phone as email fallback), user_id as identifier
+// URL: https://your-chatwoot-domain/widget?user_name=...&identifier=...
+// Shown from ProfileScreen → "Chat with Us" button
+```
+
+**Web integration:**
+```javascript
+// Standard Chatwoot JS widget injected in index.html
+// Pre-fills user details from AuthContext on login
+```
+
+### A2. i18n System (mobile) — Build Before Any Screen Work
+
+Create `mobile/src/i18n/translations.js`:
+- Contains ALL strings for **English, Hindi, Bhojpuri, and Maithili** as flat key-value objects
+- Languages: `en` | `hi` | `bho` (Bhojpuri) | `mai` (Maithili)
+- All use Devanagari script — no font changes needed
+- Bhojpuri and Maithili are the primary languages of Bihar — major differentiator
+- Toggle in AppHeader: `EN | हिं | भोज | मैथ`
+- `preferred_language` on users accepts: `"en"` | `"hi"` | `"bho"` | `"mai"`
+- Backend `backend/i18n/` also needs `bho.py` and `mai.py` notification files
+- Keys are snake_case descriptive names (e.g. `nav_home`, `job_title_label`, `error_network`)
+- Every single user-facing string in the entire app must have an entry here
+- Hindi translations must be complete and accurate (not machine-translated placeholder)
+- Include: navigation labels, screen titles, button labels, placeholder text, error messages, empty state messages, notification titles, category names, skill names, trust tier names
+
+Create `mobile/src/i18n/index.js`:
+```javascript
+import { useLanguage } from '../contexts/LanguageContext'
+import { translations } from './translations'
+
+export function useTranslation() {
+  const { lang } = useLanguage()
+  return {
+    t: (key) => translations[lang]?.[key] ?? translations['en'][key] ?? key,
+    lang,
+  }
+}
+```
+
+**Migrate `LanguageContext.js`:** Remove the old `t(key)` function (it only had a few strings). Replace with the new full translations system. Keep `lang`, `setLang`, `useLanguage` — just expand.
+
+**Rule:** After creating translations.js, search every screen and component for any hardcoded string (button labels, titles, placeholders, error messages). Every one must be replaced with `t('key')`. No exceptions.
+
+### B. Screens to DELETE
+
+| Screen | Replacement |
+|---|---|
+| `RoleSelectionScreen.js` | Removed — no role at signup |
+| `CustomerOnboardingScreen.js` | Absorbed into `ProfileScreen` |
+| `WorkerOnboardingScreen.js` | Absorbed into `ProfileScreen` "Become a Worker" sheet |
+| `CustomerProfileScreen.js` | Absorbed into `ProfileScreen` |
+| `WorkerMyProfileScreen.js` | Absorbed into `ProfileScreen` |
+
+### C. Screens to CREATE
+
+| Screen | Purpose |
+|---|---|
+| `ProfileScreen.js` | Unified profile: customer info + "Become a Worker" + worker profile |
+| `EngagementDetailScreen.js` | Accept/reject/complete/rate from notification deep link |
+| `ChatScreen.js` | Messages within an engagement |
+| `NotificationsScreen.js` | Full notification list with deep links |
+| `EarningsScreen.js` | Worker earnings calendar + stats |
+| `MapScreen.js` | Workers near me on map (react-native-maps) |
+
+### D. `mobile/App.js` — Unified navigation
+
+Replace 4 role-based tab bars with 1 unified tab bar:
+
+```javascript
+// SINGLE TAB BAR FOR ALL LOGGED-IN USERS
+// No role check anywhere in navigation
+<Tab.Navigator>
+  <Tab.Screen name="Home"      component={LandingScreen} />
+  <Tab.Screen name="FindWork"  component={WorkerJobFeedScreen} />
+  <Tab.Screen name="PostJob"   component={PostJobScreen} />
+  <Tab.Screen name="Activity"  component={DashboardScreen} />
+  <Tab.Screen name="Profile"   component={ProfileScreen} />
+</Tab.Navigator>
+
+// GUEST (logged out) stays separate — minimal tabs:
+<Tab.Navigator>
+  <Tab.Screen name="Home"      component={LandingScreen} />
+  <Tab.Screen name="Browse"    component={MarketplaceScreen} />
+  <Tab.Screen name="Jobs"      component={FindWorkScreen} />
+  <Tab.Screen name="Login"     component={LoginScreen} />
+</Tab.Navigator>
+```
+
+Add deep link config:
+```javascript
+const linking = {
+  prefixes: ["kaamnow://"],
+  config: {
+    screens: {
+      EngagementDetail: "engagement/:id",
+      Chat: "chat/:engagement_id",
+    }
+  }
+}
+```
+
+### E. `mobile/src/contexts/AuthContext.js` — Update
+
+**Remove:** `role` from user state (stop using it for routing)
+**Add:** `is_worker`, `is_customer`, `gender`, `saved_workers`, `referral_code`
+
+```javascript
+// Computed helpers (replace role checks everywhere):
+const isWorker = user?.is_worker === true
+const isCustomer = user?.is_customer !== false  // everyone is customer by default
+```
+
+### F. `mobile/src/screens/LandingScreen.js` — Simplify
+
+Current: ~1000 LOC monolith with 3 role branches.
+
+Split into:
+- `LandingScreen.js` → thin router: if (!user) show `GuestHome`, else show `UserHome`
+- `components/GuestHome.js` → guest hero, two paths, stats
+- `components/UserHome.js` → profile card (both roles), quick actions, activity preview
+
+`UserHome` renders for ALL logged-in users. Shows:
+- Profile card (always)
+- "Post a Job" quick action (always — anyone can hire)
+- "Find Work" quick action (always — tapping → Find Work tab)
+- If `is_worker`: shows active jobs/engagements summary
+- If NOT `is_worker`: shows "Become a Worker" card
+
+No more `isWorker`/`isCustomer` page-level branch. Small `is_worker` checks inside components only.
+
+### G. `mobile/src/screens/ProfileScreen.js` (NEW — merged)
+
+Sections:
+1. **Profile header** — photo, name, edit name/gender/language
+2. **Customer section** — posted jobs count, rating as customer (always shown)
+3. **Worker section:**
+   - If `is_worker=false`: "Become a Worker" card → opens `BecomeWorkerSheet`
+   - If `is_worker=true`: skills, rate, portfolio, certifications, availability toggle, earnings link, KYC status
+4. **Account actions** — saved workers, referral code/share, support, logout, deactivate
+
+**`BecomeWorkerSheet` (bottom sheet, not a screen):**
+- Step 1: Skills multi-select (reuse existing skill categories)
+- Step 2: Daily rate + GPS location (auto-fill pincode)
+- Step 3: Optional photo + bio (AI generate button)
+- Submit → `POST /api/workers/become-worker` → user becomes a worker instantly
+
+**Portfolio section (within worker section):**
+- Grid of up to 6 photos
+- "+" button → image picker → upload
+- Long press → delete
+
+**Certifications section:**
+- List of cert cards (skill, cert name, issued_by, verified badge)
+- "+" button → camera/picker → upload → AI auto-fill fields → confirm
+- Unverified shows pending badge, verified shows checkmark
+
+### H. `mobile/src/screens/LoginScreen.js` — Simplify
+
+Remove step 3 role selection. Flow: Phone → OTP → Name + optional Gender → Done.
+
+```javascript
+// Step 3 (was: Name + Role)
+// Now: Name + Gender (optional)
+// On submit: completeSignup({ name, gender })  — no role
+```
+
+Route after signup: always to Home tab (unified). No more `WorkerOnboarding` / `CustomerOnboarding` redirect.
+
+### I. `mobile/src/screens/PostJobScreen.js` — Enhance
+
+Add to existing 4-step wizard:
+
+**Voice input button on step 1 (title/description):**
+```javascript
+// Mic button → expo-av records audio → POST /api/ai/voice-to-job
+// Response auto-fills: title, category, skill, daily_rate, job_date
+// User sees filled form and confirms
+```
+
+**Photo button on step 1:**
+```javascript
+// Camera/picker → image → POST /api/ai/photo-to-job
+// Response auto-fills: title, category, description
+```
+
+**GPS location on step 3:**
+```javascript
+// "Use my location" button → expo-location.getCurrentPositionAsync()
+// lat/lng captured, reverse-geocode to pincode using postalpincode.in or Google
+// Pre-fills pincode + village fields
+```
+
+**Urgency selector:** "Normal" | "Urgent" | "ASAP" chips (replaces binary urgency)
+
+**Recurrence selector:** "One-time" | "Weekly" | "Monthly" chips
+
+**Remove worker-only lock screen** (PostJobScreen currently returns locked UI for workers). All users can post.
+
+### J. `mobile/src/screens/WorkerJobFeedScreen.js` — Enhance
+
+**When `is_worker=false`:**
+- Show same job feed (anyone can browse)
+- Show "Become a Worker to Apply" banner above feed
+- Apply button → opens `BecomeWorkerSheet` instead of applying
+
+**When `is_worker=true`:**
+- Existing feed + apply flow (unchanged logic)
+
+**Add filters:** category chips, urgency badge, recurrence badge, date picker
+
+### K. `mobile/src/screens/MarketplaceScreen.js` — Enhance
+
+**Add filter chips:** gender, certified_only, kyc_verified, available_from, max_rate
+**Add "Near me" button:** GPS → `/api/workers/search?lat=&lng=&radius=20`
+**Integrate `react-native-maps`:** Map tab showing worker pins
+
+### L. `mobile/src/screens/EngagementDetailScreen.js` (NEW)
+
+Single screen opened from:
+- Notification tap (deep link `kaamnow://engagement/:id`)
+- Activity tab row tap
+
+Shows:
+- Job info header (title, date, rate, urgency)
+- Other party card (photo, name, rating, phone after acceptance)
+- Status badge
+- Action buttons (contextual):
+  - `requested` + I'm the responder: Accept / Reject
+  - `accepted` + I'm the worker: Mark Complete
+  - `accepted`: Cancel
+  - `completed` + not yet rated: Rate [name]
+  - Any accepted state: "Message [name]" → ChatScreen
+- Payment button (if feature_payments enabled and accepted)
+
+### M. `mobile/src/screens/ChatScreen.js` (NEW)
+
+- Header: other person's name + photo
+- Message list (flat list, newest at bottom)
+- Poll `/api/chat/{engagement_id}/messages` every 4 seconds
+- Input bar: text field + image picker + mic (voice message, expo-av)
+- Mark read on focus
+- Show read receipts (✓✓)
+
+### N. `mobile/src/screens/NotificationsScreen.js` (NEW)
+
+- Full list of notifications (50 most recent)
+- Group by date
+- Tap → navigate to `EngagementDetailScreen` or `ChatScreen` via `deep_link` field
+- "Mark all read" button
+- Unread count badge on tab icon
+
+### O. `mobile/src/screens/EarningsScreen.js` (NEW)
+
+- Monthly calendar with earnings per day (coloured dots)
+- Summary card: this month total, jobs done, avg rating
+- List of completed engagements with amounts
+- Accessible from ProfileScreen → "My Earnings"
+
+### P. GPS integration across app
+
+Install `expo-location`. Use in:
+1. `BecomeWorkerSheet` — capture lat/lng when creating worker profile
+2. `PostJobScreen` — "Use my location" on step 3
+3. `MarketplaceScreen` — "Workers near me" button
+
+Pattern for all GPS calls:
+```javascript
+const { status } = await Location.requestForegroundPermissionsAsync()
+if (status !== 'granted') { /* show manual pincode input */ return }
+const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+// { coords: { latitude, longitude } }
+```
+
+### R. `mobile/src/screens/WalletScreen.js` (NEW)
+
+- Header: current balance in large text — "₹{balance} Credits"
+- "How to earn" section: referral CTA with share button (WhatsApp / copy link / QR)
+- "Your referral code" card: `{code}` + "Share and earn ₹100 when your friend completes their first booking"
+- Transaction history list: grouped by date, credit = green, debit = red
+- "Expires in X days" tag on each credit item
+- Empty state: "Invite friends to earn credits"
+
+### S. `mobile/src/screens/FAQScreen.js` (NEW)
+
+- Search bar at top (filters FAQs by keyword, client-side)
+- Category chips: All / General / For Local Experts / For Customers / Payments / Safety
+- Accordion-style FAQ list — question expands to reveal answer
+- All text from API `/api/faq` — no hardcoded FAQs
+- Fully translated: shows question + answer in current app language
+- "Still have questions? Chat with us" button at bottom → SupportChatScreen
+
+### T. `mobile/src/screens/TermsScreen.js` + `PrivacyScreen.js` (NEW)
+
+- Fetches content from `/api/legal/terms` or `/api/legal/privacy`
+- ScrollView with version + effective date in header
+- Content rendered from `content_en` or `content_hi` based on current language
+- "I Accept" button only shown at signup flow (not when viewed later from Settings)
+- Acceptance calls `POST /api/auth/accept-terms`
+
+### U. `mobile/src/screens/SupportChatScreen.js` (NEW)
+
+- React Native WebView loading Chatwoot widget
+- Pre-fills user identity (name, phone) so agent sees who is chatting
+- Full-screen with back button in header
+- Shows loading spinner while widget loads
+
+### V. `mobile/src/screens/EarningsScreen.js` (NEW)
+
+- Monthly earnings goal card: set target → big ₹ number with progress ring
+- "You've earned ₹X this month" hero stat
+- "X jobs completed" + "avg ₹Y/job"
+- Monthly calendar view: dots on days with earnings, tap day → see jobs
+- Scrollable list of completed engagements with amounts
+- "Download Certificate" button per completed job → opens PDF
+
+### W. Job Progress Update Flow (in `EngagementDetailScreen.js`)
+
+For Local Expert on active (accepted) engagement:
+- 4 progress buttons shown in sequence: "I'm On My Way" → "I've Arrived" → "Work In Progress" → "Mark as Done"
+- Each tap: calls `POST /api/engagements/{id}/progress`
+- After "I'm On My Way": share location button → opens Google Maps link
+- Optional: "Add photo" button on each step
+- Customer sees progress timeline in their EngagementDetailScreen (read-only)
+
+### X. OTP Job Start Flow
+
+**Customer side (EngagementDetailScreen):**
+- After acceptance: "Share start code with your Local Expert when they arrive" card
+- "Generate Code" button → `POST /api/engagements/{id}/generate-start-otp`
+- Shows: large 4-digit code (OTP displayed to customer to verbally tell Local Expert)
+- Refreshes automatically after 10 minutes
+
+**Local Expert side (EngagementDetailScreen):**
+- "Enter start code" input → 4 digit numpad
+- `POST /api/engagements/{id}/verify-start-otp`
+- On success: job status updates to "In Progress"
+
+### Y. Video Profile (in `ProfileScreen.js` worker section)
+
+- "Add intro video" card → opens camera or file picker (video only, max 60 seconds)
+- Upload to `POST /api/workers/me/video`
+- Shows video thumbnail with play button on profile
+- Customers can tap to watch before booking
+- "Change video" button after upload
+
+### Z. `mobile/src/screens/QRCodeScreen.js` (NEW — Local Expert only)
+
+- Full-screen QR code (their profile link)
+- "Save to Photos" button
+- "Share" button → native share sheet
+- "Print" instructions below: "Show this at job sites or share on WhatsApp"
+
+### Q. Analytics + Error monitoring
+
+**PostHog (in `AuthContext.js` after login):**
+```javascript
+import PostHog from '@posthog/react-native'
+// Track: signup, become_worker, post_job, apply_job, accept_booking, chat_message_sent
+// Identify user on login with user.id
+```
+
+**Sentry (in `App.js`):**
+```javascript
+import * as Sentry from '@sentry/react-native'
+Sentry.init({ dsn: process.env.EXPO_PUBLIC_SENTRY_DSN })
+// Wrap root component in Sentry.wrap()
+```
+
+---
+
+## Frontend Web — Changes
+
+### A. i18n System (web) — Build Before Any Page Work
+
+Create `frontend/src/i18n/translations.js` — same structure as mobile, web-specific keys added.
+Create `frontend/src/i18n/index.js` — same `useTranslation()` hook pattern.
+
+**`frontend/src/contexts/LanguageContext.jsx`** already exists — expand it exactly like mobile.
+
+Toggle in `Navbar.jsx`: "EN | हिं" pill button, top-right. Clicking swaps language globally. Persists to `localStorage`.
+
+After creating translations.js, replace every hardcoded string in all pages and components with `t('key')`.
+
+### B. Remove legacy
+- Delete `frontend/src/pages/WorkerSetup.jsx`
+- Delete route `/worker/setup` in `App.js`
+- Delete `frontend/src/pages/Strategy.jsx` (archive)
+- Delete route `/strategy`
+
+### B. Auth + role
+- Same changes as mobile: stop reading `user.role` for routing
+- Use `user.is_worker`, `user.is_customer`
+- Update all `user?.role === "worker"` checks to `user?.is_worker`
+- Update all `user?.role === "customer"` checks to `!user?.is_worker || user?.is_customer`
+- Signup: remove role selection step
+
+### C. New frontend pages
+- `frontend/src/pages/Chat.jsx` — simple web chat (mirrors mobile)
+- `frontend/src/pages/EngagementDetail.jsx` — engagement detail with actions
+- `frontend/src/pages/Earnings.jsx` — worker earnings (uses Recharts, already installed)
+
+### D. `frontend/src/pages/PostJob.jsx` — Add voice + AI
+- Voice button using browser MediaRecorder API → POST `/api/ai/voice-to-job`
+- Photo upload → POST `/api/ai/photo-to-job`
+- AI generate job button from text
+
+---
+
+## Deployment — `deploy-dev.sh` (NEW file)
+
+Create `/deploy/deploy-dev.sh` as a separate, dev-only deployment script:
+
+```bash
+#!/bin/bash
+# KaamNow DEV deployment — targets dev cluster, dev DB, dev domain
+# Usage: sudo bash deploy/deploy-dev.sh
+
+set -euo pipefail
+
+# Dev-specific config
+NAMESPACE="kaamnow-dev"
+DEV_IMAGE_TAG="dev-$(date +%Y%m%d-%H%M%S)"
+MONGO_URL="mongodb+srv://kaamnow-dev:KaamNowDev123@kaamnow-dev.p0wka3b.mongodb.net/?appName=KaamNow-Dev"
+DB_NAME="kaamnow_dev"
+CORS_ORIGINS="*"
+SHOW_OTP_IN_RESPONSE="true"
+FEATURE_AI="true"
+FEATURE_CHAT="true"
+FEATURE_VOICE="true"
+FEATURE_PAYMENTS="false"
+
+# Build dev images (with -dev tag)
+docker build -f deploy/Dockerfile.backend -t kaamnow-backend:$DEV_IMAGE_TAG .
+docker build -f deploy/Dockerfile.frontend -t kaamnow-frontend:$DEV_IMAGE_TAG \
+  --build-arg REACT_APP_BACKEND_URL="" .
+
+# Load into kind cluster
+kind load docker-image kaamnow-backend:$DEV_IMAGE_TAG
+kind load docker-image kaamnow-frontend:$DEV_IMAGE_TAG
+
+# Apply dev namespace (separate from prod)
+kubectl apply -f deploy/k8s/dev/00-namespace.yaml
+
+# Apply manifests with dev image tag
+DEV_IMAGE_TAG=$DEV_IMAGE_TAG envsubst < deploy/k8s/dev/20-backend.yaml | kubectl apply -f -
+DEV_IMAGE_TAG=$DEV_IMAGE_TAG envsubst < deploy/k8s/dev/30-frontend.yaml | kubectl apply -f -
+kubectl apply -f deploy/k8s/dev/50-ingress.yaml
+
+# Create/update dev secrets
+kubectl -n $NAMESPACE create secret generic backend-secrets \
+  --from-literal=MONGO_URL="$MONGO_URL" \
+  --from-literal=DB_NAME="$DB_NAME" \
+  --from-literal=JWT_SECRET="$(openssl rand -hex 32)" \
+  --from-literal=SHOW_OTP_IN_RESPONSE="$SHOW_OTP_IN_RESPONSE" \
+  --from-literal=FEATURE_AI="$FEATURE_AI" \
+  --from-literal=FEATURE_CHAT="$FEATURE_CHAT" \
+  --from-literal=FEATURE_VOICE="$FEATURE_VOICE" \
+  --from-literal=CORS_ORIGINS="$CORS_ORIGINS" \
+  --dry-run=client -o yaml | kubectl apply -f -
+
+kubectl -n $NAMESPACE rollout restart deployment/backend deployment/frontend
+kubectl -n $NAMESPACE rollout status deployment/backend
+echo "✅ Dev deployment complete — Namespace: $NAMESPACE"
+```
+
+Also create:
+- `/deploy/k8s/dev/` — dev-specific manifests (same structure as prod k8s/ but with namespace=kaamnow-dev)
+- `/deploy/.env.dev.example` — template with all new env vars
+
+---
+
+## Tests — Update DummyDb
+
+**`tests/test_current_flows.py`** — DummyDb must add:
+
+```python
+class DummyDb:
+    def __init__(self):
+        # Existing
+        self.users = DummyCollection()
+        self.workers = DummyCollection()
+        self.jobs = DummyCollection()
+        self.engagements = DummyCollection()
+        self.notifications = DummyCollection()
+        # NEW
+        self.messages = DummyCollection()
+        self.reports = DummyCollection()
+        self.payments = DummyCollection()
+```
+
+**User fixtures in tests** — update to new schema:
+```python
+DUMMY_USER = {
+    "id": "user-1",
+    "phone_primary": "+919999999999",
+    "name": "Test User",
+    "is_worker": False,      # CHANGED from role
+    "is_customer": True,     # NEW
+    "role": "customer",      # KEPT for compat (computed)
+    "is_active": True,
+    ...
+}
+DUMMY_WORKER_USER = {
+    ...
+    "is_worker": True,
+    "is_customer": True,
+    "role": "worker",        # computed
+}
+```
+
+**Delete test:**
+- `test_customer_cannot_apply_as_worker()` — deleted, no longer valid
+
+**New tests to write:**
+- `test_anyone_can_post_job()` — both worker and customer users can create jobs
+- `test_become_worker()` — verify is_worker flips True
+- `test_dual_role_user()` — same user posts job AND applies for a different job
+- `test_chat_within_engagement()` — message send + read
+- `test_ai_generate_job()` — mocked Gemini returns structured fields
+- `test_report_user()` — report creates record
+- `test_payment_verify()` — mocked Razorpay signature verification
+
+---
+
+## Testing Sign-Off — Phase by Phase
+
+Every phase must be signed off with **proof data** before the next phase begins. Proof is written to `tests/v2/` folder by Codex after each phase completes.
+
+### Folder Structure
+
+```
+tests/v2/
+  PHASE1_SIGNOFF.md        ← written by Codex after Phase 1
+  PHASE2_SIGNOFF.md        ← written by Codex after Phase 2
+  PHASE3_SIGNOFF.md        ← written by Codex after Phase 3
+  PHASE4_SIGNOFF.md        ← written by Codex after Phase 4
+  evidence/
+    phase1/
+      pytest_output.txt    ← full pytest run output
+      db_indexes.json      ← actual index output from MongoDB
+      schema_samples.json  ← real user + worker + job documents from dev DB
+      deleted_files.txt    ← git status showing removed files
+      doppler_keys.txt     ← key names only (no values)
+    phase2/
+      api_responses/       ← one JSON file per new endpoint
+        auth_signup.json
+        become_expert.json
+        post_job.json
+        wallet_credit.json
+        ai_generate_job.json
+        chat_send.json
+        ... (one per endpoint)
+      pytest_output.txt    ← all new tests passing
+      wallet_flow.json     ← refer → first booking → ₹100 credit proof
+      certificate_sample.pdf  ← actual generated PDF
+      qr_sample.png        ← actual generated QR
+    phase3/
+      screenshots/         ← screen captures of every new screen
+        ProfileScreen.png
+        EngagementDetailScreen.png
+        ChatScreen.png
+        WalletScreen.png
+        FAQScreen.png
+        ... (one per new screen)
+      language_toggle/
+        en_home.png
+        hi_home.png
+        bho_home.png
+        mai_home.png
+      gps_proof.json       ← actual lat/lng captured from device
+      voice_to_job.json    ← transcript + extracted fields from real audio
+      navigation_flows.txt ← written proof of all navigation paths tested
+    phase4/
+      admin_screenshots/   ← reports queue, FAQ management, user list
+      e2e_flow.json        ← full flow: signup→expert→job→hire→chat→complete→certificate
+      eas_build.txt        ← EAS build ID + download URL
+      performance.txt      ← startup time, screen load times on low-end Android
+```
+
+---
+
+### Phase 1 Sign-Off Requirements (`tests/v2/PHASE1_SIGNOFF.md`)
+
+Codex must prove:
+
+```markdown
+## Phase 1 Sign-Off — Foundation
+
+### 1. Deleted Files Proof
+[Paste: git status output showing deleted files]
+
+### 2. MongoDB Indexes
+[Paste: db.users.getIndexes(), db.workers.getIndexes(), db.jobs.getIndexes() output]
+
+### 3. Schema Sample Documents
+[Paste: one real document from each collection showing all new fields]
+
+### 4. Doppler Setup
+[Paste: doppler secrets --only-names output (key names only)]
+
+### 5. pytest Results
+[Paste: full pytest tests/ output — all tests must pass]
+
+### 6. Test Specific to Phase 1
+- `test_anyone_can_post_job()` — PASS
+- `test_become_worker()` — PASS
+- `test_dual_role_user()` — PASS
+- `test_signup_no_role()` — PASS
+- `test_tc_acceptance_stored()` — PASS
+
+### 7. Config Validation
+[Paste: python -c "from backend.config import settings; print(settings.dict())" output
+ showing all new fields populated from Doppler]
+
+STATUS: [ ] PASS  [ ] FAIL
+Signed off by: Codex
+Date: ___
+```
+
+---
+
+### Phase 2 Sign-Off Requirements (`tests/v2/PHASE2_SIGNOFF.md`)
+
+Codex must prove every new endpoint works with real data:
+
+```markdown
+## Phase 2 Sign-Off — Backend
+
+### 1. pytest Results
+[Full output — all tests pass including new ones]
+
+### 2. API Endpoint Proof (one curl + response per endpoint)
+For each new endpoint, paste:
+  Request: curl -X POST ... -d '...'
+  Response: { actual JSON response }
+
+Endpoints to prove:
+  [ ] POST /api/workers/become-worker
+  [ ] POST /api/ai/generate-job (real Gemini response)
+  [ ] POST /api/ai/voice-to-job (real Groq + Gemini response)
+  [ ] POST /api/ai/generate-bio
+  [ ] POST /api/chat/{id}/send
+  [ ] GET  /api/chat/{id}/messages
+  [ ] GET  /api/wallet/balance
+  [ ] GET  /api/wallet/transactions
+  [ ] POST /api/referrals/my-code
+  [ ] POST /api/reports
+  [ ] GET  /api/faq
+  [ ] GET  /api/legal/terms
+  [ ] GET  /api/legal/privacy
+  [ ] POST /api/payments/create-order
+  [ ] POST /api/engagements/{id}/generate-start-otp
+  [ ] POST /api/engagements/{id}/verify-start-otp
+  [ ] POST /api/engagements/{id}/checkin
+  [ ] POST /api/engagements/{id}/progress
+  [ ] GET  /api/engagements/{id}/certificate (PDF bytes returned)
+  [ ] GET  /api/workers/me/qr-code (PNG bytes returned)
+  [ ] POST /api/workers/me/available-now
+
+### 3. Wallet Flow Proof
+[Full flow: user A refers user B → B signs up with referral code → B completes first booking
+ → show wallet_transactions docs for both A and B showing ₹100 + ₹50 credited]
+
+### 4. Certificate PDF
+[Attach: actual generated certificate PDF in evidence/phase2/certificate_sample.pdf]
+
+### 5. QR Code
+[Attach: actual generated QR PNG in evidence/phase2/qr_sample.png]
+
+### 6. Chatwoot Running
+[Paste: kubectl -n kaamnow-dev get pods showing chatwoot pod Running]
+
+STATUS: [ ] PASS  [ ] FAIL
+```
+
+---
+
+### Phase 3 Sign-Off Requirements (`tests/v2/PHASE3_SIGNOFF.md`)
+
+```markdown
+## Phase 3 Sign-Off — Mobile
+
+### 1. All New Screens Render
+For each new screen, attach screenshot in evidence/phase3/screenshots/:
+  [ ] ProfileScreen — with and without worker profile
+  [ ] BecomeExpertSheet — all 3 steps visible
+  [ ] EngagementDetailScreen — all 4 states (requested/accepted/completed/rated)
+  [ ] ChatScreen — with messages visible
+  [ ] NotificationsScreen — with notifications visible
+  [ ] EarningsScreen — with earnings goal set
+  [ ] WalletScreen — with balance + transactions
+  [ ] FAQScreen — with expanded accordion
+  [ ] TermsScreen — full T&C visible
+  [ ] PrivacyScreen — full Privacy Policy visible
+  [ ] MapScreen — workers visible on map
+  [ ] QRCodeScreen — QR code rendered
+
+### 2. Language Toggle Proof
+Attach 4 screenshots of Home screen in:
+  [ ] English (en)
+  [ ] Hindi (हिं)
+  [ ] Bhojpuri (भोज)
+  [ ] Maithili (मैथ)
+Zero hardcoded strings visible — all translated.
+
+### 3. Navigation Flows
+Write out every navigation path tested:
+  [ ] Guest → Login → Home
+  [ ] Login → Become a Local Expert → 3-step sheet → expert profile visible
+  [ ] Post Job → Voice input → AI form fill → confirm → job created
+  [ ] Post Job → Photo → AI description → confirm → job created
+  [ ] Post Job → GPS → pincode auto-filled
+  [ ] Find Work → Apply → Engagement created
+  [ ] Notification tap → EngagementDetailScreen opens (deep link works)
+  [ ] Accept engagement → Chat button appears → ChatScreen opens
+  [ ] Mark Complete → Customer gets notification
+  [ ] Leave Review → Rating saved → badge check
+
+### 4. GPS Proof
+[Paste evidence/phase3/gps_proof.json — real lat/lng from device]
+
+### 5. Voice-to-Job Proof
+[Paste evidence/phase3/voice_to_job.json — transcript + extracted job fields]
+
+### 6. T&C Acceptance
+[Paste: users document showing tc_accepted_at + tc_version fields populated after signup]
+
+### 7. Zero Hardcoded Strings Check
+[Paste: grep -r "hardcoded_string_sample" mobile/src — must return no results]
+[Paste: grep -r "http://13.207" mobile/ — must return no results]
+
+STATUS: [ ] PASS  [ ] FAIL
+```
+
+---
+
+### Phase 4 Sign-Off Requirements (`tests/v2/PHASE4_SIGNOFF.md`)
+
+```markdown
+## Phase 4 Sign-Off — Admin + QA + Launch
+
+### 1. Admin Dashboard Screenshots
+  [ ] Reports queue — with at least 1 real report visible
+  [ ] FAQ management — with FAQs listed + one edited
+  [ ] User management — with real user data
+  [ ] Wallet audit — with real transactions
+  [ ] Broadcast sent — admin_logs entry showing broadcast
+
+### 2. Admin Login Proof
+  [ ] Login with email: curl output showing admin token
+  [ ] Login with phone: curl output showing admin token
+  [ ] Login with wrong password: curl output showing 401
+
+### 3. Full End-to-End Flow (with real data)
+Paste evidence/phase4/e2e_flow.json documenting:
+  [ ] Signup (User A as Customer)
+  [ ] Refer User B with referral link
+  [ ] User B signs up with referral code
+  [ ] User A becomes Local Expert (BecomeExpertSheet)
+  [ ] User B posts a job
+  [ ] User A applies for job
+  [ ] User B accepts
+  [ ] Chat: 3 messages exchanged
+  [ ] OTP for job start verified
+  [ ] GPS check-in confirmed
+  [ ] Before photo uploaded
+  [ ] Progress updates sent (all 4 states)
+  [ ] After photo uploaded
+  [ ] Job marked complete
+  [ ] Certificate PDF downloaded
+  [ ] User B rates User A — badge awarded
+  [ ] User B's wallet credited ₹50 (first booking bonus)
+  [ ] User A's (referrer) wallet credited ₹100
+
+### 4. EAS Build
+  [ ] Paste: EAS build output with build ID
+  [ ] APK installs and runs on physical Android device
+  [ ] Startup time: < 3 seconds
+  [ ] Paste: screen load times for 5 key screens
+
+### 5. Performance on Low-End Device
+  [ ] Tested on Android device with < 3GB RAM
+  [ ] No crashes on: language toggle, GPS request, voice recording, chat polling
+  [ ] Animations run at 60fps (no visible jank)
+
+### 6. No Stale Code Final Check
+[Paste: git status — no unexpected files]
+[Paste: grep -r "role === .worker" mobile/src — must return 0 results]
+[Paste: grep -r "role === .customer" mobile/src — must return 0 results]
+[Paste: grep -r "hardcoded" backend/ — must return 0 results]
+
+STATUS: [ ] PASS  [ ] FAIL
+```
+
+---
+
+## Graphify Update
+
+After all code changes are implemented, run:
+```bash
+/graphify kaamnow --update
+```
+
+This updates the knowledge graph to reflect new files and relationships.
+
+---
+
+## Implementation Order (26 days to June 15)
+
+### Week 1 (May 20-26) — Foundation
+**Day 1-2:**
+1. Delete irrelevant files (bookings.py, WorkerSetup.jsx, Strategy.jsx, pandas/numpy)
+2. Update `backend/schemas.py` — full locked schema
+3. Update `backend/db.py` — new collections + all indexes
+4. Update `backend/config.py` — all new env vars + feature flags
+5. Update `backend/requirements.txt`
+6. Create `backend/i18n/en.py`, `backend/i18n/hi.py`, `backend/i18n/__init__.py` — all notification copy in both languages
+
+**Day 3-4:**
+7. Modify `backend/routers/auth.py` — remove role from signup, add is_worker/is_customer, gender, referral
+8. Modify `backend/routers/workers.py` — remove role guards, add become-worker, portfolio, certifications
+9. Modify `backend/routers/jobs.py` — remove customer gate, add templates, fix urgency enum
+10. Modify `backend/engagements.py` + `routers/engagements.py` — update role checks, add deep_link, response_time, Hindi notifications
+
+**Day 5:**
+11. Update DummyDb in tests + fix all broken tests
+12. Add security hardening (validators, max_length, CSRF header check)
+
+### Week 2 (May 27 - June 2) — New Backend Features
+**Day 6-7:**
+12. `backend/ai_service.py` (NEW) — Gemini + Groq clients
+13. `backend/routers/ai.py` (NEW) — all 6 AI endpoints
+14. `backend/routers/chat.py` (NEW) — message CRUD + rate limiting
+15. `backend/cloudinary_service.py` — add portfolio, cert, voice, video, job-photo upload functions
+
+**Day 8:**
+16. `backend/routers/wallet.py` (NEW) — balance, transactions, credit/debit functions
+17. `backend/routers/referrals.py` (NEW) — code, stats, referral tracking
+18. `backend/routers/reports.py` (NEW) — report Local Expert, auto-flag logic
+19. `backend/routers/legal.py` (NEW) — T&C + Privacy Policy endpoints
+20. `backend/routers/faq.py` (NEW) — public FAQ + admin management
+
+**Day 9:**
+21. `backend/payment_service.py` (NEW) — Razorpay client
+22. `backend/routers/payments.py` (NEW) — order, verify, history
+23. `backend/pdf_service.py` (NEW) — completion certificate ReportLab
+24. `backend/qr_service.py` (NEW) — QR code generation
+25. `backend/routers/engagements.py` — add OTP start, check-in, progress, before/after photos, re-hire, certificate endpoints
+26. `backend/routers/workers.py` — add video upload, available-now, waitlist endpoints
+27. `backend/routers/admin.py` — extend with reports queue, FAQ mgmt, legal, broadcast, email+phone login
+
+**Day 10:**
+28. `backend/app.py` — register all 8 new routers, all background jobs, Sentry init, all indexes
+29. `backend/i18n/bho.py` + `backend/i18n/mai.py` — Bhojpuri + Maithili notification copy
+30. `deploy/deploy-dev.sh` (NEW) + `deploy/k8s/dev/` manifests + Chatwoot k8s config
+31. Test full backend locally with dev DB — all endpoints hit, all indexes created
+
+### Week 3 (June 2-8) — Mobile
+**Day 11-12:**
+24. `mobile/src/i18n/translations.js` — ALL strings EN + HI (do this FIRST before any screen)
+25. `mobile/src/i18n/index.js` — useTranslation() hook
+26. Expand `LanguageContext.js` — full i18n system, remove old t() stub
+27. `mobile/App.js` — unified nav, deep link config, Sentry init
+28. `mobile/src/contexts/AuthContext.js` — remove role, add is_worker/is_customer helpers
+29. `mobile/src/screens/LoginScreen.js` — remove role step, add gender
+30. Delete 5 screens
+31. Sweep all existing screens/components — replace every hardcoded string with t('key')
+
+**Day 13-14:**
+32. `mobile/src/screens/ProfileScreen.js` (NEW) — unified + BecomeExpertSheet + video + QR + wallet link
+33. `mobile/src/screens/LandingScreen.js` — split into GuestHome + UserHome
+34. `mobile/src/screens/EngagementDetailScreen.js` (NEW) — actions + OTP + progress buttons + before/after
+35. `mobile/src/screens/ChatScreen.js` (NEW) — polling + voice message
+
+**Day 15:**
+36. `mobile/src/screens/NotificationsScreen.js` (NEW)
+37. `mobile/src/screens/EarningsScreen.js` (NEW) — goal + calendar + certificate download
+38. `mobile/src/screens/WalletScreen.js` (NEW) — balance + transactions + referral share
+39. `mobile/src/screens/FAQScreen.js` (NEW) — searchable accordion
+40. `mobile/src/screens/TermsScreen.js` + `PrivacyScreen.js` (NEW)
+41. `mobile/src/screens/SupportChatScreen.js` (NEW) — Chatwoot WebView
+
+**Day 16:**
+42. `mobile/src/screens/PostJobScreen.js` — voice, photo-to-job, GPS, urgency, recurrence, anonymous, templates
+43. `mobile/src/screens/WorkerJobFeedScreen.js` — Become a Local Expert CTA, filters
+44. `mobile/src/screens/MarketplaceScreen.js` — filters, GPS near-me, map, waitlist, available-now badge
+45. `mobile/src/screens/MapScreen.js` (NEW) — react-native-maps
+46. `mobile/src/screens/QRCodeScreen.js` (NEW)
+47. GPS integration (`expo-location`) everywhere
+48. `mobile/src/screens/LoginScreen.js` — remove role, add gender, T&C acceptance mandatory
+
+### Week 4 (June 8-15) — Frontend + Polish + QA
+**Day 17-18:**
+39. `frontend/src/i18n/translations.js` + `index.js` — full EN + HI, all web strings
+40. Frontend: remove legacy pages, update all role checks, replace all hardcoded strings with t('key')
+41. Frontend: Chat.jsx, EngagementDetail.jsx, Earnings.jsx (NEW)
+42. Frontend: PostJob.jsx — add voice + AI
+
+**Day 19:**
+42. PostHog analytics — events in mobile + frontend
+43. Sentry error monitoring — mobile + frontend + backend
+
+**Day 20-21:**
+44. Offline mode — AsyncStorage caching for job feed + worker list
+45. DashboardScreen — unify, remove role branch
+
+**Day 22-23:**
+46. End-to-end QA: OLX dual-role flow (same user posts job + applies for another)
+47. End-to-end QA: AI voice → job posting
+48. End-to-end QA: chat within engagement
+49. End-to-end QA: certifications + portfolio
+
+**Day 24-25:**
+50. EAS build for Android APK
+51. Dev deployment via deploy-dev.sh
+52. Fix any blockers found in QA
+
+**Day 26 (June 15):**
+53. Final graphify update
+54. Launch readiness checklist
+
+---
+
+## CODEX PROMPT
+
+Read `graphify-out/GRAPH_REPORT.md` first to understand the codebase (2908 nodes, 231 communities). Then read this full plan.
+
+**God nodes you will touch:**
+- `DummyDb` (65 edges) — update for new collections + schema
+- `run()` (41 edges) — seed scripts
+- `_handle_message()` (35 edges) — DO NOT TOUCH (WhatsApp bot)
+- `Settings` — extends with new config fields
+
+**Non-negotiable rules:**
+1. Never touch `backend/routers/whatsapp.py`, `backend/whatsapp_bot.py`, `backend/onboarding.py` or any WhatsApp bot file
+2. Keep `role` field in all API responses (computed: `"worker" if is_worker else "customer"`) — WhatsApp bot reads it
+3. Use dev MongoDB: `mongodb+srv://kaamnow-dev:KaamNowDev123@kaamnow-dev.p0wka3b.mongodb.net/?appName=KaamNow-Dev`
+4. Schema is locked — implement exactly as specified, no deviations
+5. Every new function must have a single responsibility
+6. No dead code, no commented-out blocks, no TODOs in production code
+7. All new backend endpoints must have: auth guard, input validation, rate limiting, error handling
+8. All new mobile screens must handle: loading state, error state, empty state
+9. Feature flags gate all new features in backend (`settings.feature_ai`, `settings.feature_chat`, etc.)
+10. After all implementation: run `graphify update .` to rebuild knowledge graph
+
+**Language & UX rules (non-negotiable):**
+11. ALL user-facing strings in mobile go through `t('key')` from `mobile/src/i18n/translations.js`. Zero hardcoded strings in components or screens.
+12. ALL user-facing strings in frontend go through `t('key')` from `frontend/src/i18n/translations.js`. Zero hardcoded strings.
+13. translations.js must be 100% complete in both EN and HI before any screen is written or modified.
+14. Backend notification copy uses `backend/i18n/` — select language from `user.preferred_language`.
+15. Every button label, error message, placeholder, heading, empty state, and category name must use plain simple English (and Hindi equivalent). No jargon.
+16. Worker dignity: use "Worker", "Home Helper", "Cleaner" etc. — never "labourer", "maid", "servant".
+17. Trust tier display names: "New" (1), "Trusted" (2), "Pro" (3), "Star" (4).
+18. Mobile is a thin client — no business logic, no calculations, no permission checks. All backend.
+19. Max 3 actions per screen. One primary CTA per screen. Every action has immediate visual feedback.
+20. Language toggle visible on AppHeader (mobile) and Navbar (web) at all times.
+
+21. "Local Expert" replaces "Worker" in ALL display strings — internal field names (`worker_id`, `is_worker`) stay as-is.
+22. Bhojpuri (`bho`) and Maithili (`mai`) are supported languages alongside EN + HI — all 4 in translations.js and backend/i18n/.
+23. T&C acceptance is mandatory at signup — store `tc_accepted_at` + `tc_version` on user. Account not active without it.
+24. Wallet credits expire after 90 days — daily background job handles this.
+25. Chatwoot is self-hosted on k8s dev cluster — add to deploy-dev.sh.
+26. Admin can login with email OR phone — all other users phone only.
+27. Every new screen handles 3 states: loading, error, empty — no exceptions.
+28. OTP for job start is generated server-side, never returned in API response — customer sees it, tells Local Expert verbally.
+29. GPS check-in validates within 1km of job location — warn but do not hard-block (connectivity issues happen in rural areas).
+30. Wallet balance never goes negative — check before every debit.
+
+31. After each phase completes, write the sign-off document to `tests/v2/PHASE{N}_SIGNOFF.md` and populate `tests/v2/evidence/phase{N}/` with all proof data before starting the next phase.
+32. No phase begins until the previous phase sign-off document is written and all checkboxes pass.
+33. Doppler is the only credential store — set it up on Day 1 before writing any code. No `.env` files in repo.
+34. Add `doppler` as a dependency in `deploy/deploy-dev.sh` — k8s Doppler operator syncs secrets automatically.
+35. All Lottie animation JSON files go in `mobile/src/assets/animations/` — one per state (empty, loading, success, error).
+36. `react-native-reanimated` + `react-native-gesture-handler` must be used for ALL bottom sheets, ALL transitions, ALL loading skeletons. No plain `Animated.View` from React Native core.
+37. The admin dashboard (`frontend/src/pages/AdminDashboard.jsx`) is the ONLY frontend file touched in this sprint. All other frontend files are untouched.
+38. `tests/v2/` folder and sign-off template structure must be created as the very first action in Phase 1, before any deletions.
+
+**Start with Phase 1, Day 1 in this exact order:**
+1. Create `tests/v2/` folder structure with empty sign-off templates
+2. Set up Doppler — migrate all secrets from `.env.dev`
+3. Delete stale files (list above)
+4. Create `mobile/src/i18n/translations.js` with all 4 languages
+5. Update locked schema in `backend/schemas.py`
+6. All other Phase 1 work
