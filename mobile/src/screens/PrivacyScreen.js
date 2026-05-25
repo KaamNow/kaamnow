@@ -37,6 +37,7 @@ export default function PrivacyScreen() {
       {doc ? (
         <>
           <Text style={styles.version}>{t("legal_version")} {doc.version} · {doc.effective_date}</Text>
+          <Text style={styles.title}>Privacy Policy</Text>
           <Text style={styles.body}>{content}</Text>
         </>
       ) : (
@@ -47,8 +48,9 @@ export default function PrivacyScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: colors.bg },
   center:    { flex: 1, justifyContent: "center", alignItems: "center" },
-  version:   { fontFamily: fonts.body, fontSize: 12, color: colors.outline, marginBottom: spacing.md },
-  body:      { fontFamily: fonts.body, fontSize: 14, color: colors.textHeading, lineHeight: 22 },
+  version:   { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.textMuted, marginBottom: spacing.md, letterSpacing: 0.8, textTransform: "uppercase" },
+  title:     { fontFamily: fonts.bodyBold, fontSize: 24, color: colors.textHeading, marginBottom: spacing.md, letterSpacing: -0.2 },
+  body:      { fontFamily: fonts.body, fontSize: 15, color: colors.textHeading, lineHeight: 24 },
 });

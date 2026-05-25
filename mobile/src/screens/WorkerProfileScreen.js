@@ -216,19 +216,19 @@ export default function WorkerProfileScreen({ route, navigation }) {
     <View style={s.safe}>
       <View style={[s.topBar, { paddingTop: insets.top + 6 }]}>
         <Pressable onPress={() => navigation.goBack()} hitSlop={10} style={s.iconButton}>
-          <Ionicons name="arrow-back" size={22} color="#111827" />
+          <Ionicons name="arrow-back" size={22} color={colors.textHeading} />
         </Pressable>
         <Text style={[s.topTitle, { flex: 1, textAlign: "center" }]}>Expert Profile</Text>
         <View style={{ flexDirection: "row" }}>
           <Pressable onPress={shareProfile} hitSlop={10} style={s.iconButton}>
-            <Ionicons name="share-social-outline" size={20} color="#111827" />
+            <Ionicons name="share-social-outline" size={20} color={colors.textHeading} />
           </Pressable>
           {!isOwnProfile && (
             <Pressable onPress={toggleSave} hitSlop={10} style={s.iconButton} disabled={saving}>
               <Ionicons
                 name={saved ? "heart" : "heart-outline"}
                 size={20}
-                color={saved ? "#ef4444" : "#111827"}
+                color={saved ? "#ef4444" : colors.textHeading}
               />
             </Pressable>
           )}
@@ -263,7 +263,7 @@ export default function WorkerProfileScreen({ route, navigation }) {
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={s.name} numberOfLines={1}>{view.name}</Text>
               <View style={s.locationRow}>
-                <Ionicons name="location-outline" size={15} color="#6B7280" />
+                <Ionicons name="location-outline" size={15} color={colors.textSecondary} />
                 <Text style={s.locationText} numberOfLines={2}>{view.location}</Text>
               </View>
               {view.isAvailableNow && (
@@ -348,7 +348,7 @@ export default function WorkerProfileScreen({ route, navigation }) {
             </>
           ) : (
             <View style={s.noReviews}>
-              <Ionicons name="chatbubble-ellipses-outline" size={22} color="#9CA3AF" />
+              <Ionicons name="chatbubble-ellipses-outline" size={22} color={colors.textMuted} />
               <Text style={s.emptyText}>No client reviews yet.</Text>
             </View>
           )}
@@ -385,7 +385,7 @@ export default function WorkerProfileScreen({ route, navigation }) {
               <TextInput
                 style={[s.fieldInput, s.fieldInputSingle]}
                 placeholder={view.rate ? `₹${view.rate} — their listed rate` : "e.g. 500"}
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={colors.textMuted}
                 value={bookPrice}
                 onChangeText={setBookPrice}
                 keyboardType="numeric"
@@ -396,7 +396,7 @@ export default function WorkerProfileScreen({ route, navigation }) {
               <TextInput
                 style={s.fieldInput}
                 placeholder="House no., street, village / city, pincode"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={colors.textMuted}
                 value={bookAddress}
                 onChangeText={setBookAddress}
                 multiline
@@ -407,7 +407,7 @@ export default function WorkerProfileScreen({ route, navigation }) {
               <TextInput
                 style={s.fieldInput}
                 placeholder="Any extra details for the expert…"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={colors.textMuted}
                 value={bookDesc}
                 onChangeText={setBookDesc}
                 multiline
@@ -493,7 +493,7 @@ function Review({ item }) {
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#F9F9FE" },
+  safe: { flex: 1, backgroundColor: colors.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   loadingTxt: { fontFamily: fonts.body, fontSize: 14, color: colors.outline },
 
@@ -503,21 +503,21 @@ const s = StyleSheet.create({
     justifyContent: "space-between",
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.sm,
-    backgroundColor: "#F9F9FE",
+    backgroundColor: colors.bg,
     borderBottomWidth: 1,
     borderBottomColor: "rgba(0,0,0,0.04)",
     zIndex: 5,
   },
   iconButton: { width: 40, height: 36, alignItems: "center", justifyContent: "center" },
-  topTitle: { fontFamily: fonts.bodyBold, fontSize: 18, color: "#111827" },
+  topTitle: { fontFamily: fonts.bodyBold, fontSize: 18, color: colors.textHeading },
 
-  heroImage: { height: 150, width: "100%", justifyContent: "flex-end" },
+  heroImage: { height: 140, width: "100%" },
   heroImg: { resizeMode: "cover" },
   heroShade: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.16)" },
   verifiedPill: {
-    alignSelf: "flex-end",
-    marginRight: spacing.md,
-    marginBottom: spacing.sm,
+    position: "absolute",
+    top: 62,
+    right: spacing.md,
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
@@ -528,47 +528,47 @@ const s = StyleSheet.create({
   },
   verifiedText: { fontFamily: fonts.bodyBold, fontSize: 11, color: "#fff" },
 
-  identityWrap: { paddingHorizontal: spacing.md, marginTop: -38 },
+  identityWrap: { paddingHorizontal: spacing.md, marginTop: -40 },
   avatarShell: {
-    width: 104,
-    height: 104,
-    borderRadius: 52,
-    padding: 5,
-    backgroundColor: "#F9F9FE",
+    width: 94,
+    height: 94,
+    borderRadius: 47,
+    padding: 4,
+    backgroundColor: colors.bg,
     ...shadow.md,
   },
-  avatar: { width: 94, height: 94, borderRadius: 47 },
-  avatarFallback: { backgroundColor: "#111827", alignItems: "center", justifyContent: "center" },
+  avatar: { width: 86, height: 86, borderRadius: 43 },
+  avatarFallback: { backgroundColor: colors.textHeading, alignItems: "center", justifyContent: "center" },
   avatarInitial: { fontFamily: fonts.bodyBold, fontSize: 28, color: "#fff" },
   onlineDot: {
     position: "absolute",
-    right: 8,
-    bottom: 8,
+    right: 4,
+    bottom: 4,
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: "#22C55E",
+    backgroundColor: colors.success,
     borderWidth: 3,
-    borderColor: "#F9F9FE",
+    borderColor: colors.bg,
   },
-  onlineDotOff: { backgroundColor: "#9CA3AF" },
+  onlineDotOff: { backgroundColor: colors.textMuted },
   nameRow: { flexDirection: "row", alignItems: "flex-start", marginTop: spacing.md, gap: spacing.sm },
-  name: { fontFamily: fonts.bodyBold, fontSize: 24, color: "#1A1C1F", letterSpacing: -0.2 },
+  name: { fontFamily: fonts.bodyBold, fontSize: 24, color: colors.textHeading, letterSpacing: -0.2 },
   locationRow: { flexDirection: "row", alignItems: "flex-start", gap: 5, marginTop: 5, maxWidth: 260 },
-  locationText: { flex: 1, fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: "#5E5E60" },
+  locationText: { flex: 1, fontFamily: fonts.body, fontSize: 13, lineHeight: 18, color: colors.textSecondary },
   trustedChip: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    backgroundColor: "#F3F3F8",
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: "#CFC4C5",
+    borderColor: colors.borderSubtle,
     borderRadius: radius.pill,
     paddingHorizontal: 10,
     paddingVertical: 5,
     marginTop: 5,
   },
-  trustedText: { fontFamily: fonts.bodyBold, fontSize: 11, color: "#111827" },
+  trustedText: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.textHeading },
 
   statsRow: { flexDirection: "row", gap: spacing.lg, paddingHorizontal: spacing.md, marginTop: spacing.md },
   statCard: {
@@ -581,11 +581,11 @@ const s = StyleSheet.create({
     ...shadow.sm,
   },
   statValueRow: { flexDirection: "row", alignItems: "center", gap: 4 },
-  statValue: { fontFamily: fonts.bodyBold, fontSize: 18, color: "#1A1C1F" },
+  statValue: { fontFamily: fonts.bodyBold, fontSize: 18, color: colors.textHeading },
   statLabel: {
     fontFamily: fonts.bodyBold,
     fontSize: 10,
-    color: "#6B7280",
+    color: colors.textSecondary,
     textTransform: "uppercase",
     letterSpacing: 0.7,
     marginTop: 3,
@@ -596,21 +596,21 @@ const s = StyleSheet.create({
   sectionTitle: {
     fontFamily: fonts.bodyBold,
     fontSize: 12,
-    color: "#6B7280",
+    color: colors.textSecondary,
     textTransform: "uppercase",
     letterSpacing: 1.6,
   },
   sectionRating: { flexDirection: "row", alignItems: "center", gap: 4 },
-  sectionRight: { fontFamily: fonts.bodyBold, fontSize: 12, color: "#111827" },
+  sectionRight: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.textHeading },
 
   chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  skillChip: { backgroundColor: "#E8E8ED", borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 8 },
-  skillText: { fontFamily: fonts.body, fontSize: 14, color: "#1A1C1F" },
+  skillChip: { backgroundColor: colors.borderSubtle, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 8 },
+  skillText: { fontFamily: fonts.body, fontSize: 14, color: colors.textHeading },
   aboutText: { fontFamily: fonts.body, fontSize: 15, lineHeight: 24, color: "#2E3034" },
-  emptyText: { fontFamily: fonts.body, fontSize: 14, color: "#6B7280" },
+  emptyText: { fontFamily: fonts.body, fontSize: 14, color: colors.textSecondary },
 
   videoCard: { width: "100%", aspectRatio: 16 / 9, borderRadius: radius.xl, overflow: "hidden", ...shadow.lg },
-  videoPlayer: { width: "100%", height: "100%", backgroundColor: "#111827" },
+  videoPlayer: { width: "100%", height: "100%", backgroundColor: colors.textHeading },
   videoImage: { width: "100%", height: "100%" },
   videoOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.26)", alignItems: "center", justifyContent: "center" },
   playCircle: {
@@ -642,34 +642,34 @@ const s = StyleSheet.create({
     paddingHorizontal: 9,
     paddingVertical: 5,
   },
-  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: "#EF4444" },
+  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: colors.danger },
   liveText: { fontFamily: fonts.bodyBold, fontSize: 10, color: "#fff" },
   videoTitle: { flex: 1, textAlign: "right", fontFamily: fonts.bodyBold, fontSize: 12, color: "#fff" },
 
   noReviews: { alignItems: "center", justifyContent: "center", gap: spacing.sm, paddingVertical: spacing.xl },
-  review: { borderLeftWidth: 2, borderLeftColor: "#E8E8ED", paddingLeft: spacing.md, marginBottom: spacing.xl },
+  review: { borderLeftWidth: 2, borderLeftColor: colors.borderSubtle, paddingLeft: spacing.md, marginBottom: spacing.xl },
   reviewTop: { flexDirection: "row", justifyContent: "space-between", gap: spacing.sm, marginBottom: spacing.sm },
   reviewUser: { flexDirection: "row", alignItems: "center", gap: spacing.sm, flex: 1 },
   reviewAvatar: { width: 40, height: 40, borderRadius: 20 },
-  reviewAvatarFallback: { backgroundColor: "#111827", alignItems: "center", justifyContent: "center" },
+  reviewAvatarFallback: { backgroundColor: colors.textHeading, alignItems: "center", justifyContent: "center" },
   reviewInitial: { fontFamily: fonts.bodyBold, fontSize: 13, color: "#fff" },
-  reviewName: { fontFamily: fonts.bodyBold, fontSize: 14, color: "#111827" },
-  reviewDate: { fontFamily: fonts.bodyBold, fontSize: 10, color: "#6B7280" },
+  reviewName: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.textHeading },
+  reviewDate: { fontFamily: fonts.bodyBold, fontSize: 10, color: colors.textSecondary },
   stars: { flexDirection: "row", gap: 1, paddingTop: 3 },
-  reviewText: { fontFamily: fonts.body, fontSize: 14, lineHeight: 22, color: "#4C4546", fontStyle: "italic" },
+  reviewText: { fontFamily: fonts.body, fontSize: 14, lineHeight: 22, color: colors.textSecondary, fontStyle: "italic" },
   moreReviewsBtn: {
     height: 44,
     borderRadius: radius.xl,
     borderWidth: 1,
-    borderColor: "#CFC4C5",
+    borderColor: colors.borderSubtle,
     alignItems: "center",
     justifyContent: "center",
     marginTop: -spacing.sm,
   },
-  moreReviewsText: { fontFamily: fonts.bodyBold, fontSize: 14, color: "#111827" },
+  moreReviewsText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.textHeading },
   availNowChip: { flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: "#dcfce7", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4, alignSelf: "flex-start", marginTop: 6 },
-  availNowDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: "#16a34a" },
-  availNowChipText: { fontFamily: fonts.bodyBold, fontSize: 11, color: "#16a34a" },
+  availNowDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: colors.success },
+  availNowChipText: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.success },
 
   stickyBar: {
     position: "absolute",
@@ -680,7 +680,7 @@ const s = StyleSheet.create({
     paddingTop: spacing.md,
     backgroundColor: "rgba(249,249,254,0.94)",
     borderTopWidth: 1,
-    borderTopColor: "#E8E8ED",
+    borderTopColor: colors.borderSubtle,
   },
   bookButton: {
     height: 56,
@@ -711,9 +711,9 @@ const s = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingTop: 20,
   },
-  sheetTitle:    { fontFamily: fonts.bodyBold, fontSize: 18, color: "#111827", marginBottom: 4 },
-  sheetSubtitle: { fontFamily: fonts.body,     fontSize: 13, color: "#6B7280", marginBottom: 20 },
-  fieldLabel:    { fontFamily: fonts.bodyBold, fontSize: 13, color: "#374151", marginBottom: 6, marginTop: 4 },
+  sheetTitle:    { fontFamily: fonts.bodyBold, fontSize: 18, color: colors.textHeading, marginBottom: 4 },
+  sheetSubtitle: { fontFamily: fonts.body,     fontSize: 13, color: colors.textSecondary, marginBottom: 20 },
+  fieldLabel:    { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.textSecondary, marginBottom: 6, marginTop: 4 },
   fieldInput: {
     borderWidth: 1,
     borderColor: "#D1D5DB",
@@ -721,7 +721,7 @@ const s = StyleSheet.create({
     padding: 12,
     fontFamily: fonts.body,
     fontSize: 14,
-    color: "#111827",
+    color: colors.textHeading,
     minHeight: 72,
     textAlignVertical: "top",
     marginBottom: 12,

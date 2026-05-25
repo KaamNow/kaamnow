@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>KaamNow Mobile — Batch 1 Redesign Preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ionicons@4.5.10-0/dist/css/ionicons.min.css" />
+<style>
+  :root{
+    --bg:#F9F9FE;
+    --surface:#FFFFFF;
+    --surface-muted:#F3F3F8;
+    --text:#1A1C1F;
+    --text-2:#5E5E60;
+    --text-3:#7E7576;
+    --border:#E2E2E7;
+    --primary:#000000;
+    --on-primary:#FFFFFF;
+    --accent:#3F37C9;
+    --accent-tint:#EEEDFE;
+    --success:#137A4A;
+    --success-bg:#E6F5EC;
+    --danger:#B42318;
+    --danger-bg:#FEE7E5;
+    --warning:#92400E;
+    --warning-bg:#FEF3C7;
+    --money:#137A4A;
+
+    --r-sm:8px;
+    --r-md:12px;
+    --r-lg:16px;
+    --r-xl:20px;
+    --r-xxl:28px;
+    --r-pill:999px;
+
+    --shadow-xs: 0 2px 8px rgba(11,11,20,.04);
+    --shadow-card: 0 2px 12px rgba(11,11,20,.05);
+    --shadow-sheet: 0 -4px 20px rgba(11,11,20,.10);
+  }
+  html,body{margin:0;background:#0E0E12;color:var(--text);font-family:'Plus Jakarta Sans',system-ui,sans-serif;-webkit-font-smoothing:antialiased;}
+  body{overflow:hidden;}
+  *{box-sizing:border-box;}
+
+  /* Phone-screen base */
+  .scr{
+    width:393px;height:850px;background:var(--bg);
+    overflow:hidden;position:relative;font-family:'Plus Jakarta Sans',system-ui,sans-serif;
+    color:var(--text);
+  }
+  .scr *{font-family:inherit;}
+
+  /* Top status bar */
+  .status{
+    height:28px;display:flex;align-items:center;justify-content:space-between;
+    padding:0 16px;font-size:13px;font-weight:600;color:var(--text);background:transparent;
+  }
+  .status .time{font-variant-numeric:tabular-nums;}
+  .status .right{display:flex;align-items:center;gap:6px;color:var(--text);}
+
+  /* Common atoms */
+  .row{display:flex;align-items:center;}
+  .between{justify-content:space-between;}
+  .gap-4{gap:4px;}.gap-6{gap:6px;}.gap-8{gap:8px;}.gap-10{gap:10px;}.gap-12{gap:12px;}.gap-16{gap:16px;}
+  .pad-16{padding:16px;}
+  .mb-8{margin-bottom:8px;}.mb-12{margin-bottom:12px;}.mb-16{margin-bottom:16px;}.mb-20{margin-bottom:20px;}.mb-24{margin-bottom:24px;}
+  .mt-8{margin-top:8px;}.mt-12{margin-top:12px;}.mt-16{margin-top:16px;}.mt-20{margin-top:20px;}.mt-24{margin-top:24px;}
+
+  .h1{font-size:22px;font-weight:700;line-height:1.2;color:var(--text);}
+  .h2{font-size:20px;font-weight:700;line-height:1.2;color:var(--text);}
+  .h3{font-size:18px;font-weight:700;line-height:1.2;color:var(--text);}
+  .h4{font-size:16px;font-weight:700;color:var(--text);}
+  .b{font-size:14px;color:var(--text);}
+  .sm{font-size:13px;color:var(--text-2);}
+  .meta{font-size:12px;color:var(--text-3);}
+  .label{font-size:11px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;color:var(--text-3);}
+
+  /* Card */
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow-xs);padding:16px;}
+
+  /* Button */
+  .btn{
+    min-height:48px;display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    padding:0 18px;border-radius:var(--r-md);font-weight:700;font-size:14px;
+    background:var(--primary);color:var(--on-primary);border:0;
+  }
+  .btn-lg{min-height:56px;font-size:16px;}
+  .btn-secondary{background:var(--surface-muted);color:var(--text);}
+  .btn-outline{background:var(--surface);color:var(--text);border:1px solid var(--border);}
+  .btn-danger{background:var(--danger-bg);color:var(--danger);}
+  .btn-block{width:100%;}
+
+  /* Chip */
+  .chip{
+    display:inline-flex;align-items:center;gap:6px;
+    min-height:32px;padding:6px 12px;border-radius:var(--r-pill);
+    background:var(--surface-muted);color:var(--text);font-size:13px;font-weight:700;
+  }
+  .chip.active{background:var(--primary);color:var(--on-primary);}
+  .chip.success{background:var(--success-bg);color:var(--success);}
+  .chip.danger{background:var(--danger-bg);color:var(--danger);font-size:10px;letter-spacing:0.6px;}
+  .chip.warn{background:var(--warning-bg);color:var(--warning);}
+
+  /* Status badge */
+  .badge{
+    display:inline-flex;align-items:center;gap:5px;
+    padding:4px 10px;border-radius:var(--r-pill);font-size:11px;font-weight:700;
+  }
+  .badge .dot{width:6px;height:6px;border-radius:50%;}
+  .badge.open{background:var(--success-bg);color:var(--success);}
+  .badge.open .dot{background:var(--success);}
+  .badge.pending{background:var(--warning-bg);color:var(--warning);}
+  .badge.pending .dot{background:var(--warning);}
+  .badge.accepted{background:var(--accent-tint);color:var(--accent);}
+  .badge.accepted .dot{background:var(--accent);}
+  .badge.done{background:var(--surface-muted);color:var(--text-2);}
+  .badge.done .dot{background:var(--text-3);}
+
+  /* Input */
+  .input{
+    min-height:52px;padding:14px 16px;border-radius:var(--r-md);background:var(--surface-muted);
+    border:0;color:var(--text);font-size:15px;width:100%;font-family:inherit;
+  }
+  .input::placeholder{color:var(--text-3);}
+
+  /* Search bar pill (Dashboard) */
+  .searchbar{
+    height:56px;background:var(--surface-muted);border-radius:var(--r-pill);
+    padding:0 20px;display:flex;align-items:center;gap:8px;
+  }
+  .searchbar input{flex:1;border:0;background:transparent;font-size:15px;outline:none;font-family:inherit;}
+  .searchbar input::placeholder{color:var(--text-3);}
+
+  /* Bottom tab bar */
+  .tabbar{
+    position:absolute;left:0;right:0;bottom:0;height:72px;background:var(--surface);
+    border-top:1px solid var(--border);
+    display:flex;align-items:flex-start;padding-top:8px;
+  }
+  .tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--text-3);font-size:10px;font-weight:600;}
+  .tab.active{color:var(--text);}
+  .tab i{font-size:20px;}
+  .tab.fab{margin-top:-22px;}
+  .tab.fab .fab-circle{
+    width:56px;height:56px;border-radius:28px;background:var(--primary);color:var(--on-primary);
+    display:flex;align-items:center;justify-content:center;box-shadow:0 8px 16px rgba(0,0,0,.18);
+  }
+  .tab.fab .fab-circle i{font-size:24px;}
+
+  /* Avatar */
+  .avatar{width:72px;height:72px;border-radius:var(--r-md);background:var(--primary);color:var(--on-primary);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:22px;flex-shrink:0;}
+  .avatar.sm{width:42px;height:42px;font-size:14px;border-radius:10px;}
+  .avatar.xs{width:32px;height:32px;font-size:12px;border-radius:9px;}
+  .avatar.bg-1{background:linear-gradient(135deg,#5b6a4a,#3d4836);}
+  .avatar.bg-2{background:linear-gradient(135deg,#7a4e2e,#5c3a22);}
+  .avatar.bg-3{background:linear-gradient(135deg,#3a4358,#1f2532);}
+  .avatar.bg-4{background:linear-gradient(135deg,#6b3c5a,#4a2840);}
+  .avatar.bg-5{background:linear-gradient(135deg,#3a5a4e,#1e3a32);}
+
+  /* Stars */
+  .star{color:#F59E0B;}
+
+  /* Scroll content area */
+  .body{padding:16px;padding-bottom:120px;overflow:hidden;}
+  .scroll{overflow-y:auto;}
+
+  /* Section spacing */
+  .section{margin-top:24px;}
+  .section .head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+
+  /* Verified shield */
+  .v-icon{width:16px;height:16px;border-radius:50%;background:var(--accent);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:9px;}
+
+  /* Top header (most non-dashboard screens) */
+  .top{
+    display:flex;align-items:center;gap:8px;padding:6px 16px 4px;background:var(--bg);
+  }
+  .top .back{width:44px;height:44px;border-radius:22px;display:flex;align-items:center;justify-content:center;margin-left:-8px;}
+  .top .title{font-size:22px;font-weight:700;}
+  .top .right-actions{margin-left:auto;display:flex;gap:8px;}
+
+  /* Sticky bottom */
+  .sticky{position:absolute;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--border);padding:14px 16px 18px;box-shadow:var(--shadow-sheet);}
+
+  /* Skeleton */
+  .skel{background:linear-gradient(90deg,#ececf2,#f7f7fc,#ececf2);background-size:200% 100%;animation:shimmer 1.4s linear infinite;border-radius:8px;}
+  @keyframes shimmer{0%{background-position:200% 0;}100%{background-position:-200% 0;}}
+
+  /* Dashboard hero cards */
+  .hero{flex:1;border-radius:14px;padding:18px;min-height:160px;display:flex;flex-direction:column;justify-content:space-between;}
+  .hero.dark{background:var(--primary);color:var(--on-primary);}
+  .hero.dark .icon{width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;}
+  .hero.dark .sub{color:rgba(255,255,255,.7);font-size:13px;line-height:1.4;}
+  .hero.light{background:var(--surface);border:1px solid var(--border);}
+  .hero.light .icon{width:44px;height:44px;border-radius:12px;background:var(--surface-muted);display:flex;align-items:center;justify-content:center;}
+  .hero .title{font-weight:700;font-size:18px;line-height:1.3;}
+  .hero .sub{font-size:13px;color:var(--text-2);}
+
+  /* Category card */
+  .catgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+  .cat{position:relative;border-radius:12px;height:120px;overflow:hidden;background:#3a3a44;color:#fff;}
+  .cat::after{content:"";position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.65),transparent 60%);}
+  .cat .lbl{position:absolute;left:12px;bottom:10px;font-weight:700;font-size:16px;z-index:2;text-shadow:0 1px 4px rgba(0,0,0,.5);}
+  .cat .ic{position:absolute;left:12px;bottom:34px;font-size:16px;z-index:2;color:#fff;}
+
+  /* Urgent job card */
+  .ujob{
+    background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;
+    box-shadow:var(--shadow-xs);
+  }
+  .ujob + .ujob{margin-top:12px;}
+
+  /* Worker card (Marketplace) */
+  .wcard{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:var(--shadow-xs);}
+  .wcard + .wcard{margin-top:12px;}
+  .wcard .top-row{display:flex;gap:12px;}
+  .wcard .info{flex:1;min-width:0;}
+  .wcard .name-row{display:flex;align-items:center;gap:6px;}
+  .wcard .name{font-weight:700;font-size:17px;color:var(--text);}
+  .wcard .meta-row{font-size:13px;color:var(--text-2);margin-top:2px;}
+  .wcard .rating-row{display:flex;align-items:center;gap:5px;margin-top:6px;font-size:13px;}
+  .wcard .loc-row{display:flex;align-items:center;gap:4px;margin-top:4px;color:var(--text-3);font-size:12px;}
+  .wcard .divider{height:1px;background:var(--border);margin:12px 0;}
+  .wcard .foot{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+  .wcard .price-block{flex:1;min-width:0;}
+  .wcard .starting{font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--text-3);font-weight:700;}
+  .wcard .price{font-size:18px;font-weight:700;color:var(--text);}
+  .wcard .actions{display:flex;gap:8px;flex-shrink:0;}
+  .wcard .actions .btn{min-height:44px;padding:0 14px;font-size:13px;}
+
+  /* Generic helpers */
+  .grow{flex:1;min-width:0;}
+  .shrink-0{flex-shrink:0;}
+  .ellipsis{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
+  /* WorkerProfile hero */
+  .wp-hero{height:140px;background:linear-gradient(135deg,#6b8156,#3e4b30);position:relative;}
+  .wp-hero .pill-verified{position:absolute;top:62px;right:16px;background:rgba(0,0,0,.45);color:#fff;padding:6px 10px;border-radius:999px;font-size:11px;font-weight:700;backdrop-filter:blur(8px);display:flex;align-items:center;gap:5px;}
+  .wp-identity{padding:0 16px;margin-top:-40px;position:relative;}
+  .wp-avatar-wrap{width:94px;height:94px;border-radius:50%;padding:4px;background:var(--bg);box-shadow:0 4px 14px rgba(11,11,20,.12);position:relative;}
+  .wp-avatar-wrap .avatar{width:86px;height:86px;border-radius:50%;font-size:28px;}
+  .wp-online{position:absolute;bottom:4px;right:4px;width:18px;height:18px;border-radius:50%;background:var(--success);border:3px solid var(--bg);}
+  .wp-stats{display:flex;gap:12px;padding:0 16px;margin-top:12px;}
+  .wp-stat{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;text-align:center;}
+
+  /* PostJob counter */
+  .counter{display:flex;align-items:center;background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;}
+  .counter button{flex-shrink:0;width:56px;height:56px;background:var(--surface-muted);border:0;color:var(--text);font-size:18px;font-weight:700;}
+  .counter .val{flex:1;text-align:center;font-size:28px;font-weight:800;color:var(--text);}
+
+  /* Activity tab list */
+  .act-tabs{display:flex;gap:6px;padding:8px 16px 4px;}
+  .act-tab{flex:1;text-align:center;padding:10px 8px;border-radius:var(--r-pill);background:var(--surface);font-size:13px;font-weight:700;color:var(--text-2);border:1px solid var(--border);}
+  .act-tab.active{background:var(--primary);color:var(--on-primary);border-color:var(--primary);}
+
+  .act-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:var(--shadow-xs);margin-bottom:12px;}
+  .act-card .head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:10px;}
+
+  /* Profile screen hero */
+  .pf-hero{background:var(--primary);color:var(--on-primary);padding:20px 24px 36px;display:flex;flex-direction:column;align-items:center;text-align:center;position:relative;}
+  .pf-hero .top-bar{position:absolute;left:0;right:0;top:0;display:flex;justify-content:space-between;padding:8px 16px;}
+  .pf-hero .avatar{width:96px;height:96px;border-radius:48px;background:#1f1f24;font-size:32px;margin-top:32px;}
+  .pf-hero .name{font-size:24px;font-weight:700;margin-top:14px;}
+  .pf-hero .phone{font-size:14px;color:rgba(255,255,255,.6);margin-top:4px;}
+  .pf-hero .tier{margin-top:10px;padding:5px 14px;border-radius:999px;background:rgba(255,255,255,.18);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;}
+
+  /* JobDetail title card */
+  .jd-title-card{background:var(--surface);border-radius:16px;padding:20px;box-shadow:var(--shadow-card);border:1px solid var(--border);}
+
+  /* Apply sticky */
+  .apply-bar{background:var(--surface);border-top:1px solid var(--border);padding:14px 16px 18px;}
+
+  /* Step indicator (PostJob) */
+  .steps{display:flex;align-items:center;gap:6px;padding:0 16px;margin-bottom:24px;}
+  .steps .step{height:6px;flex:1;border-radius:3px;background:var(--surface-muted);}
+  .steps .step.active{background:var(--primary);}
+
+  /* Settings row */
+  .set-row{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--surface);border-radius:14px;border:1px solid var(--border);margin-bottom:8px;}
+  .set-row .left{display:flex;align-items:center;gap:12px;}
+  .set-icon{width:36px;height:36px;border-radius:10px;background:var(--surface-muted);display:flex;align-items:center;justify-content:center;color:var(--text);}
+
+  /* Card title for sections */
+  .ctitle{font-size:11px;font-weight:700;letter-spacing:1.4px;text-transform:uppercase;color:var(--text-3);margin-bottom:10px;}
+
+  /* "FAB chat" overlay */
+  .chat-fab{position:absolute;right:18px;bottom:90px;width:56px;height:56px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 8px 16px rgba(0,0,0,.18);}
+
+  /* Layout-control panel */
+  #toolbar{
+    position:fixed;top:12px;left:12px;z-index:50;background:rgba(20,20,28,.92);
+    color:#e4e4e8;padding:10px 14px;border-radius:12px;font-size:12px;
+    display:flex;gap:14px;align-items:center;backdrop-filter:blur(8px);
+    border:1px solid rgba(255,255,255,.08);font-family:'Plus Jakarta Sans',sans-serif;
+  }
+  #toolbar b{color:#fff;}
+  #toolbar .kbd{padding:2px 6px;border-radius:5px;background:rgba(255,255,255,.1);font-family:'Plus Jakarta Sans',ui-monospace;font-size:11px;}
+
+  /* Bottom nav assumption */
+  .nav-pad{height:84px;}
+</style>
+</head>
+<body>
+<div id="toolbar">
+  <b>KaamNow Mobile · Batch 1 Redesign</b>
+  <span>8 screens · 393×850 (Pixel-class) · Plus Jakarta Sans</span>
+  <span style="opacity:.55;">drag to pan · scroll to zoom</span>
+</div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="screens.jsx"></script>
+<script type="text/babel">
+  const { DesignCanvas, DCSection, DCArtboard } = window;
+
+  function App() {
+    return (
+      <DesignCanvas title="">
+        <DCSection id="user-flow" title="User-to-user flow">
+          <DCArtboard id="dashboard" label="01 · Dashboard" width={393} height={850}>
+            <window.DashboardScreen/>
+          </DCArtboard>
+          <DCArtboard id="marketplace" label="02 · Marketplace (Find Experts)" width={393} height={850}>
+            <window.MarketplaceScreen/>
+          </DCArtboard>
+          <DCArtboard id="workerprofile" label="03 · Worker Profile" width={393} height={850}>
+            <window.WorkerProfileScreen/>
+          </DCArtboard>
+          <DCArtboard id="findwork" label="04 · Find Work (Worker side)" width={393} height={850}>
+            <window.FindWorkScreen/>
+          </DCArtboard>
+          <DCArtboard id="postjob" label="05 · Post Job" width={393} height={850}>
+            <window.PostJobScreen/>
+          </DCArtboard>
+          <DCArtboard id="activity" label="06 · Activity" width={393} height={850}>
+            <window.ActivityScreen/>
+          </DCArtboard>
+          <DCArtboard id="jobdetail" label="07 · Job Detail" width={393} height={850}>
+            <window.JobDetailScreen/>
+          </DCArtboard>
+          <DCArtboard id="profile" label="08 · Profile (mine)" width={393} height={850}>
+            <window.ProfileScreen/>
+          </DCArtboard>
+        </DCSection>
+        <DCSection id="system" title="Design system at a glance">
+          <DCArtboard id="tokens" label="Tokens · color · type · spacing" width={1100} height={850}>
+            <window.TokensSheet/>
+          </DCArtboard>
+        </DCSection>
+      </DesignCanvas>
+    );
+  }
+
+  ReactDOM.createRoot(document.body.appendChild(document.createElement("div"))).render(<App/>);
+</script>
+</body>
+</html>

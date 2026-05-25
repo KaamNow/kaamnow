@@ -185,7 +185,7 @@ export default function AddressFormScreen({ navigation, route }) {
 
           {/* Pincode */}
           <Text style={S.sectionLabel}>
-            PINCODE <Text style={{ color: "#DC2626" }}>*</Text>
+            PINCODE <Text style={{ color: colors.danger }}>*</Text>
           </Text>
           <View style={S.inputRow}>
             <View style={[S.input, S.inputWithIcon, { flex: 1 }]}>
@@ -201,12 +201,12 @@ export default function AddressFormScreen({ navigation, route }) {
                 returnKeyType="done"
               />
               {pinStatus === "loading" && <ActivityIndicator size="small" color={colors.primary} />}
-              {pinStatus === "success" && <Ionicons name="checkmark-circle" size={18} color="#059669" />}
+              {pinStatus === "success" && <Ionicons name="checkmark-circle" size={18} color={colors.success} />}
             </View>
             <TouchableOpacity style={S.gpsBtn} onPress={useGPS} disabled={gpsLoading}>
               {gpsLoading
-                ? <ActivityIndicator size="small" color={colors.primary} />
-                : <Ionicons name="locate-outline" size={18} color={colors.primary} />
+                ? <ActivityIndicator size="small" color={colors.onPrimary} />
+                : <Ionicons name="locate-outline" size={20} color={colors.onPrimary} />
               }
             </TouchableOpacity>
           </View>
@@ -215,7 +215,7 @@ export default function AddressFormScreen({ navigation, route }) {
           {/* Auto-filled location */}
           {(village || district || state) && (
             <View style={S.locationCard}>
-              <Ionicons name="location" size={16} color="#059669" />
+              <Ionicons name="location" size={16} color={colors.success} />
               <Text style={S.locationText}>
                 {[village, district, state].filter(Boolean).join(", ")}
               </Text>
@@ -246,7 +246,7 @@ export default function AddressFormScreen({ navigation, route }) {
             <Switch
               value={isDefault}
               onValueChange={setIsDefault}
-              trackColor={{ false: colors.borderSubtle, true: "#059669" }}
+              trackColor={{ false: colors.borderSubtle, true: colors.success }}
               thumbColor="#fff"
             />
           </View>
@@ -258,20 +258,20 @@ export default function AddressFormScreen({ navigation, route }) {
 }
 
 const S = StyleSheet.create({
-  safe:   { flex: 1, backgroundColor: "#f9f9fe" },
+  safe:   { flex: 1, backgroundColor: colors.bg },
 
   header: {
     flexDirection: "row", alignItems: "center", gap: 10,
-    paddingHorizontal: 20, paddingVertical: 14,
+    paddingHorizontal: spacing.md, paddingVertical: 10,
     backgroundColor: "#ffffff",
-    borderBottomWidth: 1, borderBottomColor: "#e8e8ed",
+    borderBottomWidth: 1, borderBottomColor: colors.borderSubtle,
   },
-  headerBack:  { width: 36, height: 36, borderRadius: 18, backgroundColor: "#f0f0f5", alignItems: "center", justifyContent: "center" },
+  headerBack:  { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
   headerTitle: { flex: 1, fontFamily: fonts.headlineSm, fontSize: 18, color: colors.textHeading },
   saveBtn:     { backgroundColor: colors.primary, borderRadius: 20, paddingHorizontal: 18, paddingVertical: 8 },
   saveBtnText: { fontFamily: fonts.bodyBold, fontSize: 14, color: "#fff" },
 
-  scroll: { paddingHorizontal: 20, paddingTop: 24 },
+  scroll: { paddingHorizontal: spacing.md, paddingTop: 8 },
 
   sectionLabel: { fontFamily: fonts.bodyBold, fontSize: 10, color: colors.outline, letterSpacing: 1.5, marginBottom: 10, marginTop: 20 },
 
@@ -279,45 +279,45 @@ const S = StyleSheet.create({
   labelChip: {
     flexDirection: "row", alignItems: "center", gap: 5,
     paddingHorizontal: 14, paddingVertical: 10,
-    borderRadius: 20, borderWidth: 1.5, borderColor: "#e8e8ed",
-    backgroundColor: "#ffffff", ...shadow.xs,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.surface,
   },
   labelChipActive:     { backgroundColor: colors.primary, borderColor: colors.primary },
   labelChipText:       { fontFamily: fonts.bodySemi, fontSize: 13, color: colors.outline },
   labelChipTextActive: { color: "#ffffff" },
 
   input: {
-    backgroundColor: "#ffffff", borderRadius: 14,
-    borderWidth: 1, borderColor: "#e8e8ed",
+    backgroundColor: colors.surface, borderRadius: radius.md,
+    borderWidth: 0,
     paddingHorizontal: 14, paddingVertical: 13,
     fontFamily: fonts.body, fontSize: 15, color: colors.textHeading,
-    ...shadow.xs,
   },
   inputRow:     { flexDirection: "row", gap: 10, alignItems: "center" },
   inputWithIcon:{ flexDirection: "row", alignItems: "center", gap: 8 },
   innerInput:   { flex: 1, fontFamily: fonts.body, fontSize: 15, color: colors.textHeading },
 
   gpsBtn: {
-    width: 50, height: 50, borderRadius: 14, backgroundColor: "#dae2fd",
-    borderWidth: 1, borderColor: "#c0cef8",
+    width: 52, height: 52, borderRadius: radius.md, backgroundColor: colors.primary,
     alignItems: "center", justifyContent: "center",
   },
 
-  errorText:    { fontFamily: fonts.body, fontSize: 12, color: "#DC2626", marginTop: 4 },
+  errorText:    { fontFamily: fonts.body, fontSize: 12, color: colors.danger, marginTop: 4 },
 
   locationCard: {
     flexDirection: "row", alignItems: "center", gap: 8,
-    backgroundColor: "#ECFDF5", borderRadius: 12, padding: 12, marginTop: 8,
+    backgroundColor: colors.successLight, borderRadius: 12, padding: 12, marginTop: 8,
   },
-  locationText: { flex: 1, fontFamily: fonts.bodySemi, fontSize: 13, color: "#059669" },
+  locationText: { flex: 1, fontFamily: fonts.bodySemi, fontSize: 13, color: colors.success },
 
   defaultRow: {
     flexDirection: "row", alignItems: "center", gap: 14,
     backgroundColor: "#ffffff", borderRadius: 16,
-    borderWidth: 1, borderColor: "#e8e8ed",
+    borderWidth: 1, borderColor: colors.borderSubtle,
     padding: 16, marginTop: 24, ...shadow.xs,
   },
-  defaultIcon:  { width: 40, height: 40, borderRadius: 12, backgroundColor: "#f0f0f5", alignItems: "center", justifyContent: "center" },
+  defaultIcon:  { width: 40, height: 40, borderRadius: 12, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
   defaultLabel: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.textHeading },
   defaultSub:   { fontFamily: fonts.body, fontSize: 12, color: colors.outline, marginTop: 2 },
 });

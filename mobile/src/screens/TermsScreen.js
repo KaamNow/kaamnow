@@ -49,6 +49,7 @@ export default function TermsScreen({ route, navigation }) {
         {doc ? (
           <>
             <Text style={styles.version}>{t("legal_version")} {doc.version} · {doc.effective_date}</Text>
+            <Text style={styles.title}>Terms of Service</Text>
             <Text style={styles.body}>{content}</Text>
           </>
         ) : (
@@ -70,10 +71,11 @@ export default function TermsScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: colors.bg },
   center:    { flex: 1, justifyContent: "center", alignItems: "center" },
-  version:   { fontFamily: fonts.body, fontSize: 12, color: colors.outline, marginBottom: spacing.md },
-  body:      { fontFamily: fonts.body, fontSize: 14, color: colors.textHeading, lineHeight: 22 },
+  version:   { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.textMuted, marginBottom: spacing.md, letterSpacing: 0.8, textTransform: "uppercase" },
+  title:     { fontFamily: fonts.bodyBold, fontSize: 24, color: colors.textHeading, marginBottom: spacing.md, letterSpacing: -0.2 },
+  body:      { fontFamily: fonts.body, fontSize: 15, color: colors.textHeading, lineHeight: 24 },
 
   acceptBar: {
     position: "absolute", bottom: 0, left: 0, right: 0,
@@ -81,7 +83,7 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm, paddingHorizontal: spacing.md,
   },
   acceptBtn: {
-    backgroundColor: colors.primary, borderRadius: radius.xxl, paddingVertical: 14, alignItems: "center",
+    backgroundColor: colors.primary, borderRadius: radius.md, paddingVertical: 16, alignItems: "center", justifyContent: "center", minHeight: 52,
   },
-  acceptBtnText: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.onPrimary },
+  acceptBtnText: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.onPrimary },
 });

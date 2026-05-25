@@ -15,7 +15,6 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import AppScreen from "../components/AppScreen";
 import EmptyState from "../components/EmptyState";
 import JobCard from "../components/JobCard";
@@ -29,7 +28,6 @@ import { useLanguage } from "../contexts/LanguageContext";
 import { colors, fonts, radius, shadow, spacing } from "../theme";
 
 const INDIGO = colors.primary;
-const INDIGO_DARK = colors.primaryDark;
 
 const CATEGORIES = [
   { v: "", l: { en: "All", hi: "सभी" }, icon: "briefcase-outline" },
@@ -176,7 +174,7 @@ export default function WorkerJobFeedScreen({ navigation }) {
           </Pressable>
         )}
         <View style={styles.header}>
-          <LinearGradient colors={[INDIGO, INDIGO_DARK]} start={{ x:0,y:0 }} end={{ x:1,y:1 }} style={styles.topBar}>
+          <View style={styles.topBar}>
             <View>
               <Text style={styles.overline}>FIND JOBS</Text>
               <Text style={styles.screenTitle}>Job Board</Text>
@@ -187,7 +185,7 @@ export default function WorkerJobFeedScreen({ navigation }) {
                 <Text style={styles.resetPillText}>Reset</Text>
               </Pressable>
             )}
-          </LinearGradient>
+          </View>
 
           <LocationBar
             pincode={applied.pincode || pincode || workerPincode}
@@ -392,7 +390,7 @@ export default function WorkerJobFeedScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background },
+  safe: { flex: 1, backgroundColor: colors.bg },
   becomeExpertBanner: {
     flexDirection: "row", alignItems: "center",
     backgroundColor: colors.primary, paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
@@ -403,6 +401,7 @@ const styles = StyleSheet.create({
   header: { borderBottomWidth: 1, borderBottomColor: colors.borderSubtle },
   topBar: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    backgroundColor: colors.primary,
     paddingHorizontal: spacing.lg, paddingTop: 14, paddingBottom: 16,
   },
   overline:    { fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1.5, color: "rgba(255,255,255,0.6)" },

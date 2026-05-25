@@ -204,7 +204,7 @@ export default function LoginScreen() {
           <Pressable onPress={goBack} style={s.backBtn} hitSlop={12}>
             <Ionicons name="arrow-back" size={22} color="rgba(255,255,255,0.9)" />
           </Pressable>
-          <Text style={s.brand}>KaamNow</Text>
+          <Text style={s.brand}>KAAMNOW</Text>
           <Text style={s.topTitle}>{topTitle}</Text>
           <Text style={s.topSub}>{topSub}</Text>
         </View>
@@ -249,17 +249,18 @@ export default function LoginScreen() {
           {/* Step 2 — OTP */}
           {step === 2 && (
             <>
-              {requiresOptin && (
-                <Pressable style={s.optinBanner}
-                  onPress={() => Linking.openURL("https://wa.me/917834811114?text=Hi")}>
-                  <Ionicons name="logo-whatsapp" size={18} color="#25D366" />
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.optinTitle}>{t.otpOptinTitle}</Text>
-                    <Text style={s.optinSub}>{t.otpOptinSub}</Text>
-                  </View>
-                  <Text style={s.optinCta}>{t.otpOptinOpen}</Text>
-                </Pressable>
-              )}
+              <Pressable
+                style={s.optinBanner}
+                onPress={() => Linking.openURL("https://wa.me/917834811114?text=Hi")}
+                disabled={!requiresOptin}
+              >
+                <Ionicons name="logo-whatsapp" size={18} color="#25D366" />
+                <View style={{ flex: 1 }}>
+                  <Text style={s.optinTitle}>{t.otpOptinTitle}</Text>
+                  <Text style={s.optinSub}>{requiresOptin ? t.otpOptinSub : "Check WhatsApp for your secure 6-digit login code."}</Text>
+                </View>
+                {requiresOptin ? <Text style={s.optinCta}>{t.otpOptinOpen}</Text> : null}
+              </Pressable>
 
               <View style={s.otpRow}>
                 {Array.from({ length: 6 }).map((_, i) => (
@@ -353,9 +354,9 @@ const s = StyleSheet.create({
     backgroundColor: INDIGO,
     paddingHorizontal: 24, paddingTop: 8, paddingBottom: 32,
   },
-  backBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center", marginBottom: 16 },
+  backBtn: { width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", marginBottom: 16, marginLeft: -8 },
   brand:    { fontFamily: fonts.bodyBold, fontSize: 13, color: "rgba(255,255,255,0.5)", marginBottom: 12, letterSpacing: 1 },
-  topTitle: { fontFamily: fonts.display, fontSize: 30, color: colors.onPrimary, letterSpacing: -0.5, marginBottom: 6 },
+  topTitle: { fontFamily: fonts.bodyBold, fontSize: 28, color: colors.onPrimary, letterSpacing: -0.5, marginBottom: 8 },
   topSub:   { fontFamily: fonts.body, fontSize: 15, color: "rgba(255,255,255,0.65)", lineHeight: 22 },
 
   card: {
@@ -367,67 +368,67 @@ const s = StyleSheet.create({
   /* Phone input */
   phoneRow: {
     flexDirection: "row", alignItems: "center",
-    borderWidth: 1.5, borderColor: colors.borderSubtle,
-    borderRadius: radius.xxl, overflow: "hidden", marginBottom: 8,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md, overflow: "hidden", marginBottom: 8, minHeight: 56,
   },
   countryCode: {
-    paddingHorizontal: 14, paddingVertical: 17,
-    backgroundColor: colors.surfaceContainerLow,
-    borderRightWidth: 1.5, borderRightColor: colors.borderSubtle,
+    paddingHorizontal: 16, paddingVertical: 16,
+    alignItems: "center", justifyContent: "center",
   },
   countryCodeTxt: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.textHeading },
   phoneInput: {
-    flex: 1, paddingHorizontal: 14, paddingVertical: 17,
-    fontFamily: fonts.body, fontSize: 17, color: colors.textHeading, letterSpacing: 1,
+    flex: 1, paddingHorizontal: 6, paddingVertical: 16,
+    fontFamily: fonts.bodySemi, fontSize: 17, color: colors.textHeading, letterSpacing: 1.5,
   },
 
-  hint: { fontFamily: fonts.body, fontSize: 13, color: colors.outline, marginBottom: 20 },
+  hint: { fontFamily: fonts.body, fontSize: 13, color: colors.textMuted, marginBottom: 24 },
 
   /* OTP */
-  otpRow:       { flexDirection: "row", justifyContent: "space-between", gap: 8, marginBottom: 10 },
-  otpBox:       { flex: 1, height: 58, maxWidth: 50, backgroundColor: colors.surfaceContainerLow, borderWidth: 1.5, borderColor: colors.borderSubtle, borderRadius: 12, textAlign: "center", fontFamily: fonts.display, fontSize: 22, color: colors.textHeading },
-  otpBoxFocused:{ borderColor: INDIGO, backgroundColor: colors.primaryFixed },
-  otpBoxFilled: { borderColor: INDIGO },
+  otpRow:       { flexDirection: "row", justifyContent: "space-between", gap: 8, marginBottom: 14 },
+  otpBox:       { flex: 1, height: 58, maxWidth: 52, backgroundColor: colors.surface, borderWidth: 1, borderColor: "transparent", borderRadius: radius.md, textAlign: "center", fontFamily: fonts.bodyBold, fontSize: 22, color: colors.textHeading },
+  otpBoxFocused:{ borderColor: INDIGO, backgroundColor: colors.surfaceCard },
+  otpBoxFilled: { borderColor: INDIGO, backgroundColor: colors.surfaceCard },
 
   /* Name / gender */
   fieldLabel: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.textBody, marginBottom: 8 },
   textInput: {
-    borderWidth: 1.5, borderColor: colors.borderSubtle, borderRadius: radius.xxl,
-    paddingVertical: 16, paddingHorizontal: 16,
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    paddingVertical: 16, paddingHorizontal: 16, minHeight: 52,
     fontFamily: fonts.body, fontSize: 16, color: colors.textHeading, marginBottom: 4,
   },
   genderRow: { flexDirection: "row", gap: 8, marginBottom: 24 },
-  genderBtn: { flex: 1, paddingVertical: 12, borderRadius: 12, borderWidth: 1.5, borderColor: colors.borderSubtle, alignItems: "center", backgroundColor: colors.surfaceCard },
-  genderBtnOn: { borderColor: INDIGO, backgroundColor: colors.primaryFixed },
-  genderBtnTxt: { fontFamily: fonts.body, fontSize: 14, color: colors.outline },
-  genderBtnTxtOn: { fontFamily: fonts.bodyBold, color: INDIGO },
+  genderBtn: { flex: 1, paddingVertical: 14, borderRadius: radius.md, alignItems: "center", backgroundColor: colors.surface, minHeight: 48 },
+  genderBtnOn: { backgroundColor: INDIGO },
+  genderBtnTxt: { fontFamily: fonts.bodySemi, fontSize: 14, color: colors.textHeading },
+  genderBtnTxtOn: { fontFamily: fonts.bodyBold, color: colors.onPrimary },
 
   /* CTA */
   primaryBtn: {
-    backgroundColor: INDIGO, borderRadius: 16,
-    paddingVertical: 19, alignItems: "center", marginTop: 4,
+    backgroundColor: INDIGO, borderRadius: radius.md,
+    paddingVertical: 18, alignItems: "center", justifyContent: "center", marginTop: 4, minHeight: 56,
   },
   btnDisabled:   { opacity: 0.4 },
-  primaryBtnTxt: { fontFamily: fonts.bodyBold, fontSize: 17, color: colors.onPrimary },
+  primaryBtnTxt: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.onPrimary },
 
-  switchRow: { flexDirection: "row", justifyContent: "center", marginTop: 20 },
-  switchTxt:  { fontFamily: fonts.bodySemi, fontSize: 15, color: colors.textBody },
-  switchLink: { fontFamily: fonts.bodyBold, fontSize: 15, color: INDIGO },
+  switchRow: { flexDirection: "row", justifyContent: "center", marginTop: 24 },
+  switchTxt:  { fontFamily: fonts.body, fontSize: 14, color: colors.textSecondary },
+  switchLink: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.textHeading, textDecorationLine: "underline" },
 
   /* Opt-in banner */
-  optinBanner: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#F0FDF4", borderRadius: 12, borderWidth: 1, borderColor: "#BBF7D0", padding: 12, marginBottom: 16 },
-  optinTitle:  { fontFamily: fonts.bodyBold, fontSize: 13, color: "#166534" },
-  optinSub:    { fontFamily: fonts.body, fontSize: 12, color: colors.textBody, marginTop: 2 },
-  optinCta:    { fontFamily: fonts.bodyBold, fontSize: 12, color: "#166534" },
+  optinBanner: { flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: colors.successLight, borderRadius: 12, padding: 12, marginBottom: 18 },
+  optinTitle:  { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.success },
+  optinSub:    { fontFamily: fonts.body, fontSize: 12, color: colors.textSecondary, marginTop: 2 },
+  optinCta:    { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.success },
 
   /* Modal */
-  modalBg:      { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", alignItems: "center", justifyContent: "center", padding: 24 },
+  modalBg:      { flex: 1, backgroundColor: colors.overlay, alignItems: "center", justifyContent: "center", padding: 24 },
   modalCard:    { backgroundColor: colors.surfaceCard, borderRadius: 24, padding: 28, width: "100%", alignItems: "center", gap: 10 },
-  modalIcon:    { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.primaryFixed, alignItems: "center", justifyContent: "center", marginBottom: 4 },
-  modalTitle:   { fontFamily: fonts.display, fontSize: 20, color: colors.textHeading, textAlign: "center" },
-  modalBody:    { fontFamily: fonts.body, fontSize: 14, color: colors.textBody, textAlign: "center", lineHeight: 20, marginBottom: 4 },
-  modalBtn:     { backgroundColor: INDIGO, borderRadius: radius.xxl, paddingVertical: 15, paddingHorizontal: 32, alignItems: "center", width: "100%" },
+  modalIcon:    { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", marginBottom: 4 },
+  modalTitle:   { fontFamily: fonts.bodyBold, fontSize: 20, color: colors.textHeading, textAlign: "center" },
+  modalBody:    { fontFamily: fonts.body, fontSize: 14, color: colors.textSecondary, textAlign: "center", lineHeight: 20, marginBottom: 4 },
+  modalBtn:     { backgroundColor: INDIGO, borderRadius: radius.md, paddingVertical: 16, paddingHorizontal: 32, alignItems: "center", justifyContent: "center", width: "100%", minHeight: 52 },
   modalBtnTxt:  { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.onPrimary },
   modalCancel:  { marginTop: 4 },
-  modalCancelTxt:{ fontFamily: fonts.bodySemi, fontSize: 14, color: colors.outline },
+  modalCancelTxt:{ fontFamily: fonts.bodySemi, fontSize: 14, color: colors.textMuted },
 });

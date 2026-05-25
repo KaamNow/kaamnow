@@ -1,0 +1,898 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { Ionicons } from "@expo/vector-icons";
+import api, { formatApiError } from "../api";
+import { useAuth } from "../contexts/AuthContext";
+import { useLanguage } from "../contexts/LanguageContext";
+import { useLocationContext } from "../contexts/LocationContext";
+import LocationPickerSheet from "../components/LocationPickerSheet";
+import { colors, fonts, shadow, spacing } from "../theme";
+
+const CATEGORIES = [
+  { v: "", label: "All Jobs", icon: "briefcase-outline" },
+  { v: "construction", label: "Mason", icon: "construct-outline" },
+  { v: "farm", label: "Farm", icon: "leaf-outline" },
+  { v: "electrical", label: "Electrician", icon: "flash-outline" },
+  { v: "cleaning", label: "Cleaning", icon: "sparkles-outline" },
+  { v: "transport", label: "Driver", icon: "car-outline" },
+  { v: "home", label: "Home", icon: "home-outline" },
+  { v: "other", label: "Other", icon: "cube-outline" },
+];
+
+// Maps Hindi/regional search terms → English equivalents for search expansion
+const SEARCH_SYNONYMS = {
+  safai: ["cleaning", "cleaner"], "सफाई": ["cleaning", "cleaner"],
+  rangai: ["painting", "painter"], rang: ["painting", "painter"],
+  "रंगाई": ["painting", "painter"],
+  bijli: ["electrical", "electrician"], "बिजली": ["electrical", "electrician"],
+  nali: ["plumbing", "plumber"], "नाली": ["plumbing", "plumber"],
+  mistri: ["mason", "construction"], "मिस्त्री": ["mason", "construction"],
+  barhai: ["carpenter", "carpentry"], "बढ़ई": ["carpenter", "carpentry"],
+  darzi: ["tailor", "tailoring"], "दर्जी": ["tailor", "tailoring"],
+  dhobi: ["laundry", "washing"], "धोबी": ["laundry", "washing"],
+  mali: ["gardener", "gardening"], "माली": ["gardener", "gardening"],
+  kisan: ["farm", "farmer", "farming"], kheti: ["farm", "farmer", "farming"],
+  "किसान": ["farm", "farmer"], "खेती": ["farm", "farming"],
+  chalak: ["driver", "transport"], "चालक": ["driver", "transport"],
+  rasoia: ["cook", "cooking"], "रसोइया": ["cook", "cooking"],
+  mazdoor: ["labour", "labourer"], "मजदूर": ["labour", "labourer"],
+  chowkidar: ["security", "guard"], "चौकीदार": ["security", "guard"],
+  welder: ["welding", "welder"], weldar: ["welding", "welder"],
+  painting: ["painter", "painting"],
+  plumbing: ["plumber", "plumbing"],
+  electrical: ["electrician", "electrical"],
+  carpentry: ["carpenter", "carpentry"],
+};
+
+function timeAgo(iso) {
+  if (!iso) return "";
+  const diff = Date.now() - new Date(iso).getTime();
+  if (Number.isNaN(diff)) return "";
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return days === 1 ? "1d ago" : `${days}d ago`;
+}
+
+function pretty(value) {
+  if (!value) return "";
+  return String(value).replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
+}
+
+function jobSkills(job) {
+  const required = Array.isArray(job.required_skills) ? job.required_skills : [];
+  const fromRequired = required.map((s) => s?.skill || s?.category).filter(Boolean);
+  const direct = [
+    ...(Array.isArray(job.skills_required) ? job.skills_required : []),
+    ...(Array.isArray(job.skills) ? job.skills : []),
+  ];
+  return [...new Set([...fromRequired, ...direct].filter(Boolean))];
+}
+
+function locationText(job) {
+  const address = job.address || {};
+  return [
+    job.village || address.village || job.location_text,
+    job.pincode || address.pincode,
+  ].filter(Boolean).join(" · ");
+}
+
+function payText(job) {
+  if (job.budget_min) {
+    return {
+      amount: `₹${job.budget_min}${job.budget_max ? `-${job.budget_max}` : ""}`,
+      unit: job.budget_type === "hourly" ? "/ HR" : "TOTAL",
+    };
+  }
+  if (job.daily_rate) return { amount: `₹${job.daily_rate}`, unit: "/ DAY" };
+  return { amount: "Ask", unit: "PRICE" };
+}
+
+export default function FindWorkScreen({ navigation }) {
+  const { user, refreshUser } = useAuth();
+  const { lang } = useLanguage();
+  const { location } = useLocationContext();
+  const insets = useSafeAreaInsets();
+  const inputRef = useRef(null);
+
+  const [jobs, setJobs] = useState([]);
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [query, setQuery] = useState("");
+  const [category, setCategory] = useState("");
+  const [skills, setSkills] = useState("");
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [locPickerVisible, setLocPickerVisible] = useState(false);
+  const [draftCategory, setDraftCategory] = useState("");
+  const [draftSkills, setDraftSkills] = useState("");
+
+  const load = useCallback(async () => {
+    const params = {};
+    const locPincode = location?.pincode || "";
+    if (locPincode.length === 6) params.pincode = locPincode;
+    if (category) params.category = category;
+    if (skills.trim()) params.skills = skills.trim();
+
+    try {
+      const [jobRes, mineRes] = await Promise.all([
+        api.get("/jobs/feed", { params }).catch(() => api.get("/jobs/public", { params })),
+        user ? api.get("/work-requests/mine").catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
+      ]);
+      setJobs(Array.isArray(jobRes.data) ? jobRes.data : []);
+      setRequests(Array.isArray(mineRes.data) ? mineRes.data : []);
+    } catch (err) {
+      Alert.alert("Error", formatApiError(err));
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [category, location, skills, user]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const [aiExpandedTerms, setAiExpandedTerms] = useState([]);
+
+  // When query changes, resolve unknown terms via AI
+  useEffect(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) { setAiExpandedTerms([]); return; }
+    const localSynonyms = SEARCH_SYNONYMS[q];
+    if (localSynonyms) { setAiExpandedTerms([]); return; } // local map handled it
+    let cancelled = false;
+    api.get("/ai/resolve-skill", { params: { q } })
+      .then(r => { if (!cancelled && r.data?.resolved) setAiExpandedTerms([r.data.skill]); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [query]);
+
+  const visibleJobs = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return jobs;
+    const localSynonyms = SEARCH_SYNONYMS[q] || [];
+    const terms = [q, ...localSynonyms.map(s => s.toLowerCase()), ...aiExpandedTerms];
+    return jobs.filter((job) => {
+      const haystack = [
+        job.title,
+        job.description,
+        job.category,
+        locationText(job),
+        ...jobSkills(job),
+      ].filter(Boolean).join(" ").toLowerCase();
+      return terms.some(t => haystack.includes(t));
+    });
+  }, [jobs, query, aiExpandedTerms]);
+
+  const requestFor = (jobId) =>
+    requests.find((r) => r.job_id === jobId && ["requested", "accepted"].includes(r.status));
+
+  const apply = async (jobId) => {
+    if (!user) {
+      Alert.alert(
+        lang === "hi" ? "Login जरूरी है" : "Login required",
+        lang === "hi" ? "Apply karne ke liye login karo." : "Sign in to apply for this job.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Login", onPress: () => navigation.navigate("Login") },
+        ],
+      );
+      return;
+    }
+    try {
+      await api.post("/work-requests", { job_id: jobId, request_type: "job_application" });
+      Alert.alert("Request sent", "The job poster will review your application.");
+      load();
+    } catch (err) {
+      const detail = err?.response?.data?.detail || "";
+      if (detail.toLowerCase().includes("service profile")) {
+        Alert.alert(
+          "Create Service Profile",
+          "Create your service profile first to apply to jobs.",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Create Profile", onPress: () => navigation.navigate("BecomeExpert") },
+          ],
+        );
+      } else {
+        Alert.alert("Error", formatApiError(err));
+      }
+    }
+  };
+
+  const withdraw = (requestId) => {
+    Alert.alert("Withdraw?", "", [
+      { text: "No", style: "cancel" },
+      {
+        text: "Yes",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await api.post(`/work-requests/${requestId}/cancel`);
+            load();
+          } catch (err) {
+            Alert.alert("Failed", formatApiError(err));
+          }
+        },
+      },
+    ]);
+  };
+
+  const bookmarkJob = async (jobId) => {
+    if (!user) {
+      navigation.navigate("Login");
+      return;
+    }
+    try {
+      await api.post(`/auth/me/save-job/${jobId}`);
+      refreshUser();
+    } catch {}
+  };
+
+  const openFilter = () => {
+    setDraftCategory(category);
+    setDraftSkills(skills);
+    setFilterOpen(true);
+  };
+
+  const applyFilters = () => {
+    Keyboard.dismiss();
+    setCategory(draftCategory);
+    setSkills(draftSkills);
+    setLoading(true);
+    setFilterOpen(false);
+  };
+
+  const clearFilters = () => {
+    setQuery("");
+    setCategory("");
+    setSkills("");
+    setDraftCategory("");
+    setDraftSkills("");
+    setLoading(true);
+    setFilterOpen(false);
+  };
+
+  const hasFilters = !!(query.trim() || location || category || skills.trim());
+
+  return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+      <SafeAreaView edges={["top"]} style={s.safe}>
+        <View style={s.header}>
+          <View style={s.titleRow}>
+            <Pressable
+              style={s.backBtn}
+              hitSlop={10}
+              onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Home")}
+            >
+              <Ionicons name="arrow-back" size={24} color={colors.textHeading} />
+            </Pressable>
+            <Text style={s.title}>Find Jobs</Text>
+          </View>
+
+          {/* Location chip */}
+          <Pressable style={s.locChip} onPress={() => setLocPickerVisible(true)}>
+            <Ionicons name="location-outline" size={14} color={colors.primary} />
+            <Text style={s.locChipTxt} numberOfLines={1}>
+              {location?.label || (location?.pincode ? `Near ${location.pincode}` : "Set location")}
+            </Text>
+            <Ionicons name="chevron-down" size={13} color={colors.textSecondary} />
+          </Pressable>
+
+          <View style={s.searchRow}>
+            <Pressable
+              style={[s.searchBox, searchFocused && s.searchBoxFocused]}
+              onPress={() => inputRef.current?.focus()}
+            >
+              <Ionicons name="search-outline" size={22} color={colors.textMuted} />
+              <TextInput
+                ref={inputRef}
+                value={query}
+                onChangeText={setQuery}
+                style={s.searchInput}
+                placeholder="Search for plumbers, electricians..."
+                placeholderTextColor={colors.textMuted}
+                returnKeyType="search"
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setSearchFocused(false)}
+              />
+              {query.length > 0 ? (
+                <Pressable style={s.clearSearchBtn} onPress={() => setQuery("")} hitSlop={8}>
+                  <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+                </Pressable>
+              ) : null}
+            </Pressable>
+            <Pressable style={s.filterBtn} onPress={openFilter}>
+              <Ionicons name="options-outline" size={25} color="#fff" />
+              {(category || skills.trim()) ? (
+                <View style={s.filterBadge} />
+              ) : null}
+            </Pressable>
+          </View>
+        </View>
+
+        <FlatList
+          data={visibleJobs}
+          keyExtractor={(item, index) => String(item.id || index)}
+          contentContainerStyle={[s.list, { paddingBottom: insets.bottom + 116 }]}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => { setRefreshing(true); load(); }}
+              tintColor={colors.textHeading}
+            />
+          }
+          ListHeaderComponent={
+            <View>
+              <View style={s.feedHeader}>
+                <View>
+                  <Text style={s.feedTitle}>
+                    {visibleJobs.length > 0 ? `${visibleJobs.length} Jobs Found` : "Available Jobs"}
+                  </Text>
+                  {location?.pincode ? <Text style={s.feedSub}>Near {location.pincode}</Text> : null}
+                </View>
+                <Pressable onPress={clearFilters} disabled={!hasFilters} hitSlop={8}>
+                  <Text style={[s.viewAllText, !hasFilters && s.viewAllMuted]}>View All</Text>
+                </Pressable>
+              </View>
+
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}
+                contentContainerStyle={s.quickPills} style={s.quickPillsWrap}>
+                {CATEGORIES.map(cat => (
+                  <Pressable key={cat.v || "all"}
+                    style={[s.quickPill, category === cat.v && s.quickPillActive]}
+                    onPress={() => { setCategory(cat.v); setLoading(true); }}>
+                    <Ionicons name={cat.icon} size={13} color={category === cat.v ? "#fff" : colors.textSecondary} />
+                    <Text style={[s.quickPillText, category === cat.v && s.quickPillTextActive]}>{cat.label}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          }
+          renderItem={({ item }) => (
+            <JobCard
+              job={item}
+              request={requestFor(item.id)}
+              bookmarked={(user?.saved_jobs || []).includes(item.id)}
+              onOpen={() => navigation.navigate("JobDetail", { jobId: item.id })}
+              onApply={() => apply(item.id)}
+              onWithdraw={() => withdraw(requestFor(item.id)?.id)}
+              onBookmark={() => bookmarkJob(item.id)}
+            />
+          )}
+          ListFooterComponentStyle={visibleJobs.length ? s.footerWrap : null}
+          ListHeaderComponentStyle={s.headerWrap}
+          ListEmptyComponentStyle={s.emptyWrap}
+          ListFooterComponent={!loading && visibleJobs.length ? <NoMoreJobs onAdjust={openFilter} /> : null}
+          ListEmptyComponent={loading ? null : <NoMoreJobs onAdjust={openFilter} />}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        />
+
+        {loading ? (
+          <View style={s.loadingOverlay}>
+            <ActivityIndicator color={colors.textHeading} />
+          </View>
+        ) : null}
+
+        <FilterModal
+          visible={filterOpen}
+          category={draftCategory}
+          setCategory={setDraftCategory}
+          skills={draftSkills}
+          setSkills={setDraftSkills}
+          onClose={() => setFilterOpen(false)}
+          onClear={clearFilters}
+          onApply={applyFilters}
+        />
+
+        <LocationPickerSheet
+          visible={locPickerVisible}
+          onClose={() => setLocPickerVisible(false)}
+        />
+      </SafeAreaView>
+    </KeyboardAvoidingView>
+  );
+}
+
+function JobCard({ job, request, bookmarked, onOpen, onApply, onWithdraw, onBookmark }) {
+  const posted = timeAgo(job.created_at);
+  const pay = payText(job);
+  const loc = locationText(job) || "Location not added";
+  const skills = jobSkills(job);
+  const category = pretty(job.category) || "General";
+  const workersNeeded = Number(job.workers_needed || 1);
+  const filled = Number(job.filled_count || 0);
+  const workersLabel = `${Math.max(workersNeeded - filled, 1)} needed`;
+  const poster = job.posted_by_name || job.poster_name || job.customer_name || "Job Poster";
+  const rating = Number(job.poster_rating || job.rating || 0);
+
+  return (
+    <Pressable style={({ pressed }) => [s.card, pressed && s.cardPressed]} onPress={onOpen}>
+      <View style={s.cardTop}>
+        <View style={s.posterBlock}>
+          <View style={s.posterAvatar}>
+            <Ionicons name="business-outline" size={17} color="#D1D5DB" />
+          </View>
+          <View style={s.posterTextWrap}>
+            <Text style={s.posterName} numberOfLines={1}>{poster}</Text>
+            <View style={s.ratingRow}>
+              <Ionicons name={rating ? "star" : "star-outline"} size={14} color="#F59E0B" />
+              <Text style={s.posterRating}>{rating ? rating.toFixed(1) : "New"}</Text>
+            </View>
+          </View>
+        </View>
+        <Pressable
+          hitSlop={10}
+          onPress={(e) => { e.stopPropagation?.(); onBookmark?.(); }}
+        >
+          <Ionicons
+            name={bookmarked ? "bookmark" : "bookmark-outline"}
+            size={24}
+            color={bookmarked ? colors.primary : colors.textMuted}
+          />
+        </Pressable>
+      </View>
+
+      <View style={s.cardTitleRow}>
+        <Text style={[s.jobTitle, { flex: 1 }]} numberOfLines={2}>{job.title || "Untitled Job"}</Text>
+        {job.urgency === "asap" || job.urgency === "urgent" ? (
+          <View style={[s.urgencyBadge, job.urgency === "asap" && s.urgencyBadgeAsap]}>
+            <Text style={s.urgencyBadgeText}>{job.urgency === "asap" ? "URGENT" : "SOON"}</Text>
+          </View>
+        ) : null}
+      </View>
+
+      <View style={s.metaRow}>
+        <View style={s.metaItem}>
+          <Ionicons name="location-outline" size={17} color={colors.textSecondary} />
+          <Text style={s.metaText} numberOfLines={1}>{job.distance_label || loc}</Text>
+        </View>
+        {posted ? (
+          <View style={s.metaItem}>
+            <Ionicons name="time-outline" size={17} color={colors.textSecondary} />
+            <Text style={s.metaText}>{posted}</Text>
+          </View>
+        ) : null}
+      </View>
+
+      <View style={s.detailPills}>
+        <InfoPill icon="calendar-outline" text={job.job_date || job.date_required || "Date open"} />
+        <InfoPill icon="people-outline" text={workersLabel} />
+        <InfoPill icon="pricetag-outline" text={category} />
+        {job.pincode || job.address?.pincode ? (
+          <InfoPill icon="pin-outline" text={job.pincode || job.address?.pincode} />
+        ) : null}
+        {skills.slice(0, 2).map((skill) => (
+          <InfoPill key={skill} icon="hammer-outline" text={pretty(skill)} />
+        ))}
+      </View>
+
+      <View style={s.cardDivider} />
+
+      <View style={s.cardFooter}>
+        <View style={s.payBlock}>
+          <View style={s.payRow}>
+            <Text style={s.payAmount} numberOfLines={1}>{pay.amount}</Text>
+            <Text style={s.payUnit}>{pay.unit}</Text>
+          </View>
+          <View style={s.verifiedRow}>
+            <Ionicons name="checkmark-circle-outline" size={14} color="#047857" />
+            <Text style={s.verifiedText}>Verified</Text>
+          </View>
+        </View>
+
+        {request ? (
+          <View style={s.requestActions}>
+            <Pressable style={s.pendingBtn} onPress={onOpen}>
+              <Text style={s.pendingBtnText}>{request.status === "accepted" ? "Accepted" : "Pending"}</Text>
+            </Pressable>
+            {request.status === "requested" ? (
+              <Pressable style={s.withdrawBtn} onPress={onWithdraw}>
+                <Text style={s.withdrawBtnText}>Withdraw</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : (
+          <Pressable style={s.applyBtn} onPress={onApply}>
+            <Text style={s.applyBtnText}>Apply Now</Text>
+          </Pressable>
+        )}
+      </View>
+    </Pressable>
+  );
+}
+
+function InfoPill({ icon, text }) {
+  if (!text) return null;
+  return (
+    <View style={s.infoPill}>
+      <Ionicons name={icon} size={13} color={colors.textSecondary} />
+      <Text style={s.infoPillText} numberOfLines={1}>{text}</Text>
+    </View>
+  );
+}
+
+function NoMoreJobs({ onAdjust }) {
+  return (
+    <View style={s.noMore}>
+      <View style={s.noMoreIcon}>
+        <Ionicons name="file-tray-full-outline" size={31} color={colors.textSecondary} />
+      </View>
+      <Text style={s.noMoreTitle}>No more jobs in your area</Text>
+      <Text style={s.noMoreSub}>Try expanding your search radius or adjusting filters to find more opportunities.</Text>
+      <Pressable style={s.adjustBtn} onPress={onAdjust}>
+        <Text style={s.adjustText}>Adjust Filters</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function FilterModal({
+  visible,
+  category,
+  setCategory,
+  skills,
+  setSkills,
+  onClose,
+  onClear,
+  onApply,
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+        <Pressable style={s.modalBg} onPress={onClose}>
+          <Pressable style={s.modalSheet} onPress={() => {}}>
+            <View style={s.modalHandle} />
+            <Text style={s.modalTitle}>Filter Jobs</Text>
+            <Text style={s.modalSub}>Filter by category and skill to find better matches.</Text>
+
+            <Text style={s.fieldLabel}>Category</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.modalChips}>
+              {CATEGORIES.map((cat) => (
+                <Pressable
+                  key={cat.v || "all"}
+                  style={[s.modalChip, category === cat.v && s.modalChipActive]}
+                  onPress={() => setCategory(cat.v)}
+                >
+                  <Ionicons name={cat.icon} size={14} color={category === cat.v ? "#fff" : colors.textHeading} />
+                  <Text style={[s.modalChipText, category === cat.v && s.modalChipTextActive]}>{cat.label}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+
+            <Text style={s.fieldLabel}>Skill</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.modalChips}>
+              {[
+                { v: "", l: "Any",          icon: "apps-outline" },
+                { v: "electrician", l: "Electrician", icon: "flash-outline" },
+                { v: "plumber",     l: "Plumber",     icon: "water-outline" },
+                { v: "mason",       l: "Mason",        icon: "construct-outline" },
+                { v: "carpenter",   l: "Carpenter",   icon: "hammer-outline" },
+                { v: "painter",     l: "Painter",     icon: "color-palette-outline" },
+                { v: "driver",      l: "Driver",      icon: "car-outline" },
+                { v: "cleaner",     l: "Cleaner",     icon: "sparkles-outline" },
+                { v: "cook",        l: "Cook",        icon: "restaurant-outline" },
+                { v: "welder",      l: "Welder",      icon: "flame-outline" },
+                { v: "farmer",      l: "Farmer",      icon: "leaf-outline" },
+              ].map(sk => (
+                <Pressable
+                  key={sk.v || "any"}
+                  style={[s.modalChip, skills === sk.v && s.modalChipActive]}
+                  onPress={() => setSkills(sk.v)}
+                >
+                  <Ionicons name={sk.icon} size={13} color={skills === sk.v ? "#fff" : colors.textHeading} />
+                  <Text style={[s.modalChipText, skills === sk.v && s.modalChipTextActive]}>{sk.l}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+
+            <View style={s.modalButtons}>
+              <Pressable style={s.clearBtn} onPress={onClear}>
+                <Text style={s.clearBtnText}>Clear</Text>
+              </Pressable>
+              <Pressable style={s.applyFilterBtn} onPress={onApply}>
+                <Text style={s.applyFilterText}>Apply Filters</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+const s = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: colors.bg },
+
+  header: {
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderSubtle,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.xl,
+    ...shadow.sm,
+    zIndex: 2,
+  },
+  titleRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginBottom: 22 },
+  backBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center", marginLeft: -10 },
+  title: { fontFamily: fonts.bodyBold, fontSize: 26, color: colors.textHeading, letterSpacing: 0 },
+
+  locChip: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    backgroundColor: colors.surface, borderRadius: radius.pill,
+    paddingHorizontal: 12, paddingVertical: 7,
+    alignSelf: "flex-start", marginBottom: spacing.md,
+  },
+  locChipTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.textHeading, maxWidth: 220 },
+
+  searchRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  searchBox: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 52,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    overflow: "hidden",
+  },
+  searchBoxFocused: { backgroundColor: colors.surfaceCard, borderWidth: 1, borderColor: colors.borderSubtle },
+  searchInput: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 52,
+    paddingVertical: 0,
+    fontFamily: fonts.body,
+    fontSize: 15,
+    color: colors.textHeading,
+    includeFontPadding: false,
+    textAlignVertical: "center",
+  },
+  clearSearchBtn: { flexShrink: 0, width: 24, height: 24, alignItems: "center", justifyContent: "center" },
+  filterBtn: {
+    flexShrink: 0,
+    width: 52,
+    height: 52,
+    borderRadius: 12,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  filterBadge: { position: "absolute", top: 10, right: 10, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.danger, borderWidth: 1.5, borderColor: colors.primary },
+
+  list: { paddingHorizontal: spacing.md, paddingTop: 26 },
+  headerWrap: { marginBottom: spacing.lg },
+  feedHeader: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 12 },
+  feedTitle: { fontFamily: fonts.bodyBold, fontSize: 22, color: colors.textHeading },
+  feedSub: { fontFamily: fonts.body, fontSize: 13, color: colors.textSecondary, marginTop: 2 },
+  viewAllText: { fontFamily: fonts.bodyMedium, fontSize: 16, color: colors.textHeading },
+  viewAllMuted: { color: colors.textMuted },
+
+  quickPillsWrap: { marginBottom: 20 },
+  quickPills: { gap: 8, paddingVertical: 2 },
+  quickPill: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 36, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: "transparent" },
+  quickPillActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  quickPillText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.textHeading },
+  quickPillTextActive: { color: colors.onPrimary },
+
+  cardTitleRow: { flexDirection: "row", alignItems: "flex-start", gap: 8, marginBottom: 10 },
+
+  urgencyBadge: { flexShrink: 0, paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill, backgroundColor: colors.warningLight, marginTop: 3 },
+  urgencyBadgeAsap: { backgroundColor: colors.dangerLight },
+  urgencyBadgeText: { fontFamily: fonts.bodyBold, fontSize: 10, color: colors.warning, letterSpacing: 0.5 },
+
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    top: 144,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(249,249,254,0.55)",
+  },
+
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 13,
+    paddingHorizontal: 24,
+    paddingVertical: 22,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: "transparent",
+    ...shadow.sm,
+  },
+  cardPressed: { opacity: 0.94, transform: [{ scale: 0.996 }] },
+  cardTop: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 18 },
+  posterBlock: { flex: 1, minWidth: 0, flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  posterAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 9,
+    backgroundColor: colors.textHeading,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  posterTextWrap: { flex: 1, minWidth: 0 },
+  posterName: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.textHeading, includeFontPadding: false },
+  ratingRow: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 },
+  posterRating: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.textSecondary, includeFontPadding: false },
+
+  jobTitle: { fontFamily: fonts.bodyBold, fontSize: 21, lineHeight: 28, color: colors.textHeading, includeFontPadding: false },
+  metaRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: spacing.md, marginBottom: spacing.md },
+  metaItem: { flexDirection: "row", alignItems: "center", gap: 5, maxWidth: "100%" },
+  metaText: { fontFamily: fonts.body, fontSize: 14, color: colors.textSecondary, flexShrink: 1 },
+
+  detailPills: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginBottom: 18 },
+  infoPill: {
+    maxWidth: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: colors.surface,
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  infoPillText: { maxWidth: 180, fontFamily: fonts.bodyMedium, fontSize: 11, color: colors.textSecondary, includeFontPadding: false },
+
+  cardDivider: { height: 1, backgroundColor: colors.borderSubtle, marginBottom: 20 },
+  cardFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md },
+  payBlock: { flex: 1, minWidth: 0 },
+  payRow: { flexDirection: "row", alignItems: "baseline", gap: 4 },
+  payAmount: { flexShrink: 1, fontFamily: fonts.bodyBold, fontSize: 25, color: "#000", letterSpacing: 0, includeFontPadding: false },
+  payUnit: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.textSecondary },
+  verifiedRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 5 },
+  verifiedText: { fontFamily: fonts.bodyBold, fontSize: 10, color: "#047857", textTransform: "uppercase" },
+  applyBtn: {
+    flexShrink: 0,
+    width: 132,
+    height: 48,
+    borderRadius: 10,
+    backgroundColor: "#000",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  applyBtnText: { fontFamily: fonts.bodyBold, fontSize: 15, color: "#fff", includeFontPadding: false, textAlign: "center" },
+  pendingBtn: {
+    width: 132,
+    minHeight: 44,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pendingBtnText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.textSecondary },
+  requestActions: { flexShrink: 0, alignItems: "stretch", gap: 8 },
+  withdrawBtn: {
+    width: 132,
+    minHeight: 44,
+    borderRadius: 12,
+    backgroundColor: colors.surfaceCard,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  withdrawBtnText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.textHeading, includeFontPadding: false },
+
+  footerWrap: { marginTop: spacing.sm },
+  emptyWrap: { flexGrow: 1, justifyContent: "center" },
+  emptyTop: { marginTop: spacing.xl },
+  noMore: {
+    minHeight: 292,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.borderSubtle,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: spacing.xl,
+    marginBottom: spacing.xl,
+  },
+  noMoreIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.borderSubtle,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.lg,
+  },
+  noMoreTitle: { fontFamily: fonts.bodyBold, fontSize: 22, color: colors.textHeading, textAlign: "center" },
+  noMoreSub: { marginTop: 5, fontFamily: fonts.body, fontSize: 15, lineHeight: 22, color: colors.textSecondary, textAlign: "center" },
+  adjustBtn: {
+    marginTop: spacing.xl,
+    minWidth: 148,
+    minHeight: 48,
+    paddingHorizontal: 20, paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.surfaceCard,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  adjustText: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.textHeading },
+
+  modalBg: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
+  modalSheet: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 40,
+  },
+  modalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: colors.borderSubtle, alignSelf: "center", marginBottom: 20 },
+  modalTitle: { fontFamily: fonts.bodyBold, fontSize: 22, color: colors.textHeading },
+  modalSub: { fontFamily: fonts.body, fontSize: 14, color: colors.textSecondary, lineHeight: 20, marginTop: 4, marginBottom: 20 },
+  fieldLabel: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 },
+  modalInputRow: {
+    height: 52,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: colors.surface,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    marginBottom: 18,
+  },
+  modalInput: { flex: 1, minWidth: 0, fontFamily: fonts.body, fontSize: 16, color: colors.textHeading, paddingVertical: 0 },
+  modalChips: { gap: 8, paddingBottom: 18 },
+  modalChip: {
+    height: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: colors.surface,
+  },
+  modalChipActive: { backgroundColor: "#000" },
+  modalChipText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.textHeading },
+  modalChipTextActive: { color: "#fff" },
+  modalButtons: { flexDirection: "row", gap: 10, marginTop: 4 },
+  clearBtn: {
+    width: 104,
+    height: 52,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  clearBtnText: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.textSecondary },
+  applyFilterBtn: {
+    flex: 1,
+    height: 52,
+    borderRadius: 12,
+    backgroundColor: "#000",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  applyFilterText: { fontFamily: fonts.bodyBold, fontSize: 16, color: "#fff" },
+});

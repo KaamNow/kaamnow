@@ -3,6 +3,7 @@ import {
   View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Image,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../contexts/AuthContext";
 import { useTranslation } from "../i18n";
@@ -49,33 +50,51 @@ export default function EditPhotoScreen({ navigation }) {
   };
 
   return (
-    <View style={[styles.container, { paddingBottom: insets.bottom + 32 }]}>
-      <View style={styles.avatarWrap}>
-        {preview ? (
-          <Image source={{ uri: preview }} style={styles.avatar} />
-        ) : (
-          <View style={[styles.avatar, styles.avatarFallback]}>
-            <Text style={styles.avatarInitial}>{(user?.name || "?")[0].toUpperCase()}</Text>
-          </View>
-        )}
+    <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom + 32 }]}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={8}>
+          <Ionicons name="arrow-back" size={22} color={colors.textHeading} />
+        </TouchableOpacity>
       </View>
 
-      <TouchableOpacity style={styles.btn} onPress={pickAndUpload} disabled={uploading}>
-        {uploading
-          ? <ActivityIndicator color="#fff" />
-          : <Text style={styles.btnText}>{t("edit_photo_pick")}</Text>
-        }
-      </TouchableOpacity>
+      <View style={styles.content}>
+        <View style={styles.avatarWrap}>
+          {preview ? (
+            <Image source={{ uri: preview }} style={styles.avatar} />
+          ) : (
+            <View style={[styles.avatar, styles.avatarFallback]}>
+              <Text style={styles.avatarInitial}>{(user?.name || "?")[0].toUpperCase()}</Text>
+            </View>
+          )}
+        </View>
+
+        <Text style={styles.title}>Your photo</Text>
+        <Text style={styles.subtitle}>
+          Square photos look best. Show your face clearly — customers want to recognize who's coming.
+        </Text>
+
+        <TouchableOpacity style={styles.btn} onPress={pickAndUpload} disabled={uploading}>
+          {uploading
+            ? <ActivityIndicator color={colors.onPrimary} />
+            : <Text style={styles.btnText}>{t("edit_photo_pick")}</Text>
+          }
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container:     { flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center", padding: spacing.lg },
+  container:     { flex: 1, backgroundColor: colors.bg },
+  header:        { paddingHorizontal: spacing.lg, paddingVertical: 10 },
+  backBtn:       { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
+  content:       { flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl },
   avatarWrap:    { marginBottom: spacing.xl },
-  avatar:        { width: 120, height: 120, borderRadius: 60 },
+  avatar:        { width: 160, height: 160, borderRadius: 80 },
   avatarFallback:{ backgroundColor: colors.primary, justifyContent: "center", alignItems: "center" },
-  avatarInitial: { color: colors.onPrimary, fontSize: 48, fontFamily: fonts.display, fontWeight: "700" },
-  btn:           { backgroundColor: colors.primary, borderRadius: radius.xxl, paddingHorizontal: spacing.xl, paddingVertical: 14 },
+  avatarInitial: { color: colors.onPrimary, fontSize: 60, fontFamily: fonts.bodyBold },
+  title:         { fontFamily: fonts.bodyBold, fontSize: 20, color: colors.textHeading, marginBottom: spacing.sm },
+  subtitle:      { fontFamily: fonts.body, fontSize: 13, color: colors.textMuted, textAlign: "center", lineHeight: 20, maxWidth: 280, marginBottom: spacing.xxl },
+  btn:           { backgroundColor: colors.primary, borderRadius: radius.md, paddingHorizontal: 28, paddingVertical: 16, minHeight: 52, minWidth: 200, alignItems: "center", justifyContent: "center" },
   btnText:       { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.onPrimary },
 });

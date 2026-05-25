@@ -149,7 +149,7 @@ export default function DashboardScreen({ navigation }) {
   const initials  = (user?.name || "?")[0].toUpperCase();
 
   // build category rows from the full or trimmed list
-  const visibleCats = showAllCats ? ALL_CATEGORIES : ALL_CATEGORIES.slice(0, 6);
+  const visibleCats = showAllCats ? ALL_CATEGORIES : ALL_CATEGORIES.slice(0, 4);
   const catRows = [];
   for (let i = 0; i < visibleCats.length; i += 2) catRows.push(visibleCats.slice(i, i + 2));
 
@@ -195,19 +195,19 @@ export default function DashboardScreen({ navigation }) {
 
         {/* Search bar — h-14 = 56, rounded-full */}
         <View style={s.searchBar}>
-          <Ionicons name="search-outline" size={20} color="#9ca3af" style={{ marginRight: 8 }} />
+          <Ionicons name="search-outline" size={20} color={colors.textMuted} style={{ marginRight: 8 }} />
           <TextInput
             style={s.searchInput}
             placeholder="Search for experts or jobs..."
-            placeholderTextColor="#9ca3af"
+            placeholderTextColor={colors.textMuted}
             value={search}
             onChangeText={setSearch}
             onSubmitEditing={handleSearch}
             returnKeyType="search"
           />
           {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch("")}>
-              <Ionicons name="close-circle" size={18} color="#9ca3af" />
+            <TouchableOpacity onPress={() => setSearch("")} hitSlop={8}>
+              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
             </TouchableOpacity>
           )}
         </View>
@@ -216,20 +216,20 @@ export default function DashboardScreen({ navigation }) {
         <View style={s.heroRow}>
           {/* Find Local Expert — dark */}
           <TouchableOpacity style={[s.heroCard, s.heroDark]} onPress={() => navigation.navigate("Marketplace")} activeOpacity={0.9}>
-            <View style={[s.heroIconWrap, { backgroundColor: "#2d2d2d" }]}>
-              <Ionicons name="search-outline" size={22} color="#fff" />
+            <View style={[s.heroIconWrap, { backgroundColor: "rgba(255,255,255,0.12)" }]}>
+              <Ionicons name="search-outline" size={22} color={colors.onPrimary} />
             </View>
-            <Text style={[s.heroTitle, { color: "#fff" }]}>Find Local{"\n"}Expert</Text>
-            <Text style={[s.heroSub, { color: "rgba(255,255,255,0.55)" }]}>Hire top talent{"\n"}for your task</Text>
+            <Text style={[s.heroTitle, { color: colors.onPrimary }]}>Find Local{"\n"}Expert</Text>
+            <Text style={[s.heroSub, { color: "rgba(255,255,255,0.7)" }]}>Hire top talent{"\n"}for your task</Text>
           </TouchableOpacity>
 
           {/* Find Work — light */}
           <TouchableOpacity style={[s.heroCard, s.heroLight]} onPress={() => navigation.navigate("FindWork")} activeOpacity={0.9}>
-            <View style={[s.heroIconWrap, { backgroundColor: "#e1dfe1" }]}>
-              <Ionicons name="briefcase-outline" size={22} color="#1b1b1b" />
+            <View style={[s.heroIconWrap, { backgroundColor: colors.surface }]}>
+              <Ionicons name="briefcase-outline" size={22} color={colors.textHeading} />
             </View>
-            <Text style={[s.heroTitle, { color: "#1b1b1b" }]}>Find Work</Text>
-            <Text style={[s.heroSub, { color: "#6b7280" }]}>Apply for nearby{"\n"}job openings</Text>
+            <Text style={[s.heroTitle, { color: colors.textHeading }]}>Find Work</Text>
+            <Text style={[s.heroSub, { color: colors.textSecondary }]}>Apply for nearby{"\n"}job openings</Text>
           </TouchableOpacity>
         </View>
 
@@ -274,8 +274,8 @@ export default function DashboardScreen({ navigation }) {
         <View style={s.sectionHead}>
           <Text style={s.sectionTitle}>Urgent Jobs</Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-            <Ionicons name="time" size={15} color="#ef4444" />
-            <Text style={{ fontFamily: fonts.bodyBold, fontSize: 13, color: "#ef4444" }}>Hiring Now</Text>
+            <Ionicons name="time" size={14} color={colors.danger} />
+            <Text style={{ fontFamily: fonts.bodyBold, fontSize: 12, color: colors.danger }}>Hiring Now</Text>
           </View>
         </View>
 
@@ -283,7 +283,7 @@ export default function DashboardScreen({ navigation }) {
           <ActivityIndicator color={colors.primary} style={{ marginTop: 8 }} />
         ) : urgentJobs.length === 0 ? (
           <View style={s.emptyJobs}>
-            <Ionicons name="briefcase-outline" size={32} color="#d1d5db" />
+            <Ionicons name="briefcase-outline" size={28} color={colors.textMuted} />
             <Text style={s.emptyTxt}>No urgent jobs right now</Text>
           </View>
         ) : urgentJobs.map((job) => (
@@ -399,7 +399,7 @@ export default function DashboardScreen({ navigation }) {
             <TouchableOpacity style={s.gpsBtn} onPress={useGPS} disabled={locLoading} activeOpacity={0.8}>
               {locLoading
                 ? <ActivityIndicator size="small" color={colors.primary} />
-                : <Ionicons name="navigate-outline" size={18} color={colors.primary} />
+                : <Ionicons name="navigate-outline" size={18} color={colors.textHeading} />
               }
               <Text style={s.gpsBtnTxt}>Use Current Location</Text>
             </TouchableOpacity>
@@ -417,7 +417,7 @@ export default function DashboardScreen({ navigation }) {
               value={pinInput}
               onChangeText={v => { setSelectedLocAddrId(null); setPinInput(v); }}
               placeholder="e.g. 400001"
-              placeholderTextColor="#9ca3af"
+              placeholderTextColor={colors.textMuted}
               keyboardType="number-pad"
               maxLength={10}
             />
@@ -455,7 +455,7 @@ export default function DashboardScreen({ navigation }) {
         onPress={() => navigation.navigate("ChatsList")}
         activeOpacity={0.85}
       >
-        <Ionicons name="chatbubble-ellipses" size={24} color="#111827" />
+        <Ionicons name="chatbubble-ellipses" size={24} color={colors.onPrimary} />
         {unreadChats > 0 && (
           <View style={s.badge}>
             <Text style={s.badgeTxt}>{unreadChats > 9 ? "9+" : String(unreadChats)}</Text>
@@ -475,197 +475,198 @@ const CARD_SHADOW = {
 };
 
 const s = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#f9f9fe" },
+  root: { flex: 1, backgroundColor: colors.bg },
 
   // ── Top bar
   topBar: {
     height: 64,
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     paddingHorizontal: PAD,
-    backgroundColor: "#fff",
+    backgroundColor: colors.surfaceCard,
     ...CARD_SHADOW,
   },
-  locLabel: { fontSize: 11, fontFamily: fonts.body, color: "#9ca3af" },
+  locLabel: { fontSize: 11, fontFamily: fonts.body, color: colors.textMuted },
   locRow:   { flexDirection: "row", alignItems: "center", gap: 2, marginTop: 1 },
   locText:  { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.textHeading, maxWidth: 180 },
   topActions: { flexDirection: "row", alignItems: "center", gap: 10 },
   iconCircle: {
     width: 40, height: 40, borderRadius: 20,
-    backgroundColor: "#f3f4f6",
+    backgroundColor: colors.surface,
     alignItems: "center", justifyContent: "center",
   },
   notifBadge: {
     position: "absolute", top: 0, right: 0,
     minWidth: 16, height: 16, borderRadius: 8,
-    backgroundColor: "#ef4444", alignItems: "center", justifyContent: "center",
-    paddingHorizontal: 3, borderWidth: 1.5, borderColor: "#fff",
+    backgroundColor: colors.danger, alignItems: "center", justifyContent: "center",
+    paddingHorizontal: 3, borderWidth: 1.5, borderColor: colors.surfaceCard,
   },
-  notifBadgeTxt: { fontFamily: fonts.bodyBold, fontSize: 9, color: "#fff" },
-  avatar:   { width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: "#e5e7eb" },
+  notifBadgeTxt: { fontFamily: fonts.bodyBold, fontSize: 9, color: colors.onPrimary },
+  avatar:   { width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: colors.borderSubtle },
   avatarFb: { backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
-  avatarTxt:{ fontFamily: fonts.bodyBold, fontSize: 16, color: "#fff" },
+  avatarTxt:{ fontFamily: fonts.bodyBold, fontSize: 16, color: colors.onPrimary },
 
   // ── Body
-  body: { paddingHorizontal: PAD, paddingTop: 24, gap: 32 },
+  body: { paddingHorizontal: PAD, paddingTop: 16, gap: 24 },
 
   // ── Search (h-14 = 56px, rounded-full)
   searchBar: {
     height: 56, flexDirection: "row", alignItems: "center",
-    backgroundColor: "#ededf2", borderRadius: 999,
+    backgroundColor: colors.surface, borderRadius: 999,
     paddingHorizontal: 20,
   },
-  searchInput: { flex: 1, fontFamily: fonts.body, fontSize: 15, color: colors.textHeading },
+  searchInput: { flex: 1, fontFamily: fonts.body, fontSize: 15, color: colors.textHeading, paddingVertical: 0 },
 
   // ── Hero cards
   heroRow: { flexDirection: "row", gap: GAP },
   heroCard: {
-    flex: 1, borderRadius: 12, padding: 24,
+    flex: 1, borderRadius: 14, padding: 20, minHeight: 160,
     ...CARD_SHADOW,
   },
-  heroDark:  { backgroundColor: "#1b1b1b" },
-  heroLight: { backgroundColor: "#fff" },
+  heroDark:  { backgroundColor: colors.primary },
+  heroLight: { backgroundColor: colors.surfaceCard, borderWidth: 1, borderColor: colors.borderSubtle },
   heroIconWrap: {
-    width: 48, height: 48, borderRadius: 8,
+    width: 44, height: 44, borderRadius: 12,
     alignItems: "center", justifyContent: "center",
-    marginBottom: 16,
+    marginBottom: 14,
   },
-  heroTitle: { fontFamily: fonts.bodyBold, fontSize: 20, lineHeight: 28, marginBottom: 4 },
-  heroSub:   { fontFamily: fonts.body, fontSize: 14, lineHeight: 20 },
+  heroTitle: { fontFamily: fonts.bodyBold, fontSize: 18, lineHeight: 24, marginBottom: 4 },
+  heroSub:   { fontFamily: fonts.body, fontSize: 13, lineHeight: 18 },
 
   // ── Section headers
   sectionHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  sectionTitle: { fontFamily: fonts.bodyBold, fontSize: 24, color: colors.textHeading },
+  sectionTitle: { fontFamily: fonts.bodyBold, fontSize: 20, color: colors.textHeading },
 
   // ── View All button (below category grid)
   viewAllBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4,
-    paddingVertical: 10,
-    borderWidth: 1.5, borderColor: "#e5e7eb", borderRadius: 10,
-    backgroundColor: "#fff",
+    paddingVertical: 12, minHeight: 44,
+    borderWidth: 1, borderColor: colors.borderSubtle, borderRadius: 12,
+    backgroundColor: colors.surfaceCard,
   },
-  viewAllBtnTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: "#6b7280" },
+  viewAllBtnTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.textSecondary },
 
   // ── Category grid
   catGrid: { gap: GAP },
   catRow:  { flexDirection: "row", gap: GAP },
-  catCard: { width: CARD_W, height: CARD_W, borderRadius: 12, overflow: "hidden", backgroundColor: "#d1d5db" },
-  catImg:  { width: CARD_W, height: CARD_W, position: "absolute" },
-  catGrad: { position: "absolute", left: 0, right: 0, bottom: 0, height: CARD_W },
-  catLabelWrap: { position: "absolute", bottom: 16, left: 16 },
+  catCard: { width: CARD_W, height: 120, borderRadius: 12, overflow: "hidden", backgroundColor: "#d1d5db" },
+  catImg:  { width: CARD_W, height: 120, position: "absolute" },
+  catGrad: { position: "absolute", left: 0, right: 0, bottom: 0, height: 120 },
+  catLabelWrap: { position: "absolute", bottom: 10, left: 12 },
   catLabel: {
-    fontFamily: fonts.bodyBold, fontSize: 20, color: "#fff",
+    fontFamily: fonts.bodyBold, fontSize: 16, color: "#fff",
     textShadowColor: "rgba(0,0,0,0.5)", textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4,
   },
 
   // ── Urgent jobs
-  emptyJobs: { alignItems: "center", gap: 8, paddingVertical: 16 },
-  emptyTxt:  { fontFamily: fonts.body, fontSize: 14, color: "#9ca3af" },
+  emptyJobs: { alignItems: "center", gap: 8, paddingVertical: 24, backgroundColor: colors.surfaceCard, borderRadius: 14, borderWidth: 1, borderColor: colors.borderSubtle },
+  emptyTxt:  { fontFamily: fonts.body, fontSize: 14, color: colors.textMuted },
   jobCard: {
-    backgroundColor: "#fff", borderRadius: 12, padding: 14,
-    borderLeftWidth: 4, borderLeftColor: "#000",
+    backgroundColor: colors.surfaceCard, borderRadius: 14, padding: 16,
+    borderWidth: 1, borderColor: colors.borderSubtle,
     marginBottom: 12,
     ...CARD_SHADOW,
   },
-  jobBadgeRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 6 },
-  urgentBadge: { backgroundColor: "#ffdad6", paddingHorizontal: 7, paddingVertical: 2, borderRadius: 4 },
-  urgentTxt:   { fontFamily: fonts.bodyBold, fontSize: 10, color: "#93000a", letterSpacing: 0.6 },
-  jobTime:     { fontFamily: fonts.body, fontSize: 11, color: "#9ca3af" },
+  jobBadgeRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 },
+  urgentBadge: { backgroundColor: colors.dangerLight, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999 },
+  urgentTxt:   { fontFamily: fonts.bodyBold, fontSize: 10, color: colors.danger, letterSpacing: 0.6 },
+  jobTime:     { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted },
   jobTitle:    { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.textHeading, marginBottom: 6, lineHeight: 22 },
-  jobMeta:     { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 10 },
+  jobMeta:     { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 12 },
   metaItem:    { flexDirection: "row", alignItems: "center", gap: 4 },
-  metaTxt:     { fontFamily: fonts.body, fontSize: 13, color: "#6b7280" },
+  metaTxt:     { fontFamily: fonts.body, fontSize: 13, color: colors.textSecondary },
   jobBtns:     { flexDirection: "row", gap: 8 },
   detailBtn: {
-    flex: 1, height: 38, alignItems: "center", justifyContent: "center",
-    borderRadius: 8, borderWidth: 1.5, borderColor: "#cfc4c5",
+    flex: 1, minHeight: 48, paddingHorizontal: 12,
+    alignItems: "center", justifyContent: "center",
+    borderRadius: 12, borderWidth: 1, borderColor: colors.borderSubtle, backgroundColor: colors.surfaceCard,
   },
-  detailBtnTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.textHeading },
+  detailBtnTxt: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.textHeading },
   applyBtn: {
-    flex: 1, height: 38, alignItems: "center", justifyContent: "center",
-    borderRadius: 8, backgroundColor: "#000",
+    flex: 1, minHeight: 48, paddingHorizontal: 12,
+    alignItems: "center", justifyContent: "center",
+    borderRadius: 12, backgroundColor: colors.primary,
   },
-  applyBtnTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: "#fff" },
+  applyBtnTxt: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.onPrimary },
 
   // ── Location modal
   modalOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.45)",
+    backgroundColor: colors.overlay,
   },
   modalSheet: {
     position: "absolute", left: 0, right: 0, bottom: 0,
     justifyContent: "flex-end",
   },
   modalCard: {
-    backgroundColor: "#fff",
-    borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    paddingHorizontal: 24, paddingTop: 12,
+    backgroundColor: colors.surfaceCard,
+    borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    paddingHorizontal: 20, paddingTop: 12,
   },
   handle: {
-    width: 40, height: 4, borderRadius: 2,
-    backgroundColor: "#e5e7eb", alignSelf: "center", marginBottom: 20,
+    width: 36, height: 4, borderRadius: 2,
+    backgroundColor: colors.borderSubtle, alignSelf: "center", marginBottom: 20,
   },
   modalTitle: { fontFamily: fonts.bodyBold, fontSize: 20, color: colors.textHeading, marginBottom: 6 },
-  modalSub:   { fontFamily: fonts.body, fontSize: 14, color: "#6b7280", marginBottom: 20, lineHeight: 20 },
+  modalSub:   { fontFamily: fonts.body, fontSize: 14, color: colors.textSecondary, marginBottom: 20, lineHeight: 20 },
   gpsBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    borderWidth: 1.5, borderColor: colors.primary, borderRadius: 12,
-    paddingVertical: 13, marginBottom: 20,
+    minHeight: 52, borderWidth: 1, borderColor: colors.borderSubtle, borderRadius: 12,
+    paddingVertical: 14, marginBottom: 20, backgroundColor: colors.surfaceCard,
   },
-  gpsBtnTxt: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.primary },
+  gpsBtnTxt: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.textHeading },
   divider: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 20 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: "#e5e7eb" },
-  dividerTxt: { fontFamily: fonts.body, fontSize: 12, color: "#9ca3af" },
+  dividerLine: { flex: 1, height: 1, backgroundColor: colors.borderSubtle },
+  dividerTxt: { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted },
   pinInput: {
-    height: 52, borderWidth: 1.5, borderColor: "#e5e7eb",
-    borderRadius: 12, paddingHorizontal: 16,
+    minHeight: 52, borderWidth: 0, backgroundColor: colors.surface,
+    borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14,
     fontFamily: fonts.bodyBold, fontSize: 20, color: colors.textHeading,
     letterSpacing: 3, marginBottom: 16,
   },
   saveBtn: {
-    height: 52, backgroundColor: colors.primary,
+    minHeight: 52, backgroundColor: colors.primary,
     borderRadius: 12, alignItems: "center", justifyContent: "center",
-    marginBottom: 8,
+    marginBottom: 8, paddingVertical: 14, paddingHorizontal: 24,
   },
-  saveBtnTxt: { fontFamily: fonts.bodyBold, fontSize: 16, color: "#fff" },
+  saveBtnTxt: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.onPrimary },
 
   // ── Location modal: saved address chips
-  locSavedHint: { fontFamily: fonts.bodyBold, fontSize: 10, color: "#9ca3af", letterSpacing: 1, marginBottom: 10 },
+  locSavedHint: { fontFamily: fonts.bodyBold, fontSize: 10, color: colors.textMuted, letterSpacing: 1, marginBottom: 10 },
   locAddrChip: {
     flexDirection: "row", alignItems: "center", gap: 8,
-    paddingHorizontal: 14, paddingVertical: 10,
-    backgroundColor: "#f3f4f6", borderRadius: 12,
-    borderWidth: 1.5, borderColor: "#e5e7eb",
+    paddingHorizontal: 14, paddingVertical: 10, minHeight: 44,
+    backgroundColor: colors.surface, borderRadius: 12,
+    borderWidth: 1, borderColor: "transparent",
   },
   locAddrChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   locAddrLabel: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.textHeading },
-  locAddrSub:   { fontFamily: fonts.body, fontSize: 11, color: "#9ca3af", maxWidth: 90 },
-  locDefaultDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#059669" },
+  locAddrSub:   { fontFamily: fonts.body, fontSize: 11, color: colors.textMuted, maxWidth: 90 },
+  locDefaultDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.statusSuccess },
 
-  // ── Chat FAB
+  // ── Chat FAB (premium, neutral)
   chatFabGlow: {
     position: "absolute",
     right: 18,
     width: 68,
     height: 68,
     borderRadius: 34,
-    backgroundColor: "#FFB000",
+    backgroundColor: colors.primary,
   },
   chatFab: {
     position: "absolute", right: 24,
     width: 56, height: 56, borderRadius: 28,
-    backgroundColor: "#FFB000",
+    backgroundColor: colors.primary,
     alignItems: "center", justifyContent: "center",
-    borderWidth: 3,
-    borderColor: "#fff",
-    shadowColor: "#FFB000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.22, shadowRadius: 18, elevation: 10,
+    borderWidth: 0,
+    shadowColor: "#0B0B14",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18, shadowRadius: 16, elevation: 8,
   },
   badge: {
     position: "absolute", top: -3, right: -3,
     minWidth: 18, height: 18, borderRadius: 9,
-    backgroundColor: "#ef4444", alignItems: "center", justifyContent: "center",
-    borderWidth: 2, borderColor: "#fff", paddingHorizontal: 3,
+    backgroundColor: colors.danger, alignItems: "center", justifyContent: "center",
+    borderWidth: 2, borderColor: colors.surfaceCard, paddingHorizontal: 3,
   },
-  badgeTxt: { fontFamily: fonts.bodyBold, fontSize: 9, color: "#fff" },
+  badgeTxt: { fontFamily: fonts.bodyBold, fontSize: 9, color: colors.onPrimary },
 });

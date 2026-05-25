@@ -21,6 +21,14 @@ import {
   Manrope_700Bold,
   Manrope_800ExtraBold,
 } from "@expo-google-fonts/manrope";
+import {
+  useFonts as usePlusJakarta,
+  PlusJakartaSans_400Regular,
+  PlusJakartaSans_500Medium,
+  PlusJakartaSans_600SemiBold,
+  PlusJakartaSans_700Bold,
+  PlusJakartaSans_800ExtraBold,
+} from "@expo-google-fonts/plus-jakarta-sans";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Sentry from "@sentry/react-native";
 
@@ -86,7 +94,9 @@ const linking = {
       Tabs: {
         screens: {
           Home:       "home",
+          Browse:     "find",
           PostJobTab: "post-job",
+          Activity:   "activity",
           Profile:    "profile",
         },
       },
@@ -144,19 +154,32 @@ const Tab   = createBottomTabNavigator();
 
 const tabIcon = (name) => ({ tabBarIcon: ({ color }) => <Ionicons name={name} size={22} color={color} /> });
 
-// Custom bottom bar — matches HTML exactly: h-20, rounded-t-xl, elevated FAB
+// Custom bottom bar matching the Phase 1 JSX preview:
+// Home / Find / Post / Activity / Profile.
 function LoggedInTabBar({ state, navigation }) {
   const insets = useSafeAreaInsets();
-  const idx = state.index; // 0=Home, 1=PostJobTab, 2=Profile
+  const idx = state.index; // 0=Home, 1=Browse, 2=PostJobTab, 3=Activity, 4=Profile
 
   const tabBtn = (label, iconActive, iconInactive, screenName, tabIdx) => (
     <TouchableOpacity
-      style={{ flex: 1, alignItems: "center", justifyContent: "center" }}
+      style={{ flex: 1, alignItems: "center", justifyContent: "center", minWidth: 0 }}
       onPress={() => navigation.navigate(screenName)}
       activeOpacity={0.7}
     >
-      <Ionicons name={idx === tabIdx ? iconActive : iconInactive} size={24} color={idx === tabIdx ? colors.primary : colors.outline} />
-      <Text style={{ fontFamily: fonts.bodyBold, fontSize: 11, color: idx === tabIdx ? colors.primary : colors.outline, marginTop: 3 }}>
+      <Ionicons name={idx === tabIdx ? iconActive : iconInactive} size={22} color={idx === tabIdx ? colors.primary : colors.outline} />
+      <Text
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.78}
+        style={{
+          fontFamily: fonts.bodyBold,
+          fontSize: 10,
+          color: idx === tabIdx ? colors.primary : colors.outline,
+          marginTop: 3,
+          textAlign: "center",
+          maxWidth: 68,
+        }}
+      >
         {label}
       </Text>
     </TouchableOpacity>
@@ -165,15 +188,16 @@ function LoggedInTabBar({ state, navigation }) {
   return (
     <View style={{
       position: "absolute", bottom: 0, left: 0, right: 0,
-      height: 80 + insets.bottom,
+      height: 78 + insets.bottom,
       backgroundColor: "#fff",
       borderTopLeftRadius: 12, borderTopRightRadius: 12,
       shadowColor: "#000", shadowOffset: { width: 0, height: -4 },
       shadowOpacity: 0.06, shadowRadius: 20, elevation: 16,
       paddingBottom: insets.bottom,
     }}>
-      <View style={{ flex: 1, flexDirection: "row", alignItems: "center", paddingHorizontal: 24 }}>
+      <View style={{ flex: 1, flexDirection: "row", alignItems: "center", paddingHorizontal: 10 }}>
         {tabBtn("Home", "home", "home-outline", "Home", 0)}
+        {tabBtn("Find", "search", "search-outline", "Browse", 1)}
 
         {/* Center FAB — elevated -top-8 */}
         <View style={{ flex: 1, alignItems: "center" }}>
@@ -181,24 +205,30 @@ function LoggedInTabBar({ state, navigation }) {
             onPress={() => navigation.navigate("PostJobFull")}
             activeOpacity={0.85}
             style={{
-              width: 64, height: 64, borderRadius: 32,
-              backgroundColor: "#1a1c2e",
+              width: 60, height: 60, borderRadius: 30,
+              backgroundColor: colors.primary,
               alignItems: "center", justifyContent: "center",
               marginBottom: 4,
-              position: "relative", top: -24,
+              position: "relative", top: -22,
               borderWidth: 4, borderColor: "#fff",
               shadowColor: "#000", shadowOffset: { width: 0, height: 4 },
               shadowOpacity: 0.2, shadowRadius: 12, elevation: 10,
             }}
           >
-            <Ionicons name="add" size={32} color="#fff" />
+            <Ionicons name="add" size={30} color="#fff" />
           </TouchableOpacity>
-          <Text style={{ fontFamily: fonts.bodyBold, fontSize: 11, color: colors.outline, marginTop: -20 }}>
-            Post a Job
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.78}
+            style={{ fontFamily: fonts.bodyBold, fontSize: 10, color: idx === 2 ? colors.primary : colors.outline, marginTop: -18, maxWidth: 70 }}
+          >
+            Post
           </Text>
         </View>
 
-        {tabBtn("Profile", "person-circle", "person-circle-outline", "Profile", 2)}
+        {tabBtn("Activity", "list", "list-outline", "Activity", 3)}
+        {tabBtn("Profile", "person-circle", "person-circle-outline", "Profile", 4)}
       </View>
     </View>
   );
@@ -235,14 +265,16 @@ function Tabs() {
     );
   }
 
-  // Logged-in: 3-tab nav with custom bottom bar
+  // Logged-in: 5-tab nav with custom bottom bar
   return (
     <Tab.Navigator
       tabBar={(props) => <LoggedInTabBar {...props} />}
       screenOptions={{ headerShown: false }}
     >
       <Tab.Screen name="Home"       component={DashboardScreen} />
+      <Tab.Screen name="Browse"     component={MarketplaceScreen} />
       <Tab.Screen name="PostJobTab" component={PostJobScreen}   />
+      <Tab.Screen name="Activity"   component={ActivityScreen}  />
       <Tab.Screen name="Profile"    component={ProfileScreen}   />
     </Tab.Navigator>
   );
@@ -334,9 +366,16 @@ export default Sentry.wrap(function App() {
     Manrope_700Bold,
     Manrope_800ExtraBold,
   });
+  const [plusJakartaLoaded] = usePlusJakarta({
+    PlusJakartaSans_400Regular,
+    PlusJakartaSans_500Medium,
+    PlusJakartaSans_600SemiBold,
+    PlusJakartaSans_700Bold,
+    PlusJakartaSans_800ExtraBold,
+  });
   const [splashDone, setSplashDone] = useState(false);
 
-  const fontsLoaded = interLoaded && manropeLoaded;
+  const fontsLoaded = interLoaded && manropeLoaded && plusJakartaLoaded;
   const ready = fontsLoaded && splashDone;
 
   return (

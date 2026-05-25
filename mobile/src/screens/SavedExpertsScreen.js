@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "../i18n";
 import { colors, fonts, spacing, radius } from "../theme";
@@ -51,31 +52,43 @@ export default function SavedExpertsScreen({ navigation }) {
   }
 
   return (
-    <FlatList
-      data={workers}
-      keyExtractor={(w) => w.id}
-      renderItem={renderItem}
-      contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
-      ListEmptyComponent={
-        <View style={styles.empty}>
-          <Text style={styles.emptyText}>{t("saved_experts_empty")}</Text>
-        </View>
-      }
-    />
+    <View style={[styles.safe, { paddingTop: insets.top }]}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBack} hitSlop={8}>
+          <Ionicons name="arrow-back" size={22} color={colors.textHeading} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Saved Experts</Text>
+      </View>
+      <FlatList
+        data={workers}
+        keyExtractor={(w) => w.id}
+        renderItem={renderItem}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
+        ListEmptyComponent={
+          <View style={styles.empty}>
+            <Text style={styles.emptyText}>{t("saved_experts_empty")}</Text>
+          </View>
+        }
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  safe:     { flex: 1, backgroundColor: colors.bg },
   center:   { flex: 1, justifyContent: "center", alignItems: "center" },
-  row:      { flexDirection: "row", alignItems: "center", backgroundColor: colors.surfaceCard, paddingHorizontal: spacing.md, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.borderSubtle, gap: spacing.sm },
-  avatar:   { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary, justifyContent: "center", alignItems: "center" },
-  avatarText: { color: colors.onPrimary, fontFamily: fonts.bodyBold, fontSize: 18 },
-  name:     { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.textHeading },
+  header:   { flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.md, paddingVertical: 10, backgroundColor: colors.surfaceCard, borderBottomWidth: 1, borderBottomColor: colors.borderSubtle },
+  headerBack: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
+  headerTitle: { flex: 1, marginLeft: 8, fontFamily: fonts.bodyBold, fontSize: 18, color: colors.textHeading },
+  row:      { flexDirection: "row", alignItems: "center", backgroundColor: colors.surfaceCard, paddingHorizontal: spacing.md, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: colors.borderSubtle, gap: 14 },
+  avatar:   { width: 48, height: 48, borderRadius: 12, backgroundColor: colors.primary, justifyContent: "center", alignItems: "center" },
+  avatarText: { color: colors.onPrimary, fontFamily: fonts.bodyBold, fontSize: 16 },
+  name:     { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.textHeading },
   skills:   { fontFamily: fonts.body, fontSize: 12, color: colors.outline },
   rate:     { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.statusSuccess },
   empty:    { alignItems: "center", marginTop: 80 },
   emptyText:{ fontFamily: fonts.body, fontSize: 14, color: colors.outline },
-  availChip: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#dcfce7", borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3, alignSelf: "flex-start", marginTop: 4 },
-  availDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#16a34a" },
-  availChipText: { fontFamily: fonts.bodyBold, fontSize: 10, color: "#16a34a" },
+  availChip: { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.successLight, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3, alignSelf: "flex-start", marginTop: 4 },
+  availDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.success },
+  availChipText: { fontFamily: fonts.bodyBold, fontSize: 10, color: colors.success },
 });

@@ -10,7 +10,7 @@ import { useTranslation } from "../i18n";
 import { colors, fonts, spacing, radius } from "../theme";
 import api from "../lib/api";
 
-export default function CertificationsScreen() {
+export default function CertificationsScreen({ navigation }) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [certs, setCerts] = useState([]);
@@ -88,7 +88,13 @@ export default function CertificationsScreen() {
   if (loading) return <View style={styles.center}><ActivityIndicator color={colors.primary} /></View>;
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <View style={[styles.safe, { paddingTop: insets.top }]}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBack} hitSlop={8}>
+          <Ionicons name="arrow-back" size={22} color={colors.textHeading} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Certifications</Text>
+      </View>
       <FlatList
         data={certs}
         keyExtractor={(c) => c.id}
@@ -104,8 +110,8 @@ export default function CertificationsScreen() {
       <View style={[styles.addBar, { paddingBottom: insets.bottom + 8 }]}>
         <TouchableOpacity style={styles.addBtn} onPress={pickAndUpload} disabled={uploading}>
           {uploading
-            ? <ActivityIndicator color="#fff" />
-            : <><Ionicons name="add" size={18} color="#fff" /><Text style={styles.addBtnText}>{t("certs_add")}</Text></>
+            ? <ActivityIndicator color={colors.onPrimary} />
+            : <><Ionicons name="add" size={20} color={colors.onPrimary} /><Text style={styles.addBtnText}>{t("certs_add")}</Text></>
           }
         </TouchableOpacity>
       </View>
@@ -114,19 +120,23 @@ export default function CertificationsScreen() {
 }
 
 const styles = StyleSheet.create({
+  safe:    { flex: 1, backgroundColor: colors.bg },
   center:  { flex: 1, justifyContent: "center", alignItems: "center" },
-  card:    { flexDirection: "row", alignItems: "flex-start", backgroundColor: colors.surfaceCard, borderRadius: radius.xxl, padding: spacing.md, marginBottom: spacing.xs, borderWidth: 1, borderColor: colors.borderSubtle },
+  header:  { flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.md, paddingVertical: 10, backgroundColor: colors.surfaceCard, borderBottomWidth: 1, borderBottomColor: colors.borderSubtle },
+  headerBack: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
+  headerTitle: { flex: 1, marginLeft: 8, fontFamily: fonts.bodyBold, fontSize: 18, color: colors.textHeading },
+  card:    { flexDirection: "row", alignItems: "flex-start", backgroundColor: colors.surfaceCard, borderRadius: radius.lg, padding: spacing.md, marginBottom: spacing.sm, borderWidth: 1, borderColor: colors.borderSubtle, gap: spacing.sm },
   certName:{ fontFamily: fonts.bodyBold, fontSize: 14, color: colors.textHeading },
   certSkill:{ fontFamily: fonts.body, fontSize: 12, color: colors.outline, textTransform: "capitalize" },
   certMeta:{ fontFamily: fonts.body, fontSize: 12, color: colors.outline },
   cardRight: { alignItems: "flex-end", gap: 8 },
-  verifiedBadge: { backgroundColor: "#d1fae5", borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3 },
-  verifiedText:  { fontFamily: fonts.bodyBold, fontSize: 11, color: "#065f46" },
-  pendingBadge:  { backgroundColor: "#fef3c7", borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3 },
-  pendingText:   { fontFamily: fonts.bodyBold, fontSize: 11, color: "#92400e" },
+  verifiedBadge: { backgroundColor: colors.successLight, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3 },
+  verifiedText:  { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.success },
+  pendingBadge:  { backgroundColor: colors.warningLight, borderRadius: radius.pill, paddingHorizontal: 8, paddingVertical: 3 },
+  pendingText:   { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.warning },
   empty:    { alignItems: "center", marginTop: 60 },
   emptyText:{ fontFamily: fonts.body, fontSize: 14, color: colors.outline },
   addBar:   { backgroundColor: colors.surfaceCard, borderTopWidth: 1, borderTopColor: colors.borderSubtle, paddingTop: spacing.sm, paddingHorizontal: spacing.md },
-  addBtn:   { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: colors.primary, borderRadius: radius.xxl, paddingVertical: 13 },
-  addBtnText:{ fontFamily: fonts.bodyBold, fontSize: 14, color: colors.onPrimary },
+  addBtn:   { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, backgroundColor: colors.primary, borderRadius: radius.md, paddingVertical: 16, minHeight: 52 },
+  addBtnText:{ fontFamily: fonts.bodyBold, fontSize: 15, color: colors.onPrimary },
 });

@@ -8,16 +8,16 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../contexts/AuthContext";
 import { useTranslation } from "../i18n";
-import { colors, fonts, spacing, radius } from "../theme";
+import { colors, fonts, spacing, radius, shadow } from "../theme";
 import api from "../lib/api";
 import { track } from "../lib/analytics";
 
 const STATUS_COLORS = {
-  requested:  { bg: "#EDEDF2", text: "#5E5E60" },
-  accepted:   { bg: "#E3F2FD", text: "#0D47A1" },
-  completed:  { bg: "#F0FDF4", text: "#166534" },
-  rejected:   { bg: "#FFDAD6", text: "#93000A" },
-  cancelled:  { bg: "#F3F3F8", text: "#6B7280" },
+  requested:  { bg: colors.surface, text: colors.textSecondary },
+  accepted:   { bg: colors.infoLight, text: colors.info },
+  completed:  { bg: colors.successLight, text: colors.success },
+  rejected:   { bg: colors.dangerLight, text: colors.danger },
+  cancelled:  { bg: colors.surface, text: colors.textMuted },
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -64,18 +64,20 @@ function BannerCard({ text, status }) {
   if (!text) return null;
   const isGreen = status === "completed";
   const isRed   = status === "rejected" || status === "cancelled";
-  const bgColor = isGreen ? "#F0FDF4" : isRed ? "#FFF1F2" : "#F3F3F8";
-  const txColor = isGreen ? "#166534" : isRed ? "#9F1239" : "#4C4546";
+  const bgColor = isGreen ? colors.successLight : isRed ? colors.dangerLight : colors.surface;
+  const txColor = isGreen ? colors.success : isRed ? colors.danger : colors.textSecondary;
+  const icon = isGreen ? "checkmark-circle-outline" : isRed ? "alert-circle-outline" : "information-circle-outline";
   return (
     <View style={[bannerS.wrap, { backgroundColor: bgColor }]}>
+      <Ionicons name={icon} size={20} color={txColor} style={{ marginTop: 1 }} />
       <Text style={[bannerS.text, { color: txColor }]}>{text}</Text>
     </View>
   );
 }
 
 const bannerS = StyleSheet.create({
-  wrap: { borderRadius: 12, padding: 14, marginBottom: 16 },
-  text: { fontFamily: fonts.body, fontSize: 14, lineHeight: 20 },
+  wrap: { flexDirection: "row", alignItems: "flex-start", gap: 10, borderRadius: radius.md, padding: 14, marginBottom: 16 },
+  text: { flex: 1, fontFamily: fonts.body, fontSize: 14, lineHeight: 20 },
 });
 
 function StatusTracker({ engagement, isSentByMe }) {
@@ -106,7 +108,7 @@ function StatusTracker({ engagement, isSentByMe }) {
         <View key={label} style={trackerS.step}>
           <View style={[trackerS.dot, states[i] && !isTerminal && trackerS.dotDone]}>
             {states[i] && !isTerminal
-              ? <Ionicons name="checkmark" size={14} color="#fff" />
+              ? <Ionicons name="checkmark" size={14} color={colors.onPrimary} />
               : null}
           </View>
           <Text style={[trackerS.label, states[i] && !isTerminal && trackerS.labelDone]}>{label}</Text>
@@ -125,20 +127,20 @@ const trackerS = StyleSheet.create({
     paddingHorizontal: 4,
   },
   lineWrap: { position: "absolute", left: 20, right: 20, top: 13, height: 2 },
-  lineBase: { ...StyleSheet.absoluteFillObject, backgroundColor: "#E2E2E7" },
-  lineActive: { height: 2, backgroundColor: "#000" },
+  lineBase: { ...StyleSheet.absoluteFillObject, backgroundColor: colors.borderSubtle },
+  lineActive: { height: 2, backgroundColor: colors.primary },
   step: { alignItems: "center", width: 80 },
   dot: {
     width: 28, height: 28, borderRadius: 14,
-    backgroundColor: "#E2E2E7",
+    backgroundColor: colors.surfaceContainerHighest,
     alignItems: "center", justifyContent: "center", marginBottom: 6,
   },
-  dotDone: { backgroundColor: "#000" },
+  dotDone: { backgroundColor: colors.primary },
   label: {
     fontFamily: fonts.bodyBold, fontSize: 11,
-    color: "#9CA3AF", textAlign: "center", includeFontPadding: false,
+    color: colors.textMuted, textAlign: "center", includeFontPadding: false,
   },
-  labelDone: { color: "#1A1C1F" },
+  labelDone: { color: colors.textHeading },
 });
 
 export default function EngagementDetailScreen({ route, navigation }) {
@@ -210,6 +212,10 @@ export default function EngagementDetailScreen({ route, navigation }) {
   };
 
   const confirmDone = async () => {
+    if (!proofPhoto) {
+      Alert.alert("Proof required", "Please upload or take a proof photo before marking complete.");
+      return;
+    }
     setCompleting(true);
     try {
       await api.post(`/work-requests/${id}/complete`);
@@ -264,9 +270,12 @@ export default function EngagementDetailScreen({ route, navigation }) {
   const isReceivedByMe = user?.id === engagement.requested_to_user_id;
 
   // Normalise fields — backend nests job info under job_summary
-  const jobTitle  = engagement.job_summary?.title  || engagement.job_title  || "Work Request";
-  const jobDate   = engagement.job_summary?.date    || engagement.job_date   || null;
-  const dailyRate = engagement.job_summary?.budget_max || engagement.daily_rate || null;
+  const jobSummary = engagement.job_summary || {};
+  const jobTitle  = jobSummary.title  || engagement.job_title  || "Work Request";
+  const jobDate   = jobSummary.date    || engagement.job_date   || null;
+  const dailyRate = jobSummary.budget_max || jobSummary.daily_rate || engagement.daily_rate || null;
+  const location  = jobSummary.location || jobSummary.village || jobSummary.pincode || engagement.location || engagement.village || null;
+  const description = jobSummary.description || engagement.description || engagement.message || null;
 
   // Expert = worker who does the work; customer = job poster
   const isExpert = engagement.request_type === "job_application" ? isSentByMe : isReceivedByMe;
@@ -297,35 +306,12 @@ export default function EngagementDetailScreen({ route, navigation }) {
         </View>
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: insets.bottom + 40 }}>
+      <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: insets.bottom + 40 }} showsVerticalScrollIndicator={false}>
         {/* Context banner */}
         <BannerCard text={getBannerText(engagement, isSentByMe, otherPartyName, isExpert)} status={status} />
 
-        {/* Status tracker */}
-        <StatusTracker engagement={engagement} isSentByMe={isSentByMe} />
-
-        {/* Job info */}
-        <View style={styles.card}>
-          <Text style={styles.jobTitle}>{jobTitle}</Text>
-          {jobDate ? (
-            <View style={styles.metaRow}>
-              <Ionicons name="calendar-outline" size={14} color={colors.outline} />
-              <Text style={styles.meta}>{jobDate}</Text>
-            </View>
-          ) : null}
-          {dailyRate ? (
-            <View style={styles.metaRow}>
-              <Ionicons name="cash-outline" size={14} color={colors.outline} />
-              <Text style={styles.meta}>₹{dailyRate}/day</Text>
-            </View>
-          ) : null}
-        </View>
-
         {/* Other party */}
-        <View style={styles.card}>
-          <Text style={styles.sectionLabel}>
-            {isExpert ? "You worked for" : "Expert handling your job"}
-          </Text>
+        <View style={styles.partyCard}>
           <View style={styles.partyRow}>
             <View style={styles.partyAvatar}>
               <Text style={styles.partyAvatarText}>{(otherPartyName[0] || "?").toUpperCase()}</Text>
@@ -336,19 +322,59 @@ export default function EngagementDetailScreen({ route, navigation }) {
                 {isExpert ? "Customer" : "Expert / Worker"}
               </Text>
             </View>
+            <View style={styles.verifiedPill}>
+              <Ionicons name="shield-checkmark-outline" size={13} color={colors.textHeading} />
+              <Text style={styles.verifiedText}>Verified</Text>
+            </View>
           </View>
+        </View>
+
+        {/* Job info */}
+        <View style={styles.jobCard}>
+          <View style={styles.jobTopRow}>
+            <View style={{ flex: 1, paddingRight: spacing.md }}>
+              <Text style={styles.jobTitle}>{jobTitle}</Text>
+              {location ? (
+                <View style={styles.metaRow}>
+                  <Ionicons name="location-outline" size={16} color={colors.textSecondary} />
+                  <Text style={styles.meta}>{location}</Text>
+                </View>
+              ) : null}
+            </View>
+            {dailyRate ? (
+              <View style={styles.priceBlock}>
+                <Text style={styles.price}>₹{dailyRate}</Text>
+                <Text style={styles.priceUnit}>/ day</Text>
+              </View>
+            ) : null}
+          </View>
+          {description ? (
+            <Text style={styles.description}>{description}</Text>
+          ) : null}
+          {jobDate ? (
+            <View style={[styles.metaRow, styles.dateRow]}>
+              <Ionicons name="calendar-outline" size={14} color={colors.outline} />
+              <Text style={styles.meta}>{jobDate}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        {/* Status tracker */}
+        <View style={styles.card}>
+          <Text style={styles.sectionLabel}>Engagement Status</Text>
+          <StatusTracker engagement={engagement} isSentByMe={isSentByMe} />
         </View>
 
         {/* Actions */}
         <View style={styles.actionsWrap}>
           {canAcceptReject && (
-            <>
-              <ActionBtn label={t("engagement_accept")} onPress={() => act("accept")} color={colors.statusSuccess} loading={acting} />
-              <ActionBtn label={t("engagement_decline")} onPress={() => act("reject")} color={colors.error} loading={acting} outline />
-            </>
+            <View style={styles.splitActions}>
+              <ActionBtn style={{ flex: 1 }} label={t("engagement_decline")} onPress={() => act("reject")} color={colors.danger} loading={acting} outline />
+              <ActionBtn style={{ flex: 1 }} label={t("engagement_accept")} onPress={() => act("accept")} color={colors.primary} loading={acting} />
+            </View>
           )}
           {status === "requested" && isSentByMe && (
-            <ActionBtn label={t("engagement_cancel")} onPress={() => act("cancel")} color={colors.error} loading={acting} outline />
+            <ActionBtn label={t("engagement_cancel")} onPress={() => act("cancel")} color={colors.danger} loading={acting} outline />
           )}
           {/* Chat — available after acceptance; archived after completion */}
           {(status === "accepted" || status === "completed") ? (
@@ -356,7 +382,7 @@ export default function EngagementDetailScreen({ route, navigation }) {
               label={status === "accepted" ? `Chat with ${otherPartyName}` : `View chat with ${otherPartyName}`}
               icon="chatbubble-outline"
               onPress={() => navigation.navigate("Chat", { engagementId: id })}
-              color={status === "accepted" ? colors.primary : "#6B7280"}
+              color={status === "accepted" ? colors.primary : colors.textSecondary}
             />
           ) : null}
           {/* Only the expert (person who does the work) can mark done */}
@@ -435,27 +461,36 @@ export default function EngagementDetailScreen({ route, navigation }) {
             activeOpacity={1}
             onPress={() => { if (!completing) { setShowCompleteModal(false); setProofPhoto(null); } }}
           />
-          <View style={styles.modalSheet}>
-            <Text style={styles.modalTitle}>Mark as Done</Text>
+          <View style={[styles.modalSheet, { paddingBottom: insets.bottom + 24 }]}>
+            <View style={styles.sheetHandle} />
+            <View style={styles.sheetHeaderRow}>
+              <Text style={styles.modalTitle}>Complete Work</Text>
+              <TouchableOpacity
+                style={styles.sheetClose}
+                onPress={() => { if (!completing) { setShowCompleteModal(false); setProofPhoto(null); } }}
+              >
+                <Ionicons name="close" size={20} color={colors.textHeading} />
+              </TouchableOpacity>
+            </View>
             <Text style={styles.modalSubtitle}>
-              Optionally upload a proof photo of the completed work.
+              Upload a proof photo before marking this work completed.
             </Text>
 
             {proofPhoto ? (
               <View style={styles.proofPreviewWrap}>
                 <Image source={{ uri: proofPhoto.uri }} style={styles.proofPreview} resizeMode="cover" />
                 <TouchableOpacity style={styles.removePhoto} onPress={() => setProofPhoto(null)}>
-                  <Ionicons name="close-circle" size={22} color={colors.error} />
+                  <Ionicons name="close" size={18} color={colors.onPrimary} />
                 </TouchableOpacity>
               </View>
             ) : (
               <View style={styles.photoRow}>
                 <TouchableOpacity style={styles.photoBtn} onPress={takeProofPhoto}>
-                  <Ionicons name="camera-outline" size={20} color={colors.primary} />
+                  <Ionicons name="camera-outline" size={28} color={colors.textHeading} />
                   <Text style={styles.photoBtnText}>Camera</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.photoBtn} onPress={pickProofPhoto}>
-                  <Ionicons name="image-outline" size={20} color={colors.primary} />
+                  <Ionicons name="image-outline" size={28} color={colors.textHeading} />
                   <Text style={styles.photoBtnText}>Gallery</Text>
                 </TouchableOpacity>
               </View>
@@ -500,12 +535,13 @@ function StarPicker({ value, onChange, readonly = false }) {
   );
 }
 
-function ActionBtn({ label, onPress, color, outline, loading, icon }) {
+function ActionBtn({ label, onPress, color, outline, loading, icon, style }) {
   return (
     <TouchableOpacity
       style={[styles.actionBtn, outline
         ? { backgroundColor: colors.surfaceCard, borderWidth: 1.5, borderColor: color }
-        : { backgroundColor: color }
+        : { backgroundColor: color },
+        style,
       ]}
       onPress={onPress}
       disabled={loading}
@@ -521,53 +557,82 @@ function ActionBtn({ label, onPress, color, outline, loading, icon }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+  container: { flex: 1, backgroundColor: colors.bg },
   center:    { flex: 1, justifyContent: "center", alignItems: "center" },
 
   header: {
     flexDirection: "row", alignItems: "center",
-    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg, paddingVertical: 10,
     backgroundColor: colors.surfaceCard, borderBottomWidth: 1, borderBottomColor: colors.borderSubtle,
     gap: spacing.sm,
   },
-  backBtn:     { padding: 4 },
+  backBtn:     { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", marginLeft: -8 },
   headerTitle: { flex: 1, fontFamily: fonts.bodyBold, fontSize: 18, color: colors.textHeading },
   statusBadge: { paddingHorizontal: spacing.sm, paddingVertical: 4, borderRadius: radius.pill },
-  statusText:  { fontFamily: fonts.bodyBold, fontSize: 13 },
+  statusText:  { fontFamily: fonts.bodyBold, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.4 },
 
   card: {
-    backgroundColor: colors.surfaceCard, borderRadius: radius.xxl,
-    padding: spacing.md, marginBottom: spacing.md,
+    backgroundColor: colors.surfaceCard, borderRadius: radius.lg,
+    padding: spacing.lg, marginBottom: spacing.lg,
     borderWidth: 1, borderColor: colors.borderSubtle,
+    ...shadow.xs,
   },
-  jobTitle:     { fontFamily: fonts.bodyBold, fontSize: 18, color: colors.textHeading, marginBottom: 10 },
+  partyCard: {
+    backgroundColor: colors.surfaceCard,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    ...shadow.xs,
+  },
+  jobCard: {
+    backgroundColor: colors.surfaceCard,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.lg,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    ...shadow.xs,
+  },
+  jobTopRow: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" },
+  jobTitle:     { fontFamily: fonts.bodyBold, fontSize: 22, color: colors.textHeading, marginBottom: 8, letterSpacing: -0.4, lineHeight: 28 },
+  priceBlock:   { alignItems: "flex-end", minWidth: 76 },
+  price:        { fontFamily: fonts.bodyBold, fontSize: 24, color: colors.textHeading, letterSpacing: -0.3 },
+  priceUnit:    { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.textSecondary, textTransform: "uppercase", marginTop: 2 },
+  description:  { fontFamily: fonts.body, fontSize: 14, color: colors.textSecondary, lineHeight: 21, marginTop: spacing.md },
+  dateRow:      { borderTopWidth: 1, borderTopColor: colors.borderSubtle, paddingTop: spacing.md, marginTop: spacing.md },
   metaRow:      { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 6 },
-  meta:         { fontFamily: fonts.body, fontSize: 14, color: colors.outline },
-  sectionLabel: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.outline, letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 10 },
+  meta:         { flex: 1, fontFamily: fonts.body, fontSize: 14, color: colors.textSecondary },
+  sectionLabel: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.textMuted, letterSpacing: 1.1, textTransform: "uppercase", marginBottom: spacing.lg },
 
   partyRow:        { flexDirection: "row", alignItems: "center", gap: 12 },
-  partyAvatar:     { width: 44, height: 44, borderRadius: 22, backgroundColor: "#E0E7FF", alignItems: "center", justifyContent: "center" },
-  partyAvatarText: { fontFamily: fonts.bodyBold, fontSize: 18, color: "#4F46E5" },
-  partyName:       { fontFamily: fonts.bodyBold, fontSize: 17, color: colors.textHeading },
-  partyRole:       { fontFamily: fonts.body, fontSize: 13, color: colors.outline, marginTop: 2 },
+  partyAvatar:     { width: 56, height: 56, borderRadius: 18, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  partyAvatarText: { fontFamily: fonts.bodyBold, fontSize: 20, color: colors.onPrimary },
+  partyName:       { fontFamily: fonts.bodyBold, fontSize: 18, color: colors.textHeading, letterSpacing: -0.2 },
+  partyRole:       { fontFamily: fonts.body, fontSize: 13, color: colors.textSecondary, marginTop: 3 },
+  verifiedPill:    { flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.surface, borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 6 },
+  verifiedText:    { fontFamily: fonts.bodyBold, fontSize: 10, color: colors.textHeading, textTransform: "uppercase", letterSpacing: 0.4 },
 
   actionsWrap: { gap: spacing.sm, marginBottom: spacing.md },
+  splitActions: { flexDirection: "row", gap: spacing.sm },
   actionBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
-    borderRadius: radius.xxl, paddingVertical: 14,
+    borderRadius: radius.md, paddingVertical: 16, minHeight: 54,
   },
   actionBtnText: { fontFamily: fonts.bodyBold, fontSize: 16 },
 
   // Rating
-  ratingTitle:       { fontFamily: fonts.bodyBold, fontSize: 17, color: colors.textHeading, marginBottom: 4 },
-  ratingSubtitle:    { fontFamily: fonts.body, fontSize: 14, color: colors.outline, marginBottom: spacing.sm },
-  starsRow:          { flexDirection: "row", marginBottom: spacing.md },
+  ratingTitle:       { fontFamily: fonts.bodyBold, fontSize: 18, color: colors.textHeading, marginBottom: 4, letterSpacing: -0.2 },
+  ratingSubtitle:    { fontFamily: fonts.body, fontSize: 14, color: colors.textSecondary, marginBottom: spacing.md, lineHeight: 20 },
+  starsRow:          { flexDirection: "row", marginBottom: spacing.lg },
   commentInput: {
-    borderWidth: 1, borderColor: colors.borderSubtle, borderRadius: radius.lg,
-    padding: spacing.sm, fontFamily: fonts.body, fontSize: 14, color: colors.textHeading,
-    minHeight: 80, textAlignVertical: "top", marginBottom: spacing.md,
+    borderWidth: 0, borderRadius: radius.md,
+    backgroundColor: colors.surface,
+    padding: spacing.md, fontFamily: fonts.body, fontSize: 14, color: colors.textHeading,
+    minHeight: 96, textAlignVertical: "top", marginBottom: spacing.md,
   },
-  ratingCommentText: { fontFamily: fonts.body, fontSize: 14, color: colors.textBody, fontStyle: "italic", marginTop: spacing.xs },
+  ratingCommentText: { fontFamily: fonts.body, fontSize: 14, color: colors.textSecondary, fontStyle: "italic", marginTop: spacing.xs, lineHeight: 21 },
 
   // Bottom sheet
   modalOverlay: {
@@ -578,19 +643,25 @@ const styles = StyleSheet.create({
   modalSheet: {
     position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 11,
     backgroundColor: colors.surfaceCard,
-    borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    padding: spacing.lg, paddingBottom: 40,
+    borderTopLeftRadius: 28, borderTopRightRadius: 28,
+    paddingHorizontal: spacing.lg, paddingTop: spacing.md,
+    ...shadow.lg,
   },
-  modalTitle:    { fontFamily: fonts.bodyBold, fontSize: 18, color: colors.textHeading, marginBottom: 6 },
-  modalSubtitle: { fontFamily: fonts.body, fontSize: 14, color: colors.outline, marginBottom: spacing.md },
+  sheetHandle: { width: 46, height: 5, borderRadius: 3, backgroundColor: colors.borderSubtle, alignSelf: "center", marginBottom: spacing.lg },
+  sheetHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.xs },
+  sheetClose: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
+  modalTitle:    { fontFamily: fonts.bodyBold, fontSize: 22, color: colors.textHeading, letterSpacing: -0.4 },
+  modalSubtitle: { fontFamily: fonts.body, fontSize: 14, color: colors.textSecondary, lineHeight: 21, marginBottom: spacing.lg },
   photoRow:      { flexDirection: "row", gap: spacing.md, marginBottom: spacing.sm },
   photoBtn: {
-    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 8, borderWidth: 1.5, borderColor: colors.primary,
-    borderRadius: radius.lg, paddingVertical: 12,
+    flex: 1, minHeight: 128,
+    alignItems: "center", justifyContent: "center",
+    gap: 8, borderWidth: 2, borderStyle: "dashed", borderColor: colors.borderSubtle,
+    borderRadius: radius.md, paddingVertical: 12,
+    backgroundColor: colors.surfaceCard,
   },
-  photoBtnText:    { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.primary },
-  proofPreviewWrap: { position: "relative", marginBottom: spacing.md },
-  proofPreview:    { width: "100%", height: 180, borderRadius: radius.lg },
-  removePhoto:     { position: "absolute", top: 8, right: 8 },
+  photoBtnText:    { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.textHeading },
+  proofPreviewWrap: { position: "relative", height: 180, borderRadius: radius.md, overflow: "hidden", marginBottom: spacing.md, backgroundColor: colors.borderSubtle },
+  proofPreview:    { width: "100%", height: "100%" },
+  removePhoto:     { position: "absolute", top: 10, right: 10, width: 30, height: 30, borderRadius: 15, backgroundColor: "rgba(0,0,0,0.72)", alignItems: "center", justifyContent: "center" },
 });

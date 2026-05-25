@@ -127,7 +127,7 @@ export default function BecomeExpertScreen({ navigation, route }) {
     <View style={[s.container, { paddingTop: insets.top }]}>
       {/* Header */}
       <View style={s.header}>
-        <TouchableOpacity onPress={() => step > 1 ? setStep(p => p - 1) : navigation.goBack()} style={{ padding: 4 }}>
+        <TouchableOpacity onPress={() => step > 1 ? setStep(p => p - 1) : navigation.goBack()} style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", marginLeft: -8 }}>
           <Ionicons name="arrow-back" size={22} color={colors.textHeading} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>{editMode ? "Update My Skills" : "Become a Local Expert"}</Text>
@@ -156,7 +156,7 @@ export default function BecomeExpertScreen({ navigation, route }) {
                     onPress={() => toggleSkill(key)}
                     activeOpacity={0.75}
                   >
-                    {active && <Ionicons name="checkmark" size={13} color="#fff" style={{ marginRight: 4 }} />}
+                    {active && <Ionicons name="checkmark" size={13} color={colors.onPrimary} style={{ marginRight: 4 }} />}
                     <Text style={[s.chipText, active && s.chipTextActive]}>{label}</Text>
                   </TouchableOpacity>
                 );
@@ -176,7 +176,7 @@ export default function BecomeExpertScreen({ navigation, route }) {
                 onSubmitEditing={addCustom}
               />
               <TouchableOpacity style={s.addBtn} onPress={addCustom}>
-                <Ionicons name="add" size={20} color="#fff" />
+                <Ionicons name="add" size={22} color={colors.onPrimary} />
               </TouchableOpacity>
             </View>
 
@@ -189,7 +189,7 @@ export default function BecomeExpertScreen({ navigation, route }) {
                     onPress={() => setSkills(prev => prev.filter(x => x !== k))}
                   >
                     <Text style={s.customChipText}>{formatSkill(k)}</Text>
-                    <Ionicons name="close-circle" size={14} color={colors.primary} style={{ marginLeft: 4 }} />
+                    <Ionicons name="close-circle" size={14} color={colors.secondary} style={{ marginLeft: 4 }} />
                   </TouchableOpacity>
                 ))}
               </View>
@@ -241,18 +241,23 @@ export default function BecomeExpertScreen({ navigation, route }) {
         {step < 2 ? (
           <TouchableOpacity style={s.nextBtn} onPress={next}>
             <Text style={s.nextBtnText}>Continue</Text>
-            <Ionicons name="arrow-forward" size={18} color="#fff" />
+            <Ionicons name="arrow-forward" size={18} color={colors.onPrimary} />
           </TouchableOpacity>
         ) : (
-          <TouchableOpacity style={s.nextBtn} onPress={submit} disabled={submitting}>
-            {submitting
-              ? <ActivityIndicator color="#fff" />
-              : <>
-                  <Ionicons name="checkmark-circle-outline" size={18} color="#fff" />
-                  <Text style={s.nextBtnText}>{editMode ? "Save Changes" : "Create My Profile"}</Text>
-                </>
-            }
-          </TouchableOpacity>
+          <View style={s.footerActions}>
+            <TouchableOpacity style={s.backFooterBtn} onPress={() => setStep(1)} disabled={submitting}>
+              <Text style={s.backFooterBtnText}>Back</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[s.nextBtn, s.submitFooterBtn]} onPress={submit} disabled={submitting}>
+              {submitting
+                ? <ActivityIndicator color={colors.onPrimary} />
+                : <>
+                    <Ionicons name="checkmark-circle-outline" size={18} color={colors.onPrimary} />
+                    <Text style={s.nextBtnText}>{editMode ? "Save Changes" : "Create My Profile"}</Text>
+                  </>
+              }
+            </TouchableOpacity>
+          </View>
         )}
       </View>
     </View>
@@ -260,7 +265,7 @@ export default function BecomeExpertScreen({ navigation, route }) {
 }
 
 const s = StyleSheet.create({
-  container:  { flex: 1, backgroundColor: colors.background },
+  container:  { flex: 1, backgroundColor: colors.bg },
 
   header: {
     flexDirection: "row", alignItems: "center", gap: spacing.sm,
@@ -268,58 +273,64 @@ const s = StyleSheet.create({
     backgroundColor: colors.surfaceCard,
     borderBottomWidth: 1, borderBottomColor: colors.borderSubtle,
   },
-  headerTitle: { flex: 1, fontFamily: fonts.bodyBold, fontSize: 16, color: colors.textHeading },
-  stepNum:     { fontFamily: fonts.body, fontSize: 13, color: colors.outline },
+  headerTitle: { flex: 1, fontFamily: fonts.bodyBold, fontSize: 18, color: colors.textHeading },
+  stepNum:     { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.textMuted, backgroundColor: colors.surface, paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill },
 
-  stepTitle: { fontFamily: fonts.bodyBold, fontSize: 22, color: colors.textHeading, marginBottom: 6 },
-  stepSub:   { fontFamily: fonts.body, fontSize: 14, color: colors.outline, marginBottom: 20, lineHeight: 20 },
-  inputLabel:{ fontFamily: fonts.bodyBold, fontSize: 13, color: colors.outline, marginBottom: 8, marginTop: 20 },
+  stepTitle: { fontFamily: fonts.bodyBold, fontSize: 24, color: colors.textHeading, marginBottom: 6, letterSpacing: -0.3 },
+  stepSub:   { fontFamily: fonts.body, fontSize: 14, color: colors.textSecondary, marginBottom: 20, lineHeight: 20 },
+  inputLabel:{ fontFamily: fonts.bodyBold, fontSize: 13, color: colors.textHeading, marginBottom: 8, marginTop: 24 },
 
   // Skill grid
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   chip: {
     flexDirection: "row", alignItems: "center",
     paddingHorizontal: 16, paddingVertical: 10,
-    borderRadius: radius.pill, borderWidth: 1.5,
-    borderColor: "#e2e8f0", backgroundColor: "#fff",
+    minHeight: 40,
+    borderRadius: radius.pill,
+    backgroundColor: colors.surface,
   },
-  chipActive:     { backgroundColor: colors.primary, borderColor: colors.primary },
-  chipText:       { fontFamily: fonts.bodySemi, fontSize: 14, color: "#374151" },
-  chipTextActive: { color: "#fff" },
+  chipActive:     { backgroundColor: colors.primary },
+  chipText:       { fontFamily: fonts.bodySemi, fontSize: 14, color: colors.textHeading },
+  chipTextActive: { color: colors.onPrimary },
 
   // Custom skill
   customRow: { flexDirection: "row", gap: 10, alignItems: "center" },
-  addBtn:    { width: 48, height: 48, borderRadius: 14, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
+  addBtn:    { width: 52, height: 52, borderRadius: radius.md, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
   input: {
-    backgroundColor: "#fff", borderRadius: 14,
-    borderWidth: 1, borderColor: "#e2e8f0",
-    paddingHorizontal: spacing.md, paddingVertical: 13,
+    backgroundColor: colors.surface, borderRadius: radius.md,
+    paddingHorizontal: spacing.md, paddingVertical: 14,
+    minHeight: 52,
     fontFamily: fonts.body, fontSize: 15, color: colors.textHeading,
   },
   customChips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
   customChip:  {
     flexDirection: "row", alignItems: "center",
     paddingHorizontal: 12, paddingVertical: 7,
-    borderRadius: radius.pill, borderWidth: 1,
-    borderColor: colors.primary, backgroundColor: "#eef2ff",
+    minHeight: 32,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primaryLight,
   },
-  customChipText: { fontFamily: fonts.bodySemi, fontSize: 13, color: colors.primary },
+  customChipText: { fontFamily: fonts.bodySemi, fontSize: 13, color: colors.secondary },
 
   // Daily rate
-  rateWrap:       { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderRadius: 18, borderWidth: 1.5, borderColor: "#e2e8f0", overflow: "hidden", marginTop: 4 },
-  ratePrefix:     { width: 52, height: 60, backgroundColor: "#f8fafc", borderRightWidth: 1, borderRightColor: "#e2e8f0", alignItems: "center", justifyContent: "center" },
-  ratePrefixText: { fontFamily: fonts.bodyBold, fontSize: 22, color: colors.primary },
-  rateInput:      { flex: 1, paddingHorizontal: 16, paddingVertical: 14, fontFamily: fonts.bodyBold, fontSize: 26, color: colors.textHeading, letterSpacing: 1 },
-  rateSuffix:     { fontFamily: fonts.body, fontSize: 14, color: colors.outline, paddingRight: 16 },
+  rateWrap:       { flexDirection: "row", alignItems: "center", backgroundColor: colors.surface, borderRadius: radius.md, overflow: "hidden", marginTop: 4, minHeight: 64 },
+  ratePrefix:     { width: 52, height: 64, alignItems: "center", justifyContent: "center" },
+  ratePrefixText: { fontFamily: fonts.bodyBold, fontSize: 22, color: colors.textHeading },
+  rateInput:      { flex: 1, paddingHorizontal: 12, paddingVertical: 14, fontFamily: fonts.bodyBold, fontSize: 26, color: colors.textHeading, letterSpacing: 1 },
+  rateSuffix:     { fontFamily: fonts.body, fontSize: 14, color: colors.textMuted, paddingRight: 16 },
 
   suggestRow:      { flexDirection: "row", gap: 10, marginTop: 16 },
-  suggest:         { flex: 1, paddingVertical: 11, borderRadius: 12, borderWidth: 1.5, borderColor: "#e2e8f0", backgroundColor: "#fff", alignItems: "center" },
-  suggestActive:   { backgroundColor: colors.primary, borderColor: colors.primary },
-  suggestText:     { fontFamily: fonts.bodyBold, fontSize: 14, color: "#374151" },
-  suggestTextActive: { color: "#fff" },
-  rateHint:        { fontFamily: fonts.body, fontSize: 12, color: colors.outline, marginTop: 12, lineHeight: 18 },
+  suggest:         { flex: 1, paddingVertical: 13, borderRadius: radius.md, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", minHeight: 48 },
+  suggestActive:   { backgroundColor: colors.primary },
+  suggestText:     { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.textHeading },
+  suggestTextActive: { color: colors.onPrimary },
+  rateHint:        { fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, marginTop: 12, lineHeight: 18 },
 
   footer:     { backgroundColor: colors.surfaceCard, borderTopWidth: 1, borderTopColor: colors.borderSubtle, paddingTop: 12, paddingHorizontal: spacing.md },
-  nextBtn:    { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.primary, borderRadius: 16, paddingVertical: 16 },
-  nextBtnText:{ fontFamily: fonts.bodyBold, fontSize: 15, color: "#fff" },
+  footerActions: { flexDirection: "row", gap: 8 },
+  backFooterBtn: { flex: 1, minHeight: 56, borderRadius: radius.md, borderWidth: 1, borderColor: colors.borderSubtle, backgroundColor: colors.surfaceCard, alignItems: "center", justifyContent: "center" },
+  backFooterBtnText: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.textHeading },
+  submitFooterBtn: { flex: 2 },
+  nextBtn:    { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.primary, borderRadius: radius.md, paddingVertical: 18, minHeight: 56 },
+  nextBtnText:{ fontFamily: fonts.bodyBold, fontSize: 16, color: colors.onPrimary },
 });

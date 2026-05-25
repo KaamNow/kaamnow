@@ -17,7 +17,7 @@ import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { fonts, shadow, spacing } from "../theme";
+import { colors, fonts, shadow, spacing } from "../theme";
 import api from "../lib/api";
 
 const FILTERS = [
@@ -28,14 +28,14 @@ const FILTERS = [
 ];
 
 const STATUS_STYLE = {
-  posted: { label: "Posted", bg: "#E8E8ED", text: "#1A1C1F", border: "#CFC4C5" },
+  posted: { label: "Posted", bg: colors.borderSubtle, text: colors.textHeading, border: colors.borderSubtle },
   action_required: { label: "Action Required", bg: "#FFDAD6", text: "#93000A", border: "#FCA5A5" },
-  applied: { label: "Applied", bg: "#EDEDF2", text: "#5E5E60", border: "#E2E2E7" },
-  accepted: { label: "Accepted", bg: "#E8E8ED", text: "#1A1C1F", border: "#CFC4C5" },
-  in_progress: { label: "In Progress", bg: "#E8E8ED", text: "#1A1C1F", border: "#CFC4C5" },
-  completed: { label: "Completed", bg: "#F3F3F8", text: "#7E7576", border: "#E2E2E7" },
-  cancelled: { label: "Cancelled", bg: "#F3F3F8", text: "#7E7576", border: "#E2E2E7" },
-  rejected: { label: "Declined", bg: "#F3F3F8", text: "#7E7576", border: "#E2E2E7" },
+  applied: { label: "Applied", bg: colors.borderSubtle, text: colors.textSecondary, border: colors.borderSubtle },
+  accepted: { label: "Accepted", bg: colors.borderSubtle, text: colors.textHeading, border: colors.borderSubtle },
+  in_progress: { label: "In Progress", bg: colors.borderSubtle, text: colors.textHeading, border: colors.borderSubtle },
+  completed: { label: "Completed", bg: colors.surface, text: colors.textMuted, border: colors.borderSubtle },
+  cancelled: { label: "Cancelled", bg: colors.surface, text: colors.textMuted, border: colors.borderSubtle },
+  rejected: { label: "Declined", bg: colors.surface, text: colors.textMuted, border: colors.borderSubtle },
 };
 
 function timeAgo(iso) {
@@ -375,7 +375,17 @@ export default function ActivityScreen({ navigation }) {
   return (
     <View style={[S.safe, { paddingTop: insets.top }]}>
       <View style={S.header}>
-        <Text style={S.title}>My Activity</Text>
+        <View style={S.headerRow}>
+          <Pressable
+            style={S.backButton}
+            onPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Dashboard"))}
+            hitSlop={10}
+          >
+            <Ionicons name="arrow-back" size={22} color={colors.textHeading} />
+          </Pressable>
+          <Text style={S.title}>My Activity</Text>
+          <View style={S.headerSpacer} />
+        </View>
       </View>
 
       {/* Two-tab bar */}
@@ -406,18 +416,18 @@ export default function ActivityScreen({ navigation }) {
 
       <View style={S.controls}>
         <View style={S.searchBox}>
-          <Ionicons name="search-outline" size={18} color="#5E5E60" />
+          <Ionicons name="search-outline" size={18} color={colors.textSecondary} />
           <TextInput
             style={S.searchInput}
             value={query}
             onChangeText={setQuery}
             placeholder="Search by job title or location..."
-            placeholderTextColor="#5E5E60"
+            placeholderTextColor={colors.textSecondary}
             returnKeyType="search"
           />
           {query.length > 0 ? (
             <Pressable style={S.clearBtn} onPress={() => setQuery("")} hitSlop={8}>
-              <Ionicons name="close-circle" size={18} color="#7E7576" />
+              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
             </Pressable>
           ) : null}
         </View>
@@ -463,7 +473,7 @@ export default function ActivityScreen({ navigation }) {
           ListEmptyComponent={
             <View style={S.empty}>
               <View style={S.emptyIcon}>
-                <Ionicons name="file-tray-outline" size={34} color="#7E7576" />
+                <Ionicons name="file-tray-outline" size={34} color={colors.textMuted} />
               </View>
               <Text style={S.emptyTitle}>
                 {query
@@ -531,7 +541,7 @@ function ActivityCard({ item, onOpen }) {
         ) : (
           <Text style={S.cardFooterText}>{item.primaryLabel}</Text>
         )}
-        <Ionicons name="chevron-forward-outline" size={14} color={isUrgent ? "#93000A" : "#9CA3AF"} />
+        <Ionicons name="chevron-forward-outline" size={14} color={isUrgent ? "#93000A" : colors.textMuted} />
       </View>
     </Pressable>
   );
@@ -540,7 +550,7 @@ function ActivityCard({ item, onOpen }) {
 function InfoRow({ icon, text, strong, small }) {
   return (
     <View style={S.infoRow}>
-      <Ionicons name={icon} size={small ? 14 : 16} color="#5E5E60" />
+      <Ionicons name={icon} size={small ? 14 : 16} color={colors.textSecondary} />
       <Text style={[S.infoText, strong && S.infoStrong, small && S.infoSmall]} numberOfLines={1}>
         {text}
       </Text>
@@ -618,6 +628,7 @@ function ActivityDetailSheet({ visible, item, detail, loading, acting, requestCo
     : (["accepted", "in_progress", "completed"].includes(statusKey) ? 2 : 1);
   const canOpenChat = request?.id && ["accepted", "completed"].includes(effectiveStatus);
   const dateLine = job?.date_required || job?.job_date || request?.proposed_date || "Flexible Duration";
+  const isRateMissing = price === "Not specified";
   const isAppliedPending =
     item.statusKey === "applied" &&
     request?.status === "requested" &&
@@ -761,7 +772,7 @@ function ActivityDetailSheet({ visible, item, detail, loading, acting, requestCo
                   {isNewRequest ? "New Request" : isAppliedPending ? "Applied Details" : isWorkFlow ? "Engagement Details" : "Job Details"}
                 </Text>
                 <Pressable style={[S.sheetIconBtn, (isNewRequest || isAppliedPending || isWorkFlow) && S.requestCloseBtn, isWorkFlow && S.progressCloseBtn]} onPress={onClose}>
-                  <Ionicons name="close" size={(isNewRequest || isAppliedPending || isWorkFlow) ? 28 : 22} color="#1A1C1F" />
+                  <Ionicons name="close" size={(isNewRequest || isAppliedPending || isWorkFlow) ? 28 : 22} color={colors.textHeading} />
                 </Pressable>
               </View>
 
@@ -772,7 +783,7 @@ function ActivityDetailSheet({ visible, item, detail, loading, acting, requestCo
                 <View style={S.posterInfo}>
                   <View style={S.requesterNameRow}>
                     <Text style={[S.posterName, isNewRequest && S.requesterName, isAppliedPending && S.appliedPosterName, isWorkFlow && S.progressExpertName]} numberOfLines={1}>{displayPersonName}</Text>
-                    {(isNewRequest || isAppliedPending) ? <Ionicons name="shield-checkmark-outline" size={20} color="#1A1C1F" /> : null}
+                    {(isNewRequest || isAppliedPending) ? <Ionicons name="shield-checkmark-outline" size={20} color={colors.textHeading} /> : null}
                   </View>
                   <View style={[S.posterMeta, isNewRequest && S.requesterMeta, isAppliedPending && S.appliedPosterMeta, isWorkFlow && S.progressExpertMeta]}>
                     {isWorkFlow ? (
@@ -819,7 +830,7 @@ function ActivityDetailSheet({ visible, item, detail, loading, acting, requestCo
                   </View>
                   {isWorkFlow ? (
                     <View style={S.progressVerifiedPill}>
-                      <Ionicons name="shield-checkmark-outline" size={14} color="#1A1C1F" />
+                      <Ionicons name="shield-checkmark-outline" size={14} color={colors.textHeading} />
                       <Text style={S.progressVerifiedText}>Verified Expert</Text>
                     </View>
                   ) : null}
@@ -845,7 +856,7 @@ function ActivityDetailSheet({ visible, item, detail, loading, acting, requestCo
                 <View style={S.appliedJobBlock}>
                   <Text style={S.appliedTitle}>{title}</Text>
                   <View style={S.appliedLocationRow}>
-                    <Ionicons name="location-outline" size={20} color="#4C4546" />
+                    <Ionicons name="location-outline" size={20} color={colors.textSecondary} />
                     <Text style={S.appliedLocationText}>{location}</Text>
                   </View>
                   <View style={S.appliedPricePill}>
@@ -861,18 +872,25 @@ function ActivityDetailSheet({ visible, item, detail, loading, acting, requestCo
                       <View style={S.progressJobCopy}>
                         <Text style={S.progressJobTitle}>{title}</Text>
                         <View style={S.progressFactRow}>
-                          <Ionicons name="location-outline" size={18} color="#4C4546" />
+                          <Ionicons name="location-outline" size={18} color={colors.textSecondary} />
                           <Text style={S.progressLocationText}>{location}</Text>
                         </View>
                       </View>
-                      <View style={S.progressPriceBlock}>
-                        <Text style={S.progressPrice}>{price}</Text>
-                        <Text style={S.progressPriceUnit}>/ HR</Text>
+                      <View style={[S.progressPriceBlock, isRateMissing && S.progressPriceMissingBlock]}>
+                        <Text
+                          style={[S.progressPrice, isRateMissing && S.progressPriceMissing]}
+                          numberOfLines={isRateMissing ? 1 : 2}
+                          adjustsFontSizeToFit={!isRateMissing}
+                          minimumFontScale={0.82}
+                        >
+                          {isRateMissing ? "Rate not set" : price}
+                        </Text>
+                        {!isRateMissing ? <Text style={S.progressPriceUnit}>/ HR</Text> : null}
                       </View>
                     </View>
                     <View style={S.progressDivider} />
                     <View style={S.progressFactRow}>
-                      <Ionicons name="calendar-outline" size={25} color="#5E5E60" />
+                      <Ionicons name="calendar-outline" size={25} color={colors.textSecondary} />
                       <Text style={S.progressDateText}>{dateLine}</Text>
                     </View>
                   </View>
@@ -886,7 +904,7 @@ function ActivityDetailSheet({ visible, item, detail, loading, acting, requestCo
 
               {isNewRequest ? (
                 <View style={S.requestLocationPill}>
-                  <Ionicons name="location-outline" size={20} color="#5E5E60" />
+                  <Ionicons name="location-outline" size={20} color={colors.textSecondary} />
                   <Text style={S.requestLocationText}>{location}</Text>
                 </View>
               ) : isAppliedPending || isWorkFlow ? null : (
@@ -905,14 +923,14 @@ function ActivityDetailSheet({ visible, item, detail, loading, acting, requestCo
 
               {isNewRequest ? (
                 <View style={S.infoNote}>
-                  <Ionicons name="information-circle-outline" size={22} color="#5E5E60" />
+                  <Ionicons name="information-circle-outline" size={22} color={colors.textSecondary} />
                   <Text style={S.infoNoteText}>
                     By accepting this offer, you agree to complete the service at the designated location and time. Cancellation policies apply.
                   </Text>
                 </View>
               ) : isAppliedPending ? (
                 <View style={S.infoNote}>
-                  <Ionicons name="information-circle-outline" size={24} color="#1A1C1F" />
+                  <Ionicons name="information-circle-outline" size={24} color={colors.textHeading} />
                   <View style={{ flex: 1 }}>
                     <Text style={S.appliedInfoTitle}>Application Sent</Text>
                     <Text style={S.infoNoteText}>
@@ -947,14 +965,14 @@ function ActivityDetailSheet({ visible, item, detail, loading, acting, requestCo
                       ) : (
                         <View style={S.proofActionRow}>
                           <Pressable style={S.proofUpload} onPress={canMarkComplete ? takeProofPhoto : undefined}>
-                            <Ionicons name="camera-outline" size={32} color="#1A1C1F" />
+                            <Ionicons name="camera-outline" size={32} color={colors.textHeading} />
                             <Text style={S.proofUploadText}>
                               {canMarkComplete ? "Take Photo" : "Waiting for proof photo"}
                             </Text>
                           </Pressable>
                           {canMarkComplete ? (
                             <Pressable style={S.proofUpload} onPress={pickProofPhoto}>
-                              <Ionicons name="image-outline" size={32} color="#1A1C1F" />
+                              <Ionicons name="image-outline" size={32} color={colors.textHeading} />
                               <Text style={S.proofUploadText}>Upload Photo</Text>
                             </Pressable>
                           ) : null}
@@ -980,7 +998,7 @@ function ActivityDetailSheet({ visible, item, detail, loading, acting, requestCo
                               value={ratingComment}
                               onChangeText={setRatingComment}
                               placeholder="Write a review"
-                              placeholderTextColor="#7E7576"
+                              placeholderTextColor={colors.textMuted}
                               multiline
                             />
                             <Pressable style={S.reviewSubmitBtn} onPress={submitRatingHere} disabled={submittingRating}>
@@ -1035,7 +1053,7 @@ function ActivityDetailSheet({ visible, item, detail, loading, acting, requestCo
                     {canManagePostedJob ? (
                       <View style={S.dualActions}>
                         <Pressable style={S.outlineAction} onPress={openJobEditor}>
-                          <Ionicons name="create-outline" size={17} color="#1A1C1F" />
+                          <Ionicons name="create-outline" size={17} color={colors.textHeading} />
                           <Text style={S.outlineActionText}>Edit Job</Text>
                         </Pressable>
                         <Pressable style={[S.outlineAction, S.dangerOutlineAction]} onPress={cancelPostedJob} disabled={acting === `${job?.id || item.source?.id}:job_cancel`}>
@@ -1060,7 +1078,7 @@ function ActivityDetailSheet({ visible, item, detail, loading, acting, requestCo
                     {canOpenChat ? (
                       <View style={S.dualActions}>
                         <Pressable style={[S.outlineAction, { flex: 1 }]} onPress={openChat}>
-                          <Ionicons name="chatbubble-outline" size={17} color="#1A1C1F" />
+                          <Ionicons name="chatbubble-outline" size={17} color={colors.textHeading} />
                           <Text style={S.outlineActionText}>Message</Text>
                         </Pressable>
                       </View>
@@ -1072,7 +1090,7 @@ function ActivityDetailSheet({ visible, item, detail, loading, acting, requestCo
             {isNewRequest ? (
               <View style={[S.fixedRequestActions, { paddingBottom: insets.bottom + 12 }]}>
                 <Pressable style={S.requestRejectBtn} onPress={rejectRequest} disabled={secondaryLoading}>
-                  {secondaryLoading ? <ActivityIndicator size="small" color="#1A1C1F" /> : <Text style={S.requestRejectText}>Reject</Text>}
+                  {secondaryLoading ? <ActivityIndicator size="small" color={colors.textHeading} /> : <Text style={S.requestRejectText}>Reject</Text>}
                 </Pressable>
                 <Pressable style={S.requestAcceptBtn} onPress={acceptRequest} disabled={primaryLoading}>
                   {primaryLoading ? <ActivityIndicator size="small" color="#fff" /> : <Text style={S.requestAcceptText}>Accept Offer</Text>}
@@ -1081,7 +1099,7 @@ function ActivityDetailSheet({ visible, item, detail, loading, acting, requestCo
             ) : isAppliedPending ? (
               <View style={[S.fixedRequestActions, { paddingBottom: insets.bottom + 12 }]}>
                 <Pressable style={S.appliedWithdrawBtn} onPress={cancelRequest} disabled={cancelLoading}>
-                  {cancelLoading ? <ActivityIndicator size="small" color="#1A1C1F" /> : <Text style={S.appliedWithdrawText}>Withdraw</Text>}
+                  {cancelLoading ? <ActivityIndicator size="small" color={colors.textHeading} /> : <Text style={S.appliedWithdrawText}>Withdraw</Text>}
                 </Pressable>
               </View>
             ) : isInProgress && canMarkComplete ? (
@@ -1102,7 +1120,7 @@ function ActivityDetailSheet({ visible, item, detail, loading, acting, requestCo
 function DetailFact({ icon, text }) {
   return (
     <View style={S.detailFact}>
-      <Ionicons name={icon} size={18} color="#4C4546" />
+      <Ionicons name={icon} size={18} color={colors.textSecondary} />
       <Text style={S.detailFactText}>{text}</Text>
     </View>
   );
@@ -1124,7 +1142,7 @@ function StatusSteps({ progress }) {
         return (
           <View key={step.label} style={S.stepItem}>
             <View style={[S.stepCircle, active && S.stepCircleActive]}>
-              <Ionicons name={step.icon} size={18} color={active ? "#fff" : "#7E7576"} />
+              <Ionicons name={step.icon} size={18} color={active ? "#fff" : colors.textMuted} />
             </View>
             <Text style={[S.stepLabel, active && S.stepLabelActive]}>{step.label}</Text>
           </View>
@@ -1160,7 +1178,7 @@ function RequestStatusSteps() {
             ) : step.kind === "active" ? (
               <View style={S.requestStepDot} />
             ) : (
-              <Ionicons name="ellipsis-horizontal" size={18} color="#5E5E60" />
+              <Ionicons name="ellipsis-horizontal" size={18} color={colors.textSecondary} />
             )}
           </View>
           <Text style={[S.requestStepLabel, step.kind === "active" && S.requestStepLabelActive]}>
@@ -1262,7 +1280,7 @@ function SheetStarPicker({ value, onChange }) {
     <View style={S.reviewStars}>
       {[1, 2, 3, 4, 5].map((n) => (
         <Pressable key={n} onPress={() => onChange(n)} hitSlop={8}>
-          <Ionicons name={n <= value ? "star" : "star-outline"} size={34} color={n <= value ? "#F59E0B" : "#CFC4C5"} />
+          <Ionicons name={n <= value ? "star" : "star-outline"} size={34} color={n <= value ? "#F59E0B" : colors.borderSubtle} />
         </Pressable>
       ))}
     </View>
@@ -1270,20 +1288,35 @@ function SheetStarPicker({ value, onChange }) {
 }
 
 const S = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#F9F9FE" },
+  safe: { flex: 1, backgroundColor: colors.bg },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
 
   header: {
     backgroundColor: "#fff",
     paddingHorizontal: spacing.md,
-    paddingTop: 38,
-    paddingBottom: 28,
+    paddingTop: 18,
+    paddingBottom: 18,
   },
+  headerRow: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.surface,
+  },
+  headerSpacer: { width: 40, height: 40 },
   title: {
     fontFamily: fonts.bodyBold,
-    fontSize: 30,
-    lineHeight: 38,
-    color: "#000",
+    fontSize: 24,
+    lineHeight: 30,
+    color: colors.textHeading,
     includeFontPadding: false,
   },
 
@@ -1292,7 +1325,7 @@ const S = StyleSheet.create({
     flexDirection: "row",
     backgroundColor: "#fff",
     borderBottomWidth: 1,
-    borderBottomColor: "#EDEDF2",
+    borderBottomColor: colors.borderSubtle,
   },
   tabItem: {
     flex: 1,
@@ -1306,7 +1339,7 @@ const S = StyleSheet.create({
   tabLabel: {
     fontFamily: fonts.bodyBold,
     fontSize: 14,
-    color: "#9CA3AF",
+    color: colors.textMuted,
     includeFontPadding: false,
   },
   tabLabelActive: { color: "#000" },
@@ -1325,11 +1358,11 @@ const S = StyleSheet.create({
     includeFontPadding: false,
   },
 
-  controls: { paddingHorizontal: spacing.md, marginTop: 4, marginBottom: 12 },
+  controls: { paddingHorizontal: spacing.md, marginTop: 12, marginBottom: 10 },
   searchBox: {
     height: 44,
     borderRadius: 999,
-    backgroundColor: "#F3F3F8",
+    backgroundColor: colors.surface,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
@@ -1352,7 +1385,7 @@ const S = StyleSheet.create({
     height: 32,
     paddingHorizontal: 18,
     borderRadius: 999,
-    backgroundColor: "#F3F3F8",
+    backgroundColor: colors.surface,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1360,28 +1393,30 @@ const S = StyleSheet.create({
   filterText: { fontFamily: fonts.bodyBold, fontSize: 12, color: "#000", includeFontPadding: false },
   filterTextActive: { color: "#fff" },
 
-  list: { paddingHorizontal: spacing.md, paddingTop: 18 },
+  list: { paddingHorizontal: spacing.md, paddingTop: 10 },
   emptyList: { flexGrow: 1, justifyContent: "center" },
   card: {
     backgroundColor: "#fff",
-    borderRadius: 14,
-    padding: 20,
-    marginBottom: 22,
-    ...shadow.sm,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    ...shadow.xs,
   },
   cardTop: {
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
     gap: 12,
-    marginBottom: 18,
+    marginBottom: 14,
   },
   cardTitle: {
     flex: 1,
     fontFamily: fonts.bodyBold,
-    fontSize: 19,
-    lineHeight: 25,
-    color: "#1A1C1F",
+    fontSize: 17,
+    lineHeight: 23,
+    color: colors.textHeading,
     includeFontPadding: false,
   },
   statusPill: {
@@ -1397,23 +1432,23 @@ const S = StyleSheet.create({
     textTransform: "none",
     includeFontPadding: false,
   },
-  metaStack: { gap: 8, marginBottom: 14 },
+  metaStack: { gap: 7, marginBottom: 13 },
   infoRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   infoText: {
     flex: 1,
     fontFamily: fonts.body,
     fontSize: 13,
-    color: "#5E5E60",
+    color: colors.textSecondary,
     includeFontPadding: false,
   },
   infoStrong: {
     fontFamily: fonts.bodyBold,
-    color: "#1A1C1F",
+    color: colors.textHeading,
   },
   infoSmall: {
     fontFamily: fonts.bodyBold,
     fontSize: 10,
-    color: "#5E5E60",
+    color: colors.textSecondary,
     textTransform: "uppercase",
     letterSpacing: 0.6,
   },
@@ -1422,15 +1457,15 @@ const S = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    paddingTop: 12,
+    paddingTop: 11,
     borderTopWidth: 1,
-    borderTopColor: "#F3F3F8",
+    borderTopColor: colors.surface,
   },
   cardFooterText: {
     flex: 1,
     fontFamily: fonts.bodyBold,
     fontSize: 12,
-    color: "#5E5E60",
+    color: colors.textSecondary,
     includeFontPadding: false,
   },
   cardFooterUrgent: {
@@ -1446,13 +1481,13 @@ const S = StyleSheet.create({
     width: 68,
     height: 68,
     borderRadius: 22,
-    backgroundColor: "#EDEDF2",
+    backgroundColor: colors.borderSubtle,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 18,
   },
-  emptyTitle: { fontFamily: fonts.bodyBold, fontSize: 18, color: "#1A1C1F" },
-  emptySub: { marginTop: 6, fontFamily: fonts.body, fontSize: 14, color: "#5E5E60", textAlign: "center" },
+  emptyTitle: { fontFamily: fonts.bodyBold, fontSize: 18, color: colors.textHeading },
+  emptySub: { marginTop: 6, fontFamily: fonts.body, fontSize: 14, color: colors.textSecondary, textAlign: "center" },
 
   sheetRoot: { flex: 1, justifyContent: "flex-end" },
   sheetScrim: {
@@ -1461,7 +1496,7 @@ const S = StyleSheet.create({
   },
   sheet: {
     height: "85%",
-    backgroundColor: "#F9F9FE",
+    backgroundColor: colors.bg,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: spacing.md,
@@ -1496,14 +1531,14 @@ const S = StyleSheet.create({
     paddingBottom: 20,
     marginBottom: 28,
     borderBottomWidth: 1,
-    borderBottomColor: "#E2E2E7",
+    borderBottomColor: colors.borderSubtle,
   },
-  sheetTitle: { fontFamily: fonts.bodyBold, fontSize: 22, color: "#1A1C1F", includeFontPadding: false },
+  sheetTitle: { fontFamily: fonts.bodyBold, fontSize: 22, color: colors.textHeading, includeFontPadding: false },
   requestSheetTitle: { flex: 1, textAlign: "center", fontSize: 27, lineHeight: 34 },
-  progressSheetTitle: { flex: 1, fontSize: 28, lineHeight: 34 },
+  progressSheetTitle: { flex: 1, fontSize: 24, lineHeight: 30 },
   sheetIconBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
   sheetIconSpacer: { width: 56 },
-  requestCloseBtn: { width: 56, height: 56, borderRadius: 28, backgroundColor: "#F3F3F8" },
+  requestCloseBtn: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.surface },
   progressCloseBtn: { width: 44, height: 44 },
   posterCard: {
     minHeight: 72,
@@ -1514,7 +1549,7 @@ const S = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
     borderWidth: 1,
-    borderColor: "#E2E2E7",
+    borderColor: colors.borderSubtle,
     ...shadow.sm,
     marginBottom: 30,
   },
@@ -1526,12 +1561,14 @@ const S = StyleSheet.create({
     borderWidth: 0,
   },
   progressExpertCard: {
-    minHeight: 190,
-    borderRadius: 0,
-    borderWidth: 0,
-    paddingHorizontal: 34,
-    paddingVertical: 42,
-    marginBottom: 62,
+    minHeight: 116,
+    borderRadius: 16,
+    borderWidth: 1,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+    marginBottom: 30,
+    borderColor: colors.borderSubtle,
+    shadowOpacity: 0.05,
   },
   appliedPosterCard: {
     minHeight: 72,
@@ -1547,7 +1584,7 @@ const S = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: "#E8E8ED",
+    backgroundColor: colors.borderSubtle,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -1556,66 +1593,66 @@ const S = StyleSheet.create({
     height: 64,
     borderRadius: 32,
   },
-  progressAvatar: { width: 64, height: 64, borderRadius: 32 },
+  progressAvatar: { width: 56, height: 56, borderRadius: 28 },
   onlineDot: {
     position: "absolute",
-    left: 76,
-    top: 92,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+    left: 60,
+    top: 62,
+    width: 17,
+    height: 17,
+    borderRadius: 9,
     backgroundColor: "#34C759",
-    borderWidth: 3,
+    borderWidth: 2.5,
     borderColor: "#fff",
   },
-  posterAvatarText: { fontFamily: fonts.bodyBold, fontSize: 18, color: "#1A1C1F" },
+  posterAvatarText: { fontFamily: fonts.bodyBold, fontSize: 18, color: colors.textHeading },
   posterInfo: { flex: 1, minWidth: 0 },
   requesterNameRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  posterName: { fontFamily: fonts.bodyBold, fontSize: 15, color: "#1A1C1F", includeFontPadding: false },
+  posterName: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.textHeading, includeFontPadding: false },
   requesterName: { fontSize: 26, lineHeight: 32 },
   appliedPosterName: { fontSize: 17, lineHeight: 22 },
-  progressExpertName: { fontSize: 28, lineHeight: 34 },
+  progressExpertName: { fontSize: 22, lineHeight: 28 },
   posterMeta: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
   requesterMeta: { gap: 8, marginTop: 6 },
   appliedPosterMeta: { gap: 6, marginTop: 4 },
   progressExpertMeta: { marginTop: 6, gap: 5 },
-  progressMetaText: { fontFamily: fonts.body, fontSize: 17, color: "#4C4546", includeFontPadding: false },
+  progressMetaText: { fontFamily: fonts.body, fontSize: 14, color: colors.textSecondary, includeFontPadding: false },
   progressVerifiedPill: {
     alignSelf: "flex-start",
-    marginTop: 12,
-    minHeight: 30,
+    marginTop: 10,
+    minHeight: 26,
     borderRadius: 999,
-    backgroundColor: "#EDEDF2",
+    backgroundColor: colors.borderSubtle,
     flexDirection: "row",
     alignItems: "center",
     gap: 7,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
   },
   progressVerifiedText: {
     fontFamily: fonts.bodyBold,
-    fontSize: 14,
-    letterSpacing: 0.8,
-    color: "#1A1C1F",
+    fontSize: 12,
+    letterSpacing: 0.4,
+    color: colors.textHeading,
   },
-  posterMetaText: { fontFamily: fonts.body, fontSize: 12, color: "#4C4546", includeFontPadding: false },
-  posterDot: { fontFamily: fonts.body, fontSize: 12, color: "#4C4546" },
+  posterMetaText: { fontFamily: fonts.body, fontSize: 12, color: colors.textSecondary, includeFontPadding: false },
+  posterDot: { fontFamily: fonts.body, fontSize: 12, color: colors.textSecondary },
   verifiedBadge: {
     flexShrink: 0,
     borderRadius: 999,
-    backgroundColor: "#EDEDF2",
+    backgroundColor: colors.borderSubtle,
     paddingHorizontal: 12,
     paddingVertical: 7,
   },
-  verifiedBadgeText: { fontFamily: fonts.bodyBold, fontSize: 9, color: "#1A1C1F", textTransform: "uppercase" },
+  verifiedBadgeText: { fontFamily: fonts.bodyBold, fontSize: 9, color: colors.textHeading, textTransform: "uppercase" },
   detailTitle: {
     fontFamily: fonts.bodyBold,
     fontSize: 28,
     lineHeight: 36,
-    color: "#1A1C1F",
+    color: colors.textHeading,
     includeFontPadding: false,
     marginBottom: 8,
   },
-  detailDesc: { fontFamily: fonts.body, fontSize: 14, lineHeight: 21, color: "#4C4546", marginBottom: 20 },
+  detailDesc: { fontFamily: fonts.body, fontSize: 14, lineHeight: 21, color: colors.textSecondary, marginBottom: 20 },
   requestTitleRow: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -1627,7 +1664,7 @@ const S = StyleSheet.create({
     fontFamily: fonts.bodyBold,
     fontSize: 32,
     lineHeight: 40,
-    color: "#1A1C1F",
+    color: colors.textHeading,
     includeFontPadding: false,
     marginBottom: 12,
   },
@@ -1642,7 +1679,7 @@ const S = StyleSheet.create({
     fontFamily: fonts.body,
     fontSize: 19,
     lineHeight: 26,
-    color: "#4C4546",
+    color: colors.textSecondary,
   },
   appliedPricePill: {
     alignSelf: "flex-start",
@@ -1655,82 +1692,109 @@ const S = StyleSheet.create({
   appliedPriceText: {
     fontFamily: fonts.bodyBold,
     fontSize: 20,
-    color: "#1A1C1F",
+    color: colors.textHeading,
     includeFontPadding: false,
   },
   appliedDesc: {
     fontFamily: fonts.body,
     fontSize: 23,
     lineHeight: 34,
-    color: "#4C4546",
+    color: colors.textSecondary,
   },
-  progressSection: { marginBottom: 58 },
+  progressSection: { marginBottom: 28 },
   progressSectionTitle: {
     fontFamily: fonts.bodyBold,
-    fontSize: 18,
-    letterSpacing: 0.7,
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: 0.8,
     textTransform: "uppercase",
-    color: "#5E5E60",
-    marginBottom: 18,
+    color: colors.textSecondary,
+    marginBottom: 12,
   },
   progressJobCard: {
-    backgroundColor: "#fff",
-    borderRadius: 0,
-    padding: 34,
+    backgroundColor: colors.surfaceCard,
+    borderRadius: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
     ...shadow.sm,
   },
-  progressJobTop: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 18 },
+  progressJobTop: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 12 },
   progressJobCopy: { flex: 1, minWidth: 0 },
   progressJobTitle: {
     fontFamily: fonts.bodyBold,
-    fontSize: 32,
-    lineHeight: 38,
-    color: "#1A1C1F",
+    fontSize: 22,
+    lineHeight: 28,
+    color: colors.textHeading,
     includeFontPadding: false,
     marginBottom: 12,
   },
-  progressFactRow: { flexDirection: "row", alignItems: "center", gap: 13 },
-  progressLocationText: { flex: 1, fontFamily: fonts.body, fontSize: 20, lineHeight: 28, color: "#4C4546" },
-  progressPriceBlock: { alignItems: "flex-end", flexShrink: 0, maxWidth: 128 },
-  progressPrice: { fontFamily: fonts.bodyBold, fontSize: 29, lineHeight: 34, color: "#1A1C1F", includeFontPadding: false },
-  progressPriceUnit: { marginTop: 8, fontFamily: fonts.bodyBold, fontSize: 16, color: "#5E5E60" },
-  progressDivider: { height: 1, backgroundColor: "#E2E2E7", marginVertical: 34 },
-  progressDateText: { flex: 1, fontFamily: fonts.body, fontSize: 20, lineHeight: 28, color: "#4C4546" },
+  progressFactRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  progressLocationText: { flex: 1, fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: colors.textSecondary },
+  progressPriceBlock: { alignItems: "flex-end", flexShrink: 0, maxWidth: 116 },
+  progressPriceMissingBlock: {
+    backgroundColor: colors.surface,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    maxWidth: 116,
+  },
+  progressPrice: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 22,
+    lineHeight: 27,
+    color: colors.textHeading,
+    includeFontPadding: false,
+    textAlign: "right",
+  },
+  progressPriceMissing: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 12,
+    lineHeight: 15,
+    color: colors.textSecondary,
+    textAlign: "center",
+  },
+  progressPriceUnit: { marginTop: 4, fontFamily: fonts.bodyBold, fontSize: 11, lineHeight: 14, color: colors.textSecondary },
+  progressDivider: { height: 1, backgroundColor: colors.borderSubtle, marginVertical: 18 },
+  progressDateText: { flex: 1, fontFamily: fonts.body, fontSize: 14, lineHeight: 20, color: colors.textSecondary },
   requestTitleCopy: { flex: 1, minWidth: 0 },
   requestTitle: {
     fontFamily: fonts.bodyBold,
     fontSize: 30,
     lineHeight: 38,
-    color: "#1A1C1F",
+    color: colors.textHeading,
     includeFontPadding: false,
     marginBottom: 8,
   },
-  requestDesc: { fontFamily: fonts.body, fontSize: 20, lineHeight: 30, color: "#5E5E60" },
+  requestDesc: { fontFamily: fonts.body, fontSize: 20, lineHeight: 30, color: colors.textSecondary },
   requestPriceBlock: { flexShrink: 0, alignItems: "flex-end", maxWidth: 130 },
-  requestPrice: { fontFamily: fonts.bodyBold, fontSize: 28, lineHeight: 34, color: "#1A1C1F", includeFontPadding: false },
-  requestPriceSub: { fontFamily: fonts.body, fontSize: 20, lineHeight: 28, color: "#5E5E60" },
+  requestPrice: { fontFamily: fonts.bodyBold, fontSize: 28, lineHeight: 34, color: colors.textHeading, includeFontPadding: false },
+  requestPriceSub: { fontFamily: fonts.body, fontSize: 20, lineHeight: 28, color: colors.textSecondary },
   requestLocationPill: {
     alignSelf: "flex-start",
     minHeight: 62,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    backgroundColor: "#F3F3F8",
+    backgroundColor: colors.surface,
     borderRadius: 10,
     paddingHorizontal: 18,
     paddingVertical: 14,
     marginBottom: 76,
   },
-  requestLocationText: { fontFamily: fonts.body, fontSize: 19, color: "#5E5E60" },
+  requestLocationText: { fontFamily: fonts.body, fontSize: 19, color: colors.textSecondary },
   detailFacts: { gap: 12, marginBottom: 30 },
   detailFact: { flexDirection: "row", alignItems: "center", gap: 8 },
-  detailFactText: { flex: 1, fontFamily: fonts.bodyBold, fontSize: 14, color: "#1A1C1F" },
+  detailFactText: { flex: 1, fontFamily: fonts.bodyBold, fontSize: 14, color: colors.textHeading },
   statusBlock: { marginBottom: 28 },
-  requestStatusTitle: { fontSize: 18, textTransform: "none", letterSpacing: 0, color: "#1A1C1F", marginBottom: 30 },
+  requestStatusTitle: { fontSize: 18, textTransform: "none", letterSpacing: 0, color: colors.textHeading, marginBottom: 30 },
   statusBlockTitle: {
     fontFamily: fonts.bodyBold,
     fontSize: 11,
-    color: "#4C4546",
+    color: colors.textSecondary,
     letterSpacing: 0.7,
     textTransform: "uppercase",
     marginBottom: 16,
@@ -1747,7 +1811,7 @@ const S = StyleSheet.create({
     right: 14,
     top: 15,
     height: 1.5,
-    backgroundColor: "#E2E2E7",
+    backgroundColor: colors.borderSubtle,
   },
   stepsLineActive: { height: 1.5, backgroundColor: "#000" },
   stepItem: { width: 74, alignItems: "center" },
@@ -1757,14 +1821,14 @@ const S = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: "#fff",
     borderWidth: 1,
-    borderColor: "#E2E2E7",
+    borderColor: colors.borderSubtle,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 8,
   },
   stepCircleActive: { backgroundColor: "#000", borderColor: "#000" },
-  stepLabel: { fontFamily: fonts.bodyBold, fontSize: 9, color: "#5E5E60", includeFontPadding: false },
-  stepLabelActive: { color: "#1A1C1F" },
+  stepLabel: { fontFamily: fonts.bodyBold, fontSize: 9, color: colors.textSecondary, includeFontPadding: false },
+  stepLabelActive: { color: colors.textHeading },
   requestStepsWrap: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -1779,7 +1843,7 @@ const S = StyleSheet.create({
     right: 28,
     top: 20,
     height: 2,
-    backgroundColor: "#E2E2E7",
+    backgroundColor: colors.borderSubtle,
   },
   requestLineActive: { width: "50%", height: 2, backgroundColor: "#000" },
   requestStep: { width: 108, alignItems: "center" },
@@ -1793,9 +1857,9 @@ const S = StyleSheet.create({
   },
   requestStepDone: { backgroundColor: "#000" },
   requestStepActive: { backgroundColor: "#fff", borderWidth: 3, borderColor: "#000" },
-  requestStepPending: { backgroundColor: "#E8E8ED" },
+  requestStepPending: { backgroundColor: colors.borderSubtle },
   requestStepDot: { width: 14, height: 14, borderRadius: 7, backgroundColor: "#000" },
-  requestStepLabel: { fontFamily: fonts.bodyBold, fontSize: 15, color: "#5E5E60", textAlign: "center" },
+  requestStepLabel: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.textSecondary, textAlign: "center" },
   requestStepLabelActive: { color: "#000" },
   progressStepsCard: {
     backgroundColor: "#fff",
@@ -1815,7 +1879,7 @@ const S = StyleSheet.create({
     right: 52,
     top: 13,
     height: 2,
-    backgroundColor: "#E2E2E7",
+    backgroundColor: colors.borderSubtle,
   },
   progressStepsLineActive: { width: "50%", height: 2, backgroundColor: "#000" },
   progressStep: { width: 94, alignItems: "center" },
@@ -1830,7 +1894,7 @@ const S = StyleSheet.create({
   progressStepDone: { backgroundColor: "#000" },
   progressStepActive: { backgroundColor: "#fff", borderWidth: 3, borderColor: "#000" },
   progressStepDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: "#000" },
-  progressStepLabel: { fontFamily: fonts.bodyBold, fontSize: 12, color: "#1A1C1F", letterSpacing: 0.5 },
+  progressStepLabel: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.textHeading, letterSpacing: 0.5 },
   progressStepLabelActive: { fontSize: 13 },
   proofCard: {
     backgroundColor: "#fff",
@@ -1844,13 +1908,13 @@ const S = StyleSheet.create({
     minHeight: 128,
     borderWidth: 2,
     borderStyle: "dashed",
-    borderColor: "#CFC4C5",
+    borderColor: colors.borderSubtle,
     borderRadius: 4,
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
   },
-  proofPreviewWrap: { height: 168, borderRadius: 8, overflow: "hidden", marginBottom: 12, backgroundColor: "#EDEDF2" },
+  proofPreviewWrap: { height: 168, borderRadius: 8, overflow: "hidden", marginBottom: 12, backgroundColor: colors.borderSubtle },
   proofPreview: { width: "100%", height: "100%" },
   proofRemoveBtn: {
     position: "absolute",
@@ -1863,25 +1927,25 @@ const S = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  proofUploadText: { fontFamily: fonts.bodyBold, fontSize: 15, color: "#1A1C1F" },
-  proofHint: { fontFamily: fonts.body, fontSize: 13, lineHeight: 19, color: "#4C4546", textAlign: "center" },
+  proofUploadText: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.textHeading },
+  proofHint: { fontFamily: fonts.body, fontSize: 13, lineHeight: 19, color: colors.textSecondary, textAlign: "center" },
   reviewCard: {
     backgroundColor: "#fff",
     borderRadius: 0,
     padding: 22,
     ...shadow.sm,
   },
-  reviewTitle: { fontFamily: fonts.bodyBold, fontSize: 20, color: "#1A1C1F", includeFontPadding: false, marginBottom: 14 },
+  reviewTitle: { fontFamily: fonts.bodyBold, fontSize: 20, color: colors.textHeading, includeFontPadding: false, marginBottom: 14 },
   reviewStars: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 16 },
   reviewInput: {
     minHeight: 108,
     borderRadius: 8,
-    backgroundColor: "#F3F3F8",
+    backgroundColor: colors.surface,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontFamily: fonts.body,
     fontSize: 15,
-    color: "#1A1C1F",
+    color: colors.textHeading,
     textAlignVertical: "top",
     marginBottom: 16,
   },
@@ -1908,15 +1972,15 @@ const S = StyleSheet.create({
     width: 20,
     height: 20,
     borderRadius: 10,
-    backgroundColor: "#E2E2E7",
+    backgroundColor: colors.borderSubtle,
     borderWidth: 4,
     borderColor: "#fff",
   },
   timelineDotActive: { backgroundColor: "#000" },
   timelineCopy: { marginLeft: 22, flex: 1 },
-  timelineTitle: { fontFamily: fonts.bodyBold, fontSize: 13, color: "#5E5E60", marginBottom: 4 },
-  timelineTitleActive: { color: "#1A1C1F" },
-  timelineSub: { fontFamily: fonts.body, fontSize: 13, color: "#4C4546" },
+  timelineTitle: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.textSecondary, marginBottom: 4 },
+  timelineTitleActive: { color: colors.textHeading },
+  timelineSub: { fontFamily: fonts.body, fontSize: 13, color: colors.textSecondary },
   appliedStepsWrap: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -1931,7 +1995,7 @@ const S = StyleSheet.create({
     right: 24,
     top: 13,
     height: 2,
-    backgroundColor: "#E2E2E7",
+    backgroundColor: colors.borderSubtle,
   },
   appliedLineActive: { width: "50%", height: 2, backgroundColor: "#000" },
   appliedStep: { width: 96, alignItems: "center" },
@@ -1953,26 +2017,26 @@ const S = StyleSheet.create({
     borderWidth: 7,
     borderColor: "#000",
   },
-  appliedStepPending: { backgroundColor: "#E8E8ED" },
+  appliedStepPending: { backgroundColor: colors.borderSubtle },
   appliedStepDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#fff" },
   appliedStepDotMuted: { backgroundColor: "#A1A1AA" },
-  appliedStepLabel: { fontFamily: fonts.bodyBold, fontSize: 14, color: "#1A1C1F", textAlign: "center" },
+  appliedStepLabel: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.textHeading, textAlign: "center" },
   appliedStepLabelActive: { fontSize: 15, color: "#000" },
   appliedStepLabelMuted: { color: "#A1A1AA" },
   infoNote: {
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 14,
-    backgroundColor: "#F3F3F8",
+    backgroundColor: colors.surface,
     borderRadius: 10,
     padding: 20,
     marginTop: 4,
   },
-  infoNoteText: { flex: 1, fontFamily: fonts.body, fontSize: 18, lineHeight: 27, color: "#5E5E60" },
+  infoNoteText: { flex: 1, fontFamily: fonts.body, fontSize: 18, lineHeight: 27, color: colors.textSecondary },
   appliedInfoTitle: {
     fontFamily: fonts.bodyBold,
     fontSize: 21,
-    color: "#1A1C1F",
+    color: colors.textHeading,
     marginBottom: 8,
     includeFontPadding: false,
   },
@@ -1985,37 +2049,37 @@ const S = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#E2E2E7",
+    borderColor: colors.borderSubtle,
     ...shadow.sm,
     marginBottom: 28,
   },
-  applicantTitle: { fontFamily: fonts.bodyBold, fontSize: 16, color: "#1A1C1F", includeFontPadding: false },
-  applicantSub: { marginTop: 5, fontFamily: fonts.body, fontSize: 13, color: "#4C4546", fontStyle: "italic" },
+  applicantTitle: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.textHeading, includeFontPadding: false },
+  applicantSub: { marginTop: 5, fontFamily: fonts.body, fontSize: 13, color: colors.textSecondary, fontStyle: "italic" },
   avatarStack: { flexDirection: "row", alignItems: "center" },
   miniAvatar: {
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: "#E8E8ED",
+    backgroundColor: colors.borderSubtle,
     borderWidth: 2,
     borderColor: "#fff",
     alignItems: "center",
     justifyContent: "center",
   },
-  miniAvatarText: { fontFamily: fonts.bodyBold, fontSize: 11, color: "#1A1C1F" },
+  miniAvatarText: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.textHeading },
   detailActions: { gap: 12, marginBottom: 18 },
   completionHint: {
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 12,
-    backgroundColor: "#F3F3F8",
+    backgroundColor: colors.surface,
     borderRadius: 10,
     padding: 16,
   },
   completionHintTitle: {
     fontFamily: fonts.bodyBold,
     fontSize: 15,
-    color: "#1A1C1F",
+    color: colors.textHeading,
     includeFontPadding: false,
     marginBottom: 5,
   },
@@ -2023,7 +2087,7 @@ const S = StyleSheet.create({
     fontFamily: fonts.body,
     fontSize: 13,
     lineHeight: 19,
-    color: "#4C4546",
+    color: colors.textSecondary,
   },
   repostBtn: {
     height: 56,
@@ -2042,13 +2106,13 @@ const S = StyleSheet.create({
     borderRadius: 10,
     backgroundColor: "#fff",
     borderWidth: 1,
-    borderColor: "#E2E2E7",
+    borderColor: colors.borderSubtle,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
     gap: 7,
   },
-  outlineActionText: { fontFamily: fonts.bodyBold, fontSize: 14, color: "#1A1C1F", includeFontPadding: false },
+  outlineActionText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.textHeading, includeFontPadding: false },
   dangerOutlineAction: { borderColor: "#FCA5A5", backgroundColor: "#FEF2F2" },
   dangerOutlineText: { fontFamily: fonts.bodyBold, fontSize: 14, color: "#BA1A1A", includeFontPadding: false },
   fixedRequestActions: {
@@ -2062,19 +2126,19 @@ const S = StyleSheet.create({
     paddingTop: 18,
     backgroundColor: "#fff",
     borderTopWidth: 1,
-    borderTopColor: "#E2E2E7",
+    borderTopColor: colors.borderSubtle,
   },
   requestRejectBtn: {
     flex: 1,
     height: 64,
     borderRadius: 0,
     borderWidth: 1,
-    borderColor: "#CFC4C5",
+    borderColor: colors.borderSubtle,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#fff",
   },
-  requestRejectText: { fontFamily: fonts.bodyBold, fontSize: 20, color: "#1A1C1F" },
+  requestRejectText: { fontFamily: fonts.bodyBold, fontSize: 20, color: colors.textHeading },
   requestAcceptBtn: {
     flex: 1,
     height: 64,
@@ -2095,7 +2159,7 @@ const S = StyleSheet.create({
   appliedWithdrawText: {
     fontFamily: fonts.bodyBold,
     fontSize: 20,
-    color: "#1A1C1F",
+    color: colors.textHeading,
   },
   progressCompleteBtn: {
     flex: 1,

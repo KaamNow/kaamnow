@@ -63,7 +63,7 @@ export default function SavedAddressesScreen({ navigation }) {
             <Text style={S.label}>{item.label}</Text>
             {item.is_default && (
               <View style={S.defaultBadge}>
-                <Ionicons name="star" size={10} color="#059669" />
+                <Ionicons name="star" size={10} color={colors.success} />
                 <Text style={S.defaultBadgeText}>DEFAULT</Text>
               </View>
             )}
@@ -89,7 +89,7 @@ export default function SavedAddressesScreen({ navigation }) {
             onPress={() => remove(item.id)}
             hitSlop={6}
           >
-            <Ionicons name="trash-outline" size={16} color="#DC2626" />
+            <Ionicons name="trash-outline" size={16} color={colors.danger} />
           </TouchableOpacity>
         </View>
       </View>
@@ -141,15 +141,15 @@ export default function SavedAddressesScreen({ navigation }) {
 }
 
 const S = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#f9f9fe" },
+  safe: { flex: 1, backgroundColor: colors.bg },
 
   header: {
     flexDirection: "row", alignItems: "center", gap: 10,
-    paddingHorizontal: 20, paddingVertical: 14,
+    paddingHorizontal: spacing.md, paddingVertical: 10,
     backgroundColor: "#ffffff",
-    borderBottomWidth: 1, borderBottomColor: "#e8e8ed",
+    borderBottomWidth: 1, borderBottomColor: colors.borderSubtle,
   },
-  headerBack:  { width: 36, height: 36, borderRadius: 18, backgroundColor: "#f0f0f5", alignItems: "center", justifyContent: "center" },
+  headerBack:  { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
   headerTitle: { flex: 1, fontFamily: fonts.headlineSm, fontSize: 18, color: colors.textHeading },
   addBtn:      { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
 
@@ -159,28 +159,28 @@ const S = StyleSheet.create({
 
   card: {
     flexDirection: "row", alignItems: "center", gap: 14,
-    backgroundColor: "#ffffff", borderRadius: 18,
-    borderWidth: 1, borderColor: "#f0f0f5",
+    backgroundColor: "#ffffff", borderRadius: 16,
+    borderWidth: 1, borderColor: colors.borderSubtle,
     padding: 16, ...shadow.xs,
   },
   iconWrap: {
     width: 44, height: 44, borderRadius: 13,
-    backgroundColor: "#f0f0f5",
+    backgroundColor: colors.surface,
     alignItems: "center", justifyContent: "center",
   },
   labelRow:    { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 3 },
   label:       { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.textHeading },
-  defaultBadge:{ flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "#ECFDF5", borderRadius: 20, paddingHorizontal: 8, paddingVertical: 2 },
-  defaultBadgeText: { fontFamily: fonts.bodyBold, fontSize: 9, color: "#059669", letterSpacing: 0.5 },
+  defaultBadge:{ flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: colors.successLight, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 2 },
+  defaultBadgeText: { fontFamily: fonts.bodyBold, fontSize: 9, color: colors.success, letterSpacing: 0.5 },
   addr:        { fontFamily: fonts.body, fontSize: 12, color: colors.outline, lineHeight: 17 },
   addrEmpty:   { fontFamily: fonts.body, fontSize: 12, color: colors.outline, fontStyle: "italic" },
 
   actions:       { gap: 6 },
-  actionBtn:     { width: 32, height: 32, borderRadius: 10, backgroundColor: "#f0f0f5", alignItems: "center", justifyContent: "center" },
-  actionBtnDanger: { backgroundColor: "#FEE2E2" },
+  actionBtn:     { width: 32, height: 32, borderRadius: 10, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
+  actionBtnDanger: { backgroundColor: colors.dangerLight },
 
   empty:     { alignItems: "center", paddingTop: 80, paddingHorizontal: 32 },
-  emptyIcon: { width: 80, height: 80, borderRadius: 24, backgroundColor: "#f0f0f5", alignItems: "center", justifyContent: "center", marginBottom: 20 },
+  emptyIcon: { width: 80, height: 80, borderRadius: 24, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center", marginBottom: 20 },
   emptyTitle: { fontFamily: fonts.bodyBold, fontSize: 18, color: colors.textHeading, marginBottom: 8 },
   emptySub:   { fontFamily: fonts.body, fontSize: 14, color: colors.outline, textAlign: "center", lineHeight: 20, marginBottom: 24 },
   emptyBtn:   { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.primary, borderRadius: 20, paddingHorizontal: 20, paddingVertical: 12 },

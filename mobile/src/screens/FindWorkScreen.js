@@ -22,7 +22,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useLanguage } from "../contexts/LanguageContext";
 import { useLocationContext } from "../contexts/LocationContext";
 import LocationPickerSheet from "../components/LocationPickerSheet";
-import { colors, fonts, shadow, spacing } from "../theme";
+import { colors, fonts, radius, shadow, spacing } from "../theme";
 
 const CATEGORIES = [
   { v: "", label: "All Jobs", icon: "briefcase-outline" },
@@ -284,7 +284,7 @@ export default function FindWorkScreen({ navigation }) {
               hitSlop={10}
               onPress={() => navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Home")}
             >
-              <Ionicons name="arrow-back" size={24} color="#111827" />
+              <Ionicons name="arrow-back" size={24} color={colors.textHeading} />
             </Pressable>
             <Text style={s.title}>Find Jobs</Text>
           </View>
@@ -295,7 +295,7 @@ export default function FindWorkScreen({ navigation }) {
             <Text style={s.locChipTxt} numberOfLines={1}>
               {location?.label || (location?.pincode ? `Near ${location.pincode}` : "Set location")}
             </Text>
-            <Ionicons name="chevron-down" size={13} color="#6B7280" />
+            <Ionicons name="chevron-down" size={13} color={colors.textSecondary} />
           </Pressable>
 
           <View style={s.searchRow}>
@@ -303,21 +303,21 @@ export default function FindWorkScreen({ navigation }) {
               style={[s.searchBox, searchFocused && s.searchBoxFocused]}
               onPress={() => inputRef.current?.focus()}
             >
-              <Ionicons name="search-outline" size={22} color="#9CA3AF" />
+              <Ionicons name="search-outline" size={22} color={colors.textMuted} />
               <TextInput
                 ref={inputRef}
                 value={query}
                 onChangeText={setQuery}
                 style={s.searchInput}
                 placeholder="Search for plumbers, electricians..."
-                placeholderTextColor="#7E7576"
+                placeholderTextColor={colors.textMuted}
                 returnKeyType="search"
                 onFocus={() => setSearchFocused(true)}
                 onBlur={() => setSearchFocused(false)}
               />
               {query.length > 0 ? (
                 <Pressable style={s.clearSearchBtn} onPress={() => setQuery("")} hitSlop={8}>
-                  <Ionicons name="close-circle" size={18} color="#9CA3AF" />
+                  <Ionicons name="close-circle" size={18} color={colors.textMuted} />
                 </Pressable>
               ) : null}
             </Pressable>
@@ -338,7 +338,7 @@ export default function FindWorkScreen({ navigation }) {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={() => { setRefreshing(true); load(); }}
-              tintColor="#111827"
+              tintColor={colors.textHeading}
             />
           }
           ListHeaderComponent={
@@ -361,7 +361,7 @@ export default function FindWorkScreen({ navigation }) {
                   <Pressable key={cat.v || "all"}
                     style={[s.quickPill, category === cat.v && s.quickPillActive]}
                     onPress={() => { setCategory(cat.v); setLoading(true); }}>
-                    <Ionicons name={cat.icon} size={13} color={category === cat.v ? "#fff" : "#4B5563"} />
+                    <Ionicons name={cat.icon} size={13} color={category === cat.v ? "#fff" : colors.textSecondary} />
                     <Text style={[s.quickPillText, category === cat.v && s.quickPillTextActive]}>{cat.label}</Text>
                   </Pressable>
                 ))}
@@ -390,7 +390,7 @@ export default function FindWorkScreen({ navigation }) {
 
         {loading ? (
           <View style={s.loadingOverlay}>
-            <ActivityIndicator color="#111827" />
+            <ActivityIndicator color={colors.textHeading} />
           </View>
         ) : null}
 
@@ -448,12 +448,12 @@ function JobCard({ job, request, bookmarked, onOpen, onApply, onWithdraw, onBook
           <Ionicons
             name={bookmarked ? "bookmark" : "bookmark-outline"}
             size={24}
-            color={bookmarked ? colors.primary : "#7E7576"}
+            color={bookmarked ? colors.primary : colors.textMuted}
           />
         </Pressable>
       </View>
 
-      <View style={s.titleRow}>
+      <View style={s.cardTitleRow}>
         <Text style={[s.jobTitle, { flex: 1 }]} numberOfLines={2}>{job.title || "Untitled Job"}</Text>
         {job.urgency === "asap" || job.urgency === "urgent" ? (
           <View style={[s.urgencyBadge, job.urgency === "asap" && s.urgencyBadgeAsap]}>
@@ -464,12 +464,12 @@ function JobCard({ job, request, bookmarked, onOpen, onApply, onWithdraw, onBook
 
       <View style={s.metaRow}>
         <View style={s.metaItem}>
-          <Ionicons name="location-outline" size={17} color="#4B5563" />
+          <Ionicons name="location-outline" size={17} color={colors.textSecondary} />
           <Text style={s.metaText} numberOfLines={1}>{job.distance_label || loc}</Text>
         </View>
         {posted ? (
           <View style={s.metaItem}>
-            <Ionicons name="time-outline" size={17} color="#4B5563" />
+            <Ionicons name="time-outline" size={17} color={colors.textSecondary} />
             <Text style={s.metaText}>{posted}</Text>
           </View>
         ) : null}
@@ -526,7 +526,7 @@ function InfoPill({ icon, text }) {
   if (!text) return null;
   return (
     <View style={s.infoPill}>
-      <Ionicons name={icon} size={13} color="#5E5E60" />
+      <Ionicons name={icon} size={13} color={colors.textSecondary} />
       <Text style={s.infoPillText} numberOfLines={1}>{text}</Text>
     </View>
   );
@@ -536,7 +536,7 @@ function NoMoreJobs({ onAdjust }) {
   return (
     <View style={s.noMore}>
       <View style={s.noMoreIcon}>
-        <Ionicons name="file-tray-full-outline" size={31} color="#5E5E60" />
+        <Ionicons name="file-tray-full-outline" size={31} color={colors.textSecondary} />
       </View>
       <Text style={s.noMoreTitle}>No more jobs in your area</Text>
       <Text style={s.noMoreSub}>Try expanding your search radius or adjusting filters to find more opportunities.</Text>
@@ -574,7 +574,7 @@ function FilterModal({
                   style={[s.modalChip, category === cat.v && s.modalChipActive]}
                   onPress={() => setCategory(cat.v)}
                 >
-                  <Ionicons name={cat.icon} size={14} color={category === cat.v ? "#fff" : "#111827"} />
+                  <Ionicons name={cat.icon} size={14} color={category === cat.v ? "#fff" : colors.textHeading} />
                   <Text style={[s.modalChipText, category === cat.v && s.modalChipTextActive]}>{cat.label}</Text>
                 </Pressable>
               ))}
@@ -600,7 +600,7 @@ function FilterModal({
                   style={[s.modalChip, skills === sk.v && s.modalChipActive]}
                   onPress={() => setSkills(sk.v)}
                 >
-                  <Ionicons name={sk.icon} size={13} color={skills === sk.v ? "#fff" : "#111827"} />
+                  <Ionicons name={sk.icon} size={13} color={skills === sk.v ? "#fff" : colors.textHeading} />
                   <Text style={[s.modalChipText, skills === sk.v && s.modalChipTextActive]}>{sk.l}</Text>
                 </Pressable>
               ))}
@@ -622,87 +622,87 @@ function FilterModal({
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#F9F9FE" },
+  safe: { flex: 1, backgroundColor: colors.bg },
 
   header: {
     backgroundColor: "#fff",
     borderBottomWidth: 1,
-    borderBottomColor: "#E8E8ED",
+    borderBottomColor: colors.borderSubtle,
     paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xl,
-    ...shadow.sm,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
     zIndex: 2,
   },
-  titleRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginBottom: 22 },
-  backBtn: { width: 38, height: 38, alignItems: "center", justifyContent: "center" },
-  title: { fontFamily: fonts.bodyBold, fontSize: 28, color: "#111827", letterSpacing: 0 },
+  titleRow: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginBottom: spacing.sm },
+  backBtn: { width: 44, height: 44, alignItems: "center", justifyContent: "center", marginLeft: -10 },
+  title: { fontFamily: fonts.bodyBold, fontSize: 24, color: colors.textHeading, letterSpacing: 0 },
 
   locChip: {
-    flexDirection: "row", alignItems: "center", gap: 5,
-    backgroundColor: "#EEF2FF", borderRadius: 20,
-    paddingHorizontal: 12, paddingVertical: 6,
+    flexDirection: "row", alignItems: "center", gap: 6,
+    backgroundColor: colors.surface, borderRadius: radius.pill,
+    paddingHorizontal: 12, paddingVertical: 7,
     alignSelf: "flex-start", marginBottom: spacing.md,
   },
-  locChipTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.primary, maxWidth: 220 },
+  locChipTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.textHeading, maxWidth: 220 },
 
   searchRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   searchBox: {
     flex: 1,
     minWidth: 0,
-    height: 56,
+    minHeight: 52,
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
-    backgroundColor: "#F3F3F8",
-    borderRadius: 16,
+    backgroundColor: colors.surface,
+    borderRadius: 12,
     paddingHorizontal: 16,
     overflow: "hidden",
   },
-  searchBoxFocused: { backgroundColor: "#fff", borderWidth: 1, borderColor: "#111827" },
+  searchBoxFocused: { backgroundColor: colors.surfaceCard, borderWidth: 1, borderColor: colors.borderSubtle },
   searchInput: {
     flex: 1,
     minWidth: 0,
-    height: 56,
+    minHeight: 52,
     paddingVertical: 0,
     fontFamily: fonts.body,
-    fontSize: 16,
-    color: "#111827",
+    fontSize: 15,
+    color: colors.textHeading,
     includeFontPadding: false,
     textAlignVertical: "center",
   },
   clearSearchBtn: { flexShrink: 0, width: 24, height: 24, alignItems: "center", justifyContent: "center" },
   filterBtn: {
     flexShrink: 0,
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: "#000",
+    width: 52,
+    height: 52,
+    borderRadius: 12,
+    backgroundColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
     position: "relative",
   },
-  filterBadge: { position: "absolute", top: 10, right: 10, width: 8, height: 8, borderRadius: 4, backgroundColor: "#ef4444", borderWidth: 1.5, borderColor: "#000" },
+  filterBadge: { position: "absolute", top: 10, right: 10, width: 8, height: 8, borderRadius: 4, backgroundColor: colors.danger, borderWidth: 1.5, borderColor: colors.primary },
 
-  list: { paddingHorizontal: spacing.md, paddingTop: 26 },
+  list: { paddingHorizontal: spacing.md, paddingTop: 4 },
   headerWrap: { marginBottom: spacing.lg },
   feedHeader: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 12 },
-  feedTitle: { fontFamily: fonts.bodyBold, fontSize: 22, color: "#1A1C1F" },
-  feedSub: { fontFamily: fonts.body, fontSize: 13, color: "#6B7280", marginTop: 2 },
-  viewAllText: { fontFamily: fonts.bodyMedium, fontSize: 16, color: "#111827" },
-  viewAllMuted: { color: "#9CA3AF" },
+  feedTitle: { fontFamily: fonts.bodyBold, fontSize: 22, color: colors.textHeading },
+  feedSub: { fontFamily: fonts.body, fontSize: 13, color: colors.textSecondary, marginTop: 2 },
+  viewAllText: { fontFamily: fonts.bodyMedium, fontSize: 16, color: colors.textHeading },
+  viewAllMuted: { color: colors.textMuted },
 
   quickPillsWrap: { marginBottom: 20 },
   quickPills: { gap: 8, paddingVertical: 2 },
-  quickPill: { flexDirection: "row", alignItems: "center", gap: 5, height: 34, paddingHorizontal: 12, borderRadius: 999, backgroundColor: "#F3F3F8", borderWidth: 1, borderColor: "#E8E8ED" },
-  quickPillActive: { backgroundColor: "#111827", borderColor: "#111827" },
-  quickPillText: { fontFamily: fonts.bodyMedium, fontSize: 12, color: "#4B5563" },
-  quickPillTextActive: { color: "#fff" },
+  quickPill: { flexDirection: "row", alignItems: "center", gap: 6, minHeight: 36, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: colors.surface, borderWidth: 1, borderColor: "transparent" },
+  quickPillActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  quickPillText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.textHeading },
+  quickPillTextActive: { color: colors.onPrimary },
 
-  titleRow: { flexDirection: "row", alignItems: "flex-start", gap: 8, marginBottom: 10 },
-  urgencyBadge: { flexShrink: 0, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6, backgroundColor: "#FEF3C7", marginTop: 3 },
-  urgencyBadgeAsap: { backgroundColor: "#FEE2E2" },
-  urgencyBadgeText: { fontFamily: fonts.bodyBold, fontSize: 10, color: "#B45309", letterSpacing: 0.5 },
+  cardTitleRow: { flexDirection: "row", alignItems: "flex-start", gap: 8, marginBottom: 10 },
+
+  urgencyBadge: { flexShrink: 0, paddingHorizontal: 8, paddingVertical: 3, borderRadius: radius.pill, backgroundColor: colors.warningLight, marginTop: 3 },
+  urgencyBadgeAsap: { backgroundColor: colors.dangerLight },
+  urgencyBadgeText: { fontFamily: fonts.bodyBold, fontSize: 10, color: colors.warning, letterSpacing: 0.5 },
 
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -714,13 +714,12 @@ const s = StyleSheet.create({
 
   card: {
     backgroundColor: "#fff",
-    borderRadius: 13,
-    paddingHorizontal: 24,
-    paddingVertical: 22,
-    marginBottom: 24,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: "transparent",
-    ...shadow.sm,
+    borderColor: colors.borderSubtle,
+    ...shadow.xs,
   },
   cardPressed: { opacity: 0.94, transform: [{ scale: 0.996 }] },
   cardTop: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 18 },
@@ -729,19 +728,19 @@ const s = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 9,
-    backgroundColor: "#111827",
+    backgroundColor: colors.textHeading,
     alignItems: "center",
     justifyContent: "center",
   },
   posterTextWrap: { flex: 1, minWidth: 0 },
-  posterName: { fontFamily: fonts.bodyBold, fontSize: 15, color: "#1A1C1F", includeFontPadding: false },
+  posterName: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.textHeading, includeFontPadding: false },
   ratingRow: { flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 },
-  posterRating: { fontFamily: fonts.bodyMedium, fontSize: 13, color: "#4C4546", includeFontPadding: false },
+  posterRating: { fontFamily: fonts.bodyMedium, fontSize: 13, color: colors.textSecondary, includeFontPadding: false },
 
-  jobTitle: { fontFamily: fonts.bodyBold, fontSize: 21, lineHeight: 28, color: "#111827", includeFontPadding: false },
+  jobTitle: { fontFamily: fonts.bodyBold, fontSize: 16, lineHeight: 22, color: colors.textHeading, includeFontPadding: false },
   metaRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: spacing.md, marginBottom: spacing.md },
   metaItem: { flexDirection: "row", alignItems: "center", gap: 5, maxWidth: "100%" },
-  metaText: { fontFamily: fonts.body, fontSize: 14, color: "#4C4546", flexShrink: 1 },
+  metaText: { fontFamily: fonts.body, fontSize: 14, color: colors.textSecondary, flexShrink: 1 },
 
   detailPills: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginBottom: 18 },
   infoPill: {
@@ -749,19 +748,19 @@ const s = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    backgroundColor: "#F3F3F8",
+    backgroundColor: colors.surface,
     borderRadius: 999,
     paddingHorizontal: 9,
     paddingVertical: 5,
   },
-  infoPillText: { maxWidth: 180, fontFamily: fonts.bodyMedium, fontSize: 11, color: "#4C4546", includeFontPadding: false },
+  infoPillText: { maxWidth: 180, fontFamily: fonts.bodyMedium, fontSize: 11, color: colors.textSecondary, includeFontPadding: false },
 
-  cardDivider: { height: 1, backgroundColor: "#E8E8ED", marginBottom: 20 },
+  cardDivider: { height: 1, backgroundColor: colors.borderSubtle, marginBottom: 20 },
   cardFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md },
   payBlock: { flex: 1, minWidth: 0 },
   payRow: { flexDirection: "row", alignItems: "baseline", gap: 4 },
-  payAmount: { flexShrink: 1, fontFamily: fonts.bodyBold, fontSize: 25, color: "#000", letterSpacing: 0, includeFontPadding: false },
-  payUnit: { fontFamily: fonts.bodyBold, fontSize: 12, color: "#4C4546" },
+  payAmount: { flexShrink: 1, fontFamily: fonts.bodyBold, fontSize: 18, color: colors.money, letterSpacing: 0, includeFontPadding: false },
+  payUnit: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.textSecondary },
   verifiedRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 5 },
   verifiedText: { fontFamily: fonts.bodyBold, fontSize: 10, color: "#047857", textTransform: "uppercase" },
   applyBtn: {
@@ -776,27 +775,27 @@ const s = StyleSheet.create({
   applyBtnText: { fontFamily: fonts.bodyBold, fontSize: 15, color: "#fff", includeFontPadding: false, textAlign: "center" },
   pendingBtn: {
     width: 132,
-    height: 42,
-    borderRadius: 10,
-    backgroundColor: "#FFFBEB",
+    minHeight: 44,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: "#FDE68A",
+    borderColor: colors.borderSubtle,
     alignItems: "center",
     justifyContent: "center",
   },
-  pendingBtnText: { fontFamily: fonts.bodyBold, fontSize: 15, color: "#92400E" },
+  pendingBtnText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.textSecondary },
   requestActions: { flexShrink: 0, alignItems: "stretch", gap: 8 },
   withdrawBtn: {
     width: 132,
-    height: 42,
-    borderRadius: 10,
-    backgroundColor: "#fff",
+    minHeight: 44,
+    borderRadius: 12,
+    backgroundColor: colors.surfaceCard,
     borderWidth: 1,
-    borderColor: "#CFC4C5",
+    borderColor: colors.borderSubtle,
     alignItems: "center",
     justifyContent: "center",
   },
-  withdrawBtnText: { fontFamily: fonts.bodyBold, fontSize: 14, color: "#1A1C1F", includeFontPadding: false },
+  withdrawBtnText: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.textHeading, includeFontPadding: false },
 
   footerWrap: { marginTop: spacing.sm },
   emptyWrap: { flexGrow: 1, justifyContent: "center" },
@@ -806,8 +805,8 @@ const s = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1.5,
     borderStyle: "dashed",
-    borderColor: "#CFC4C5",
-    backgroundColor: "#EDEDF2",
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.borderSubtle,
     alignItems: "center",
     justifyContent: "center",
     padding: spacing.xl,
@@ -817,24 +816,26 @@ const s = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: "#E2E2E7",
+    backgroundColor: colors.borderSubtle,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: spacing.lg,
   },
-  noMoreTitle: { fontFamily: fonts.bodyBold, fontSize: 22, color: "#1A1C1F", textAlign: "center" },
-  noMoreSub: { marginTop: 5, fontFamily: fonts.body, fontSize: 15, lineHeight: 22, color: "#4C4546", textAlign: "center" },
+  noMoreTitle: { fontFamily: fonts.bodyBold, fontSize: 22, color: colors.textHeading, textAlign: "center" },
+  noMoreSub: { marginTop: 5, fontFamily: fonts.body, fontSize: 15, lineHeight: 22, color: colors.textSecondary, textAlign: "center" },
   adjustBtn: {
     marginTop: spacing.xl,
     minWidth: 148,
-    height: 42,
-    borderRadius: 8,
+    minHeight: 48,
+    paddingHorizontal: 20, paddingVertical: 12,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#111827",
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.surfaceCard,
     alignItems: "center",
     justifyContent: "center",
   },
-  adjustText: { fontFamily: fonts.bodyMedium, fontSize: 15, color: "#111827" },
+  adjustText: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.textHeading },
 
   modalBg: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
   modalSheet: {
@@ -844,21 +845,21 @@ const s = StyleSheet.create({
     padding: 24,
     paddingBottom: 40,
   },
-  modalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: "#E5E7EB", alignSelf: "center", marginBottom: 20 },
-  modalTitle: { fontFamily: fonts.bodyBold, fontSize: 22, color: "#111827" },
-  modalSub: { fontFamily: fonts.body, fontSize: 14, color: "#6B7280", lineHeight: 20, marginTop: 4, marginBottom: 20 },
-  fieldLabel: { fontFamily: fonts.bodyBold, fontSize: 11, color: "#6B7280", textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 },
+  modalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: colors.borderSubtle, alignSelf: "center", marginBottom: 20 },
+  modalTitle: { fontFamily: fonts.bodyBold, fontSize: 22, color: colors.textHeading },
+  modalSub: { fontFamily: fonts.body, fontSize: 14, color: colors.textSecondary, lineHeight: 20, marginTop: 4, marginBottom: 20 },
+  fieldLabel: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.textSecondary, textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 },
   modalInputRow: {
     height: 52,
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    backgroundColor: "#F3F3F8",
+    backgroundColor: colors.surface,
     borderRadius: 12,
     paddingHorizontal: 14,
     marginBottom: 18,
   },
-  modalInput: { flex: 1, minWidth: 0, fontFamily: fonts.body, fontSize: 16, color: "#111827", paddingVertical: 0 },
+  modalInput: { flex: 1, minWidth: 0, fontFamily: fonts.body, fontSize: 16, color: colors.textHeading, paddingVertical: 0 },
   modalChips: { gap: 8, paddingBottom: 18 },
   modalChip: {
     height: 38,
@@ -867,10 +868,10 @@ const s = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 12,
     borderRadius: 999,
-    backgroundColor: "#F3F3F8",
+    backgroundColor: colors.surface,
   },
   modalChipActive: { backgroundColor: "#000" },
-  modalChipText: { fontFamily: fonts.bodyBold, fontSize: 13, color: "#111827" },
+  modalChipText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.textHeading },
   modalChipTextActive: { color: "#fff" },
   modalButtons: { flexDirection: "row", gap: 10, marginTop: 4 },
   clearBtn: {
@@ -878,11 +879,11 @@ const s = StyleSheet.create({
     height: 52,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#CFC4C5",
+    borderColor: colors.borderSubtle,
     alignItems: "center",
     justifyContent: "center",
   },
-  clearBtnText: { fontFamily: fonts.bodyBold, fontSize: 15, color: "#4C4546" },
+  clearBtnText: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.textSecondary },
   applyFilterBtn: {
     flex: 1,
     height: 52,

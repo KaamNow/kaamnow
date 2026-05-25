@@ -12,7 +12,7 @@ import api from "../lib/api";
 
 const MAX_ITEMS = 6;
 
-export default function PortfolioScreen() {
+export default function PortfolioScreen({ navigation }) {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [items, setItems] = useState([]);
@@ -90,23 +90,33 @@ export default function PortfolioScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <View style={[styles.safe, { paddingTop: insets.top }]}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBack} hitSlop={8}>
+          <Ionicons name="arrow-back" size={22} color={colors.textHeading} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Portfolio</Text>
+      </View>
       <FlatList
         data={data}
         numColumns={3}
         keyExtractor={(i) => i.id}
         renderItem={renderItem}
-        contentContainerStyle={{ padding: 2, paddingBottom: insets.bottom + 16 }}
+        contentContainerStyle={{ padding: 2, paddingBottom: insets.bottom + 48 }}
       />
-      <Text style={styles.hint}>{t("portfolio_long_press_hint")}</Text>
+      <Text style={[styles.hint, { paddingBottom: insets.bottom + 8 }]}>{t("portfolio_long_press_hint")}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  safe:    { flex: 1, backgroundColor: colors.bg },
   center:  { flex: 1, justifyContent: "center", alignItems: "center" },
+  header:  { flexDirection: "row", alignItems: "center", paddingHorizontal: spacing.md, paddingVertical: 10, backgroundColor: colors.surfaceCard, borderBottomWidth: 1, borderBottomColor: colors.borderSubtle },
+  headerBack: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
+  headerTitle: { flex: 1, marginLeft: 8, fontFamily: fonts.bodyBold, fontSize: 18, color: colors.textHeading },
   tile:    { flex: 1, aspectRatio: 1, margin: 2 },
   img:     { width: "100%", height: "100%" },
-  addTile: { flex: 1, aspectRatio: 1, margin: 2, justifyContent: "center", alignItems: "center", backgroundColor: "#f3f4f6", borderRadius: radius.sm },
-  hint:    { fontFamily: fonts.body, fontSize: 11, color: colors.outline, textAlign: "center", padding: spacing.xs },
+  addTile: { flex: 1, aspectRatio: 1, margin: 2, justifyContent: "center", alignItems: "center", backgroundColor: colors.surface, borderRadius: radius.sm },
+  hint:    { position: "absolute", left: 0, right: 0, bottom: 0, backgroundColor: colors.bg, fontFamily: fonts.body, fontSize: 11, color: colors.outline, textAlign: "center", paddingTop: spacing.xs, paddingHorizontal: spacing.md },
 });

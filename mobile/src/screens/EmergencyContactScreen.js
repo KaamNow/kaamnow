@@ -6,7 +6,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../contexts/AuthContext";
-import { colors, fonts, spacing, radius } from "../theme";
+import { colors, fonts, spacing, radius, shadow } from "../theme";
 import OTPInput from "../components/OTPInput";
 import api from "../lib/api";
 import { formatApiError } from "../api";
@@ -96,7 +96,7 @@ export default function EmergencyContactScreen({ navigation }) {
         <View style={s.header}>
           <TouchableOpacity
             onPress={() => {
-              if (step === "otp") { setStep("view"); return; }
+              if (step === "otp") { setStep(existing ? "view" : "edit"); return; }
               if (step === "edit" && existing) { setStep("view"); return; }
               navigation.goBack();
             }}
@@ -110,7 +110,7 @@ export default function EmergencyContactScreen({ navigation }) {
         </View>
 
         <ScrollView
-          contentContainerStyle={s.body}
+          contentContainerStyle={[s.body, { paddingBottom: insets.bottom + 48 }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -125,7 +125,7 @@ export default function EmergencyContactScreen({ navigation }) {
                 <Text style={s.infoName}>{existing.name}</Text>
                 <Text style={s.infoPhone}>{existing.phone}</Text>
                 <View style={s.savedBadge}>
-                  <Ionicons name="shield-checkmark-outline" size={14} color="#10b981" />
+                  <Ionicons name="shield-checkmark-outline" size={14} color={colors.success} />
                   <Text style={s.savedBadgeTxt}>Saved</Text>
                 </View>
               </View>
@@ -141,9 +141,9 @@ export default function EmergencyContactScreen({ navigation }) {
                 disabled={sending}
               >
                 {sending
-                  ? <ActivityIndicator color="#fff" size="small" />
+                  ? <ActivityIndicator color={colors.onPrimary} size="small" />
                   : <>
-                      <Ionicons name="create-outline" size={18} color="#fff" />
+                      <Ionicons name="create-outline" size={18} color={colors.onPrimary} />
                       <Text style={s.primaryBtnTxt}>Edit Contact</Text>
                     </>
                 }
@@ -173,7 +173,7 @@ export default function EmergencyContactScreen({ navigation }) {
                 disabled={verifying || otp.length !== 6}
               >
                 {verifying
-                  ? <ActivityIndicator color="#fff" size="small" />
+                  ? <ActivityIndicator color={colors.onPrimary} size="small" />
                   : <Text style={s.primaryBtnTxt}>Verify & Continue</Text>
                 }
               </TouchableOpacity>
@@ -195,42 +195,55 @@ export default function EmergencyContactScreen({ navigation }) {
             <View>
               {existing && (
                 <View style={s.verifiedBanner}>
-                  <Ionicons name="checkmark-circle" size={16} color="#10b981" />
+                  <Ionicons name="checkmark-circle" size={16} color={colors.success} />
                   <Text style={s.verifiedBannerTxt}>Identity verified — you can now edit</Text>
                 </View>
               )}
 
-              <Text style={s.label}>Contact Name *</Text>
-              <TextInput
-                style={s.input}
-                value={name}
-                onChangeText={setName}
-                placeholder="e.g. Riya Sharma (Sister)"
-                placeholderTextColor={colors.outline}
-                autoCapitalize="words"
-                maxLength={100}
-                returnKeyType="next"
-              />
-
-              <Text style={s.label}>Mobile Number *</Text>
-              <View style={s.phoneRow}>
-                <View style={s.countryCode}>
-                  <Text style={s.countryCodeTxt}>🇮🇳 +91</Text>
+              <View style={s.formCard}>
+                <View style={s.formHeader}>
+                  <View style={s.formIcon}>
+                    <Ionicons name="shield-outline" size={22} color={colors.textHeading} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.formTitle}>Emergency contact</Text>
+                    <Text style={s.formSub}>Add someone trusted who can be contacted quickly.</Text>
+                  </View>
                 </View>
+
+                <Text style={s.label}>Contact Name *</Text>
                 <TextInput
-                  style={s.phoneInput}
-                  value={phone}
-                  onChangeText={(v) => setPhone(v.replace(/\D/g, "").slice(0, 10))}
-                  placeholder="10-digit number"
+                  style={s.input}
+                  value={name}
+                  onChangeText={setName}
+                  placeholder="e.g. Riya Sharma (Sister)"
                   placeholderTextColor={colors.outline}
-                  keyboardType="number-pad"
-                  maxLength={10}
-                  returnKeyType="done"
+                  autoCapitalize="words"
+                  maxLength={100}
+                  returnKeyType="next"
                 />
+
+                <Text style={s.label}>Mobile Number *</Text>
+                <View style={s.phoneRow}>
+                  <View style={s.countryCode}>
+                    <Text style={s.countryCodeTxt}>+91</Text>
+                  </View>
+                  <TextInput
+                    style={s.phoneInput}
+                    value={phone}
+                    onChangeText={(v) => setPhone(v.replace(/\D/g, "").slice(0, 10))}
+                    placeholder="10-digit number"
+                    placeholderTextColor={colors.outline}
+                    keyboardType="number-pad"
+                    maxLength={10}
+                    returnKeyType="done"
+                  />
+                </View>
+                <View style={s.hintRow}>
+                  <Ionicons name="information-circle-outline" size={14} color={colors.textMuted} />
+                  <Text style={s.hint}>This person will be contacted in case of emergency.</Text>
+                </View>
               </View>
-              <Text style={s.hint}>
-                <Ionicons name="information-circle-outline" size={13} color={colors.outline} /> This person will be contacted in case of emergency.
-              </Text>
 
               <TouchableOpacity
                 style={[s.primaryBtn, (!name.trim() || phone.length !== 10) && s.btnDisabled]}
@@ -238,9 +251,9 @@ export default function EmergencyContactScreen({ navigation }) {
                 disabled={saving || !name.trim() || phone.length !== 10}
               >
                 {saving
-                  ? <ActivityIndicator color="#fff" size="small" />
+                  ? <ActivityIndicator color={colors.onPrimary} size="small" />
                   : <>
-                      <Ionicons name="save-outline" size={18} color="#fff" />
+                      <Ionicons name="save-outline" size={18} color={colors.onPrimary} />
                       <Text style={s.primaryBtnTxt}>Save Contact</Text>
                     </>
                 }
@@ -255,60 +268,62 @@ export default function EmergencyContactScreen({ navigation }) {
 }
 
 const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f5f5f7" },
+  container: { flex: 1, backgroundColor: colors.bg },
 
   header: {
     flexDirection: "row", alignItems: "center",
-    paddingHorizontal: 16, paddingVertical: 14,
-    backgroundColor: "#fff",
-    borderBottomWidth: 1, borderBottomColor: "#e8e8ed",
+    paddingHorizontal: spacing.lg, paddingVertical: 10,
+    backgroundColor: colors.surfaceCard,
+    borderBottomWidth: 1, borderBottomColor: colors.borderSubtle,
   },
   backBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: "#f0f0f5", alignItems: "center", justifyContent: "center",
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: colors.surface, alignItems: "center", justifyContent: "center",
+    marginLeft: -8,
   },
   headerTitle: {
     flex: 1, textAlign: "center",
-    fontFamily: fonts.bodyBold, fontSize: 17, color: colors.textHeading,
+    fontFamily: fonts.bodyBold, fontSize: 18, color: colors.textHeading,
   },
 
-  body: { padding: 20, paddingBottom: 48 },
+  body: { padding: spacing.lg },
 
   // ── View mode ──────────────────────────────────────────────────────────────
   infoCard: {
-    backgroundColor: "#fff", borderRadius: 20,
-    borderWidth: 1, borderColor: "#e8e8ed",
-    padding: 24, alignItems: "center",
-    marginBottom: 20,
+    backgroundColor: colors.surfaceCard, borderRadius: radius.lg,
+    borderWidth: 1, borderColor: colors.borderSubtle,
+    padding: spacing.xl, alignItems: "center",
+    marginBottom: spacing.lg,
+    ...shadow.xs,
   },
   infoIcon: {
-    width: 60, height: 60, borderRadius: 30,
-    backgroundColor: "#eef2ff", alignItems: "center", justifyContent: "center",
-    marginBottom: 14,
+    width: 72, height: 72, borderRadius: 36,
+    backgroundColor: colors.surface, alignItems: "center", justifyContent: "center",
+    marginBottom: spacing.lg,
   },
-  infoName:  { fontFamily: fonts.bodyBold, fontSize: 18, color: colors.textHeading, marginBottom: 4 },
-  infoPhone: { fontFamily: fonts.body, fontSize: 15, color: colors.outline, marginBottom: 12 },
+  infoName:  { fontFamily: fonts.bodyBold, fontSize: 22, color: colors.textHeading, marginBottom: 4, letterSpacing: -0.3 },
+  infoPhone: { fontFamily: fonts.body, fontSize: 15, color: colors.textSecondary, marginBottom: spacing.md },
   savedBadge: {
     flexDirection: "row", alignItems: "center", gap: 5,
-    backgroundColor: "#d1fae5", borderRadius: 20,
-    paddingHorizontal: 12, paddingVertical: 4,
+    backgroundColor: colors.successLight, borderRadius: radius.pill,
+    paddingHorizontal: 12, paddingVertical: 5,
   },
-  savedBadgeTxt: { fontFamily: fonts.bodyBold, fontSize: 12, color: "#065f46" },
+  savedBadgeTxt: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.success },
 
   editHint: {
-    fontFamily: fonts.body, fontSize: 13, color: colors.outline,
-    textAlign: "center", lineHeight: 20, marginBottom: 20,
+    fontFamily: fonts.body, fontSize: 14, color: colors.textSecondary,
+    textAlign: "center", lineHeight: 21, marginBottom: spacing.lg,
   },
 
   // ── OTP mode ───────────────────────────────────────────────────────────────
-  otpHeader: { alignItems: "center", marginBottom: 28 },
+  otpHeader: { alignItems: "center", marginBottom: 28, backgroundColor: colors.surfaceCard, borderRadius: radius.lg, borderWidth: 1, borderColor: colors.borderSubtle, padding: spacing.xl, ...shadow.xs },
   otpIcon: {
-    width: 64, height: 64, borderRadius: 32,
-    backgroundColor: "#eef2ff", alignItems: "center", justifyContent: "center",
-    marginBottom: 14,
+    width: 72, height: 72, borderRadius: 36,
+    backgroundColor: colors.surface, alignItems: "center", justifyContent: "center",
+    marginBottom: spacing.lg,
   },
-  otpTitle: { fontFamily: fonts.bodyBold, fontSize: 20, color: colors.textHeading, marginBottom: 8 },
-  otpSub:   { fontFamily: fonts.body, fontSize: 14, color: colors.outline, textAlign: "center", lineHeight: 22 },
+  otpTitle: { fontFamily: fonts.bodyBold, fontSize: 22, color: colors.textHeading, marginBottom: 8, letterSpacing: -0.3 },
+  otpSub:   { fontFamily: fonts.body, fontSize: 14, color: colors.textSecondary, textAlign: "center", lineHeight: 22 },
 
   resendBtn: { alignItems: "center", marginTop: 16 },
   resendTxt: { fontFamily: fonts.bodySemi, fontSize: 14, color: colors.primary },
@@ -316,34 +331,47 @@ const s = StyleSheet.create({
   // ── Edit mode ──────────────────────────────────────────────────────────────
   verifiedBanner: {
     flexDirection: "row", alignItems: "center", gap: 8,
-    backgroundColor: "#d1fae5", borderRadius: 12,
-    padding: 12, marginBottom: 20,
+    backgroundColor: colors.successLight, borderRadius: radius.md,
+    padding: spacing.md, marginBottom: spacing.lg,
   },
-  verifiedBannerTxt: { fontFamily: fonts.bodySemi, fontSize: 13, color: "#065f46" },
+  verifiedBannerTxt: { fontFamily: fonts.bodySemi, fontSize: 13, color: colors.success },
+
+  formCard: {
+    backgroundColor: colors.surfaceCard,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    padding: spacing.lg,
+    ...shadow.xs,
+  },
+  formHeader: { flexDirection: "row", alignItems: "center", gap: spacing.md, marginBottom: spacing.md },
+  formIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" },
+  formTitle: { fontFamily: fonts.bodyBold, fontSize: 17, color: colors.textHeading, letterSpacing: -0.2 },
+  formSub: { fontFamily: fonts.body, fontSize: 12, color: colors.textSecondary, marginTop: 2, lineHeight: 17 },
 
   label: {
     fontFamily: fonts.bodyBold, fontSize: 13,
-    color: colors.textBody, marginBottom: 8, marginTop: 16,
+    color: colors.textHeading, marginBottom: 8, marginTop: 16,
   },
-  hint: { fontFamily: fonts.body, fontSize: 12, color: colors.outline, marginTop: 6, lineHeight: 18 },
+  hintRow: { flexDirection: "row", alignItems: "flex-start", gap: 6, marginTop: 8 },
+  hint: { flex: 1, fontFamily: fonts.body, fontSize: 12, color: colors.textMuted, lineHeight: 18 },
 
   input: {
-    backgroundColor: "#fff", borderRadius: 14,
-    borderWidth: 1, borderColor: "#e8e8ed",
+    backgroundColor: colors.surface, borderRadius: radius.md,
     paddingHorizontal: 16, paddingVertical: 14,
     fontFamily: fonts.body, fontSize: 15, color: colors.textHeading,
+    minHeight: 52,
   },
 
   phoneRow: {
     flexDirection: "row", alignItems: "center",
-    borderWidth: 1, borderColor: "#e8e8ed",
-    borderRadius: 14, overflow: "hidden",
-    backgroundColor: "#fff",
+    borderRadius: radius.md, overflow: "hidden",
+    backgroundColor: colors.surface,
+    minHeight: 52,
   },
   countryCode: {
     paddingHorizontal: 14, paddingVertical: 14,
-    backgroundColor: "#f8f8f8",
-    borderRightWidth: 1, borderRightColor: "#e8e8ed",
+    borderRightWidth: 1, borderRightColor: colors.borderSubtle,
   },
   countryCodeTxt: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.textHeading },
   phoneInput: {
@@ -355,8 +383,9 @@ const s = StyleSheet.create({
   primaryBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",
     gap: 8, backgroundColor: colors.primary,
-    borderRadius: 16, paddingVertical: 16, marginTop: 24,
+    borderRadius: radius.md, paddingVertical: 16, marginTop: spacing.xl,
+    minHeight: 54,
   },
   btnDisabled:   { opacity: 0.4 },
-  primaryBtnTxt: { fontFamily: fonts.bodyBold, fontSize: 16, color: "#fff" },
+  primaryBtnTxt: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.onPrimary },
 });

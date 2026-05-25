@@ -390,20 +390,20 @@ export default function LandingScreen({ navigation }) {
         </View>
 
         <View style={s.guestSection}>
-          <Text style={s.catHeading}>What do you need help with?</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.catChipRow}>
-            {CATS.map(cat => (
+          <Text style={s.catHeading}>Popular categories</Text>
+          <View style={s.catChipRow}>
+            {CATS.slice(0, 6).map(cat => (
               <Pressable key={cat.filterSkill} style={s.catCard}
                 onPress={() => navigation.navigate("Tabs", { screen: "Browse", params: { skill: cat.filterSkill } })}>
                 <View style={s.catIconCircle}>
-                  <Ionicons name={cat.icon} size={26} color={colors.primary} />
+                  <Ionicons name={cat.icon} size={22} color={colors.onPrimary} />
                 </View>
                 <Text style={s.catLabel} numberOfLines={1}>
                   {cat.label[lang] || cat.label.en}
                 </Text>
               </Pressable>
             ))}
-          </ScrollView>
+          </View>
         </View>
 
         <View style={s.statsRow}>
@@ -727,29 +727,41 @@ const s = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     marginBottom: 12,
   },
-  catChipRow: { paddingHorizontal: spacing.lg, gap: 10, paddingBottom: 2 },
+  catChipRow: {
+    paddingHorizontal: spacing.lg,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    paddingBottom: 2,
+  },
   catCard: {
-    width: 80,
-    alignItems: "center",
+    width: "31.3%",
+    aspectRatio: 1,
+    justifyContent: "flex-end",
+    alignItems: "flex-start",
     gap: 8,
-    backgroundColor: colors.surfaceCard,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    padding: 14,
+    backgroundColor: colors.primary,
+    borderRadius: 12,
+    padding: 10,
+    overflow: "hidden",
     ...shadow.xs,
   },
   catIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.surfaceContainerLow,
+    position: "absolute",
+    top: 10,
+    right: 10,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "rgba(255,255,255,0.14)",
     alignItems: "center",
     justifyContent: "center",
   },
   catLabel: {
-    fontFamily: fonts.bodyMedium, fontSize: 12,
-    color: colors.textHeading, textAlign: "center",
+    fontFamily: fonts.bodyBold,
+    fontSize: 13,
+    color: colors.onPrimary,
+    textAlign: "left",
   },
 
   statsRow: {
@@ -834,13 +846,18 @@ const s = StyleSheet.create({
   /* Content */
   nudge: {
     flexDirection: "row", alignItems: "center", gap: 12,
-    margin: spacing.lg, backgroundColor: "#FFFBEB",
-    borderRadius: radius.xxl, borderWidth: 1, borderColor: "#FDE68A", padding: 14,
+    margin: spacing.lg,
+    backgroundColor: colors.surfaceCard,
+    borderRadius: radius.xxl,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    padding: 14,
+    ...shadow.xs,
   },
-  nudgeTitle:    { fontFamily: fonts.bodyBold, fontSize: 13, color: "#92400E" },
-  progressTrack: { height: 4, borderRadius: 999, backgroundColor: "#FDE68A", marginTop: 6, overflow: "hidden" },
-  progressFill:  { height: 4, borderRadius: 999, backgroundColor: colors.warning },
-  nudgePct:      { fontFamily: fonts.body, fontSize: 11, color: "#A16207", marginTop: 3 },
+  nudgeTitle:    { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.textHeading },
+  progressTrack: { height: 4, borderRadius: 999, backgroundColor: colors.surfaceContainerHigh, marginTop: 6, overflow: "hidden" },
+  progressFill:  { height: 4, borderRadius: 999, backgroundColor: colors.primary },
+  nudgePct:      { fontFamily: fonts.body, fontSize: 11, color: colors.textSecondary, marginTop: 3 },
 
   dualCta: { flexDirection: "row", gap: 10, paddingHorizontal: spacing.lg, marginTop: spacing.md, marginBottom: 10 },
   ctaHalfExpert: {
@@ -903,12 +920,16 @@ const s = StyleSheet.create({
   alertCard: {
     flexDirection: "row", alignItems: "center", gap: 12,
     marginHorizontal: spacing.lg, marginTop: spacing.md,
-    backgroundColor: "#FFFBEB", borderRadius: radius.xxl,
-    borderWidth: 1, borderColor: "#FDE68A", padding: 14,
+    backgroundColor: colors.surfaceCard,
+    borderRadius: radius.xxl,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    padding: 14,
+    ...shadow.xs,
   },
-  alertIcon:  { width: 44, height: 44, borderRadius: 14, backgroundColor: "#FEF3C7", alignItems: "center", justifyContent: "center" },
-  alertTitle: { fontFamily: fonts.bodyBold, fontSize: 14, color: "#92400E" },
-  alertSub:   { fontFamily: fonts.body, fontSize: 12, color: "#A16207", marginTop: 2 },
+  alertIcon:  { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.surfaceContainerLow, alignItems: "center", justifyContent: "center" },
+  alertTitle: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.textHeading },
+  alertSub:   { fontFamily: fonts.body, fontSize: 12, color: colors.textSecondary, marginTop: 2 },
 
   emptyJobCard: {
     flexDirection: "row", alignItems: "center", gap: 12,

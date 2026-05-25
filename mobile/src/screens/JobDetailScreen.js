@@ -10,14 +10,14 @@ import { colors, fonts } from "../theme";
 import api from "../lib/api";
 
 const SC = {
-  open:      { bg: "#ecfdf5", text: "#059669", dot: "#10b981", label: "Open" },
-  filled:    { bg: "#eff6ff", text: "#2563eb", dot: "#3b82f6", label: "Filled" },
-  closed:    { bg: "#f9fafb", text: "#6b7280", dot: "#9ca3af", label: "Closed" },
-  requested: { bg: "#fffbeb", text: "#d97706", dot: "#f59e0b", label: "Pending" },
-  accepted:  { bg: "#ecfdf5", text: "#059669", dot: "#10b981", label: "Accepted" },
-  completed: { bg: "#eff6ff", text: "#2563eb", dot: "#3b82f6", label: "Done" },
-  rejected:  { bg: "#fef2f2", text: "#dc2626", dot: "#ef4444", label: "Declined" },
-  cancelled: { bg: "#f9fafb", text: "#6b7280", dot: "#9ca3af", label: "Cancelled" },
+  open:      { bg: colors.successLight, text: colors.success,    dot: colors.success,    label: "Open" },
+  filled:    { bg: colors.surface,      text: colors.textSecondary, dot: colors.textMuted,  label: "Filled" },
+  closed:    { bg: colors.surface,      text: colors.textMuted,   dot: colors.textMuted,    label: "Closed" },
+  requested: { bg: colors.warningLight, text: colors.warning,     dot: colors.warning,     label: "Pending" },
+  accepted:  { bg: colors.successLight, text: colors.success,    dot: colors.success,    label: "Accepted" },
+  completed: { bg: colors.primaryLight, text: colors.secondary,   dot: colors.secondary,   label: "Done" },
+  rejected:  { bg: colors.dangerLight,  text: colors.danger,      dot: colors.danger,      label: "Declined" },
+  cancelled: { bg: colors.surface,      text: colors.textMuted,   dot: colors.textMuted,    label: "Cancelled" },
 };
 
 export default function JobDetailScreen({ route, navigation }) {
@@ -185,7 +185,7 @@ export default function JobDetailScreen({ route, navigation }) {
       {/* Header */}
       <View style={s.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={s.backBtn}>
-          <Ionicons name="arrow-back" size={20} color="#111" />
+          <Ionicons name="arrow-back" size={20} color={colors.textHeading} />
         </TouchableOpacity>
         <Text style={s.headerTitle}>Job Details</Text>
         <View style={{ width: 36 }} />
@@ -221,7 +221,7 @@ export default function JobDetailScreen({ route, navigation }) {
         {(pay || job.location_text || job.pincode || job.job_date) && (
           <View style={s.statsRow}>
             {pay && (
-              <View style={[s.statBox, { backgroundColor: "#1a1c2e", flex: 1.3 }]}>
+              <View style={[s.statBox, { backgroundColor: colors.primary, flex: 1.3 }]}>
                 <Ionicons name="cash-outline" size={18} color="rgba(255,255,255,0.6)" />
                 <Text style={[s.statLabel, { color: "rgba(255,255,255,0.55)" }]}>Pay</Text>
                 <Text style={[s.statValue, { color: "#fff" }]}>{pay}</Text>
@@ -229,14 +229,14 @@ export default function JobDetailScreen({ route, navigation }) {
             )}
             {(job.location_text || job.pincode) && (
               <View style={[s.statBox, { flex: 1 }]}>
-                <Ionicons name="location-outline" size={18} color="#6b7280" />
+                <Ionicons name="location-outline" size={18} color={colors.textSecondary} />
                 <Text style={s.statLabel}>Location</Text>
                 <Text style={s.statValue} numberOfLines={1}>{job.location_text || job.pincode}</Text>
               </View>
             )}
             {job.job_date && (
               <View style={[s.statBox, { flex: 1 }]}>
-                <Ionicons name="calendar-outline" size={18} color="#6b7280" />
+                <Ionicons name="calendar-outline" size={18} color={colors.textSecondary} />
                 <Text style={s.statLabel}>Date</Text>
                 <Text style={s.statValue}>{job.job_date}</Text>
               </View>
@@ -253,7 +253,7 @@ export default function JobDetailScreen({ route, navigation }) {
             </View>
             <View style={s.ownerActions}>
               <TouchableOpacity style={s.editJobBtn} onPress={openEdit} activeOpacity={0.85}>
-                <Ionicons name="create-outline" size={15} color="#111" />
+                <Ionicons name="create-outline" size={15} color={colors.textHeading} />
                 <Text style={s.editJobTxt}>Edit</Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -263,10 +263,10 @@ export default function JobDetailScreen({ route, navigation }) {
                 activeOpacity={0.85}
               >
                 {cancellingJob ? (
-                  <ActivityIndicator size="small" color="#dc2626" />
+                  <ActivityIndicator size="small" color={colors.danger} />
                 ) : (
                   <>
-                    <Ionicons name="trash-outline" size={15} color="#dc2626" />
+                    <Ionicons name="trash-outline" size={15} color={colors.danger} />
                     <Text style={s.cancelJobTxt}>Cancel</Text>
                   </>
                 )}
@@ -319,7 +319,7 @@ export default function JobDetailScreen({ route, navigation }) {
 
             {applications.length === 0 ? (
               <View style={s.empty}>
-                <Ionicons name="people-outline" size={40} color="#e5e7eb" />
+                <Ionicons name="people-outline" size={40} color={colors.borderSubtle} />
                 <Text style={s.emptyTxt}>No applications yet</Text>
                 <Text style={s.emptySub}>Share this job to get more applicants</Text>
               </View>
@@ -364,7 +364,7 @@ export default function JobDetailScreen({ route, navigation }) {
                             onPress={() => act(eng.id, "reject")}
                           >
                             {acting === eng.id + "reject"
-                              ? <ActivityIndicator size="small" color="#ef4444" />
+                              ? <ActivityIndicator size="small" color={colors.danger} />
                               : <Text style={s.declineTxt}>Decline</Text>}
                           </TouchableOpacity>
                         </View>
@@ -402,7 +402,7 @@ export default function JobDetailScreen({ route, navigation }) {
             <View style={s.sheetHeader}>
               <Text style={s.sheetTitle}>Edit Job</Text>
               <TouchableOpacity onPress={() => setEditVisible(false)} style={s.sheetClose}>
-                <Ionicons name="close" size={20} color="#111" />
+                <Ionicons name="close" size={20} color={colors.textHeading} />
               </TouchableOpacity>
             </View>
 
@@ -460,7 +460,7 @@ function EditField({ label, style, multiline, ...props }) {
       <TextInput
         {...props}
         multiline={multiline}
-        placeholderTextColor="#9ca3af"
+        placeholderTextColor={colors.textMuted}
         style={[s.input, multiline && s.inputMulti]}
       />
     </View>
@@ -470,31 +470,36 @@ function EditField({ label, style, multiline, ...props }) {
 const SHADOW = {
   shadowColor: "#000",
   shadowOffset: { width: 0, height: 2 },
-  shadowOpacity: 0.05,
+  shadowOpacity: 0.04,
   shadowRadius: 8,
-  elevation: 2,
+  elevation: 1,
 };
 
 const s = StyleSheet.create({
-  root:   { flex: 1, backgroundColor: "#f5f5fa" },
+  root:   { flex: 1, backgroundColor: colors.surface },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
 
   header: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     paddingHorizontal: 16, paddingVertical: 12,
     backgroundColor: "#fff",
-    borderBottomWidth: 1, borderBottomColor: "#f0f0f5",
+    borderBottomWidth: 1, borderBottomColor: colors.surface,
   },
   backBtn: {
     width: 36, height: 36, borderRadius: 18,
-    backgroundColor: "#f3f4f6",
+    backgroundColor: colors.surface,
     alignItems: "center", justifyContent: "center",
   },
-  headerTitle: { fontFamily: fonts.bodyBold, fontSize: 16, color: "#111" },
+  headerTitle: { fontFamily: fonts.bodyBold, fontSize: 16, color: colors.textHeading },
 
   // Title card
   titleCard: {
-    backgroundColor: "#fff", borderRadius: 18, padding: 20, ...SHADOW,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    ...SHADOW,
   },
   statusBadge: {
     flexDirection: "row", alignItems: "center", gap: 5,
@@ -503,64 +508,77 @@ const s = StyleSheet.create({
   },
   statusDot: { width: 6, height: 6, borderRadius: 3 },
   statusTxt: { fontFamily: fonts.bodyBold, fontSize: 11 },
-  jobTitle: { fontFamily: fonts.bodyBold, fontSize: 22, color: "#111", lineHeight: 30, marginBottom: 14 },
+  jobTitle: { fontFamily: fonts.bodyBold, fontSize: 22, color: colors.textHeading, lineHeight: 30, marginBottom: 14 },
   postedRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   postedAvatar: {
     width: 28, height: 28, borderRadius: 14,
     backgroundColor: "#e0e7ff", alignItems: "center", justifyContent: "center",
   },
   postedAvatarTxt: { fontFamily: fonts.bodyBold, fontSize: 12, color: "#4f46e5" },
-  postedName:  { fontFamily: fonts.bodyBold, fontSize: 13, color: "#374151" },
-  postedLabel: { fontFamily: fonts.body, fontSize: 13, color: "#9ca3af" },
+  postedName:  { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.textSecondary },
+  postedLabel: { fontFamily: fonts.body, fontSize: 13, color: colors.textMuted },
 
   // Stats row
   statsRow: { flexDirection: "row", gap: 10 },
   statBox: {
-    backgroundColor: "#fff", borderRadius: 14, padding: 14, gap: 4, ...SHADOW,
+    backgroundColor: "#fff",
+    borderRadius: 14,
+    padding: 14,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    ...SHADOW,
   },
-  statLabel: { fontFamily: fonts.body, fontSize: 10, color: "#9ca3af", marginTop: 2 },
-  statValue: { fontFamily: fonts.bodyBold, fontSize: 14, color: "#111" },
+  statLabel: { fontFamily: fonts.body, fontSize: 10, color: colors.textMuted, marginTop: 2 },
+  statValue: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.textHeading },
 
   // Owner controls
   ownerCard: {
     backgroundColor: "#fff",
-    borderRadius: 18,
+    borderRadius: 16,
     padding: 16,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
     ...SHADOW,
   },
-  ownerTitle: { fontFamily: fonts.bodyBold, fontSize: 15, color: "#111", marginBottom: 3 },
-  ownerSub: { fontFamily: fonts.body, fontSize: 12, color: "#6b7280", lineHeight: 17 },
+  ownerTitle: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.textHeading, marginBottom: 3 },
+  ownerSub: { fontFamily: fonts.body, fontSize: 12, color: colors.textSecondary, lineHeight: 17 },
   ownerActions: { flexDirection: "row", gap: 8 },
   editJobBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    height: 38,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    backgroundColor: "#f3f4f6",
+    gap: 6,
+    minHeight: 44,
+    paddingHorizontal: 14, paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
   },
-  editJobTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: "#111" },
+  editJobTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.textHeading },
   cancelJobBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    height: 38,
-    paddingHorizontal: 12,
-    borderRadius: 10,
-    backgroundColor: "#fef2f2",
+    gap: 6,
+    minHeight: 44,
+    paddingHorizontal: 14, paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: colors.dangerLight,
   },
-  cancelJobTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: "#dc2626" },
+  cancelJobTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.danger },
 
   // Sections
   section: {
-    backgroundColor: "#fff", borderRadius: 18, padding: 20, ...SHADOW,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    ...SHADOW,
   },
-  sectionTitle: { fontFamily: fonts.bodyBold, fontSize: 15, color: "#111", marginBottom: 12 },
-  bodyTxt:      { fontFamily: fonts.body, fontSize: 14, color: "#4b5563", lineHeight: 22 },
+  sectionTitle: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.textHeading, marginBottom: 12 },
+  bodyTxt:      { fontFamily: fonts.body, fontSize: 14, color: colors.textSecondary, lineHeight: 22 },
 
   // My application status
   myAppRow: { flexDirection: "row", alignItems: "center", gap: 14 },
@@ -568,18 +586,18 @@ const s = StyleSheet.create({
     width: 46, height: 46, borderRadius: 23,
     alignItems: "center", justifyContent: "center",
   },
-  myAppStatus: { fontFamily: fonts.bodyBold, fontSize: 15, color: "#111", marginBottom: 2 },
-  myAppSub:    { fontFamily: fonts.body, fontSize: 13, color: "#6b7280" },
+  myAppStatus: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.textHeading, marginBottom: 2 },
+  myAppSub:    { fontFamily: fonts.body, fontSize: 13, color: colors.textSecondary },
 
   // Application rows
   appRow:       { flexDirection: "row", alignItems: "flex-start", gap: 12, paddingVertical: 14 },
-  appRowBorder: { borderTopWidth: 1, borderTopColor: "#f3f4f6" },
+  appRowBorder: { borderTopWidth: 1, borderTopColor: colors.surface },
   appAvatar: {
     width: 42, height: 42, borderRadius: 21,
     backgroundColor: "#e0e7ff", alignItems: "center", justifyContent: "center",
   },
   appAvatarTxt: { fontFamily: fonts.bodyBold, fontSize: 16, color: "#4f46e5" },
-  appName:      { fontFamily: fonts.bodyBold, fontSize: 14, color: "#111" },
+  appName:      { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.textHeading },
   appBadge:     { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 100 },
   appBadgeTxt:  { fontFamily: fonts.bodyBold, fontSize: 11 },
 
@@ -587,32 +605,32 @@ const s = StyleSheet.create({
   acceptBtn: {
     flexDirection: "row", alignItems: "center", gap: 4,
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8,
-    backgroundColor: "#10b981",
+    backgroundColor: colors.success,
   },
   acceptTxt:  { fontFamily: fonts.bodyBold, fontSize: 13, color: "#fff" },
   declineBtn: {
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8,
-    borderWidth: 1.5, borderColor: "#ef4444",
+    borderWidth: 1.5, borderColor: colors.danger,
   },
-  declineTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: "#ef4444" },
+  declineTxt: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.danger },
 
   // Empty state
   empty:    { alignItems: "center", paddingVertical: 28, gap: 6 },
-  emptyTxt: { fontFamily: fonts.bodyBold, fontSize: 15, color: "#374151" },
-  emptySub: { fontFamily: fonts.body, fontSize: 13, color: "#9ca3af" },
+  emptyTxt: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.textSecondary },
+  emptySub: { fontFamily: fonts.body, fontSize: 13, color: colors.textMuted },
 
   // Sticky apply bar
   stickyBar: {
     position: "absolute", bottom: 0, left: 0, right: 0,
     backgroundColor: "#fff",
     paddingHorizontal: 16, paddingTop: 10,
-    borderTopWidth: 1, borderTopColor: "#f0f0f5",
+    borderTopWidth: 1, borderTopColor: colors.surface,
     shadowColor: "#000", shadowOffset: { width: 0, height: -3 },
     shadowOpacity: 0.06, shadowRadius: 12, elevation: 8,
   },
   applyBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-    height: 52, backgroundColor: "#1a1c2e", borderRadius: 14,
+    height: 52, backgroundColor: colors.primary, borderRadius: 14,
   },
   applyBtnTxt: { fontFamily: fonts.bodyBold, fontSize: 16, color: "#fff" },
 
@@ -644,29 +662,29 @@ const s = StyleSheet.create({
     justifyContent: "space-between",
     marginBottom: 14,
   },
-  sheetTitle: { fontFamily: fonts.bodyBold, fontSize: 20, color: "#111" },
+  sheetTitle: { fontFamily: fonts.bodyBold, fontSize: 20, color: colors.textHeading },
   sheetClose: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "#f3f4f6",
+    backgroundColor: colors.surface,
     alignItems: "center",
     justifyContent: "center",
   },
   twoCol: { flexDirection: "row", gap: 10 },
   fieldWrap: { gap: 6 },
-  fieldLabel: { fontFamily: fonts.bodyBold, fontSize: 12, color: "#6b7280" },
+  fieldLabel: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.textSecondary },
   input: {
     minHeight: 48,
     borderRadius: 12,
-    backgroundColor: "#f5f5fa",
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: "#ececf2",
+    borderColor: colors.surface,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontFamily: fonts.body,
     fontSize: 15,
-    color: "#111",
+    color: colors.textHeading,
   },
   inputMulti: {
     minHeight: 108,

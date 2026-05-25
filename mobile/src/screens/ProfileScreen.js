@@ -37,7 +37,7 @@ function SettingsRow({ icon, label, value, onPress, danger }) {
   return (
     <TouchableOpacity style={styles.settingsRow} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.settingsRowLeft}>
-        <View style={[styles.settingsIcon, danger && { backgroundColor: "#fff1f2" }]}>
+        <View style={[styles.settingsIcon, danger && { backgroundColor: colors.dangerLight }]}>
           <Ionicons name={icon} size={18} color={danger ? colors.error : colors.textBody} />
         </View>
         <Text style={[styles.settingsLabel, danger && { color: colors.error }]}>{label}</Text>
@@ -170,6 +170,13 @@ export default function ProfileScreen({ navigation }) {
       <View style={[styles.hero, { paddingTop: insets.top + spacing.sm }]}>
         {/* Top bar: title + edit */}
         <View style={styles.heroTopBar}>
+          <TouchableOpacity
+            onPress={() => (navigation.canGoBack() ? navigation.goBack() : navigation.navigate("Dashboard"))}
+            style={styles.heroBackBtn}
+            activeOpacity={0.82}
+          >
+            <Ionicons name="arrow-back" size={20} color="#fff" />
+          </TouchableOpacity>
           <Text style={styles.heroTopTitle}>My Profile</Text>
           <TouchableOpacity onPress={() => navigation.navigate("EditProfile")} style={styles.heroEditBtn} activeOpacity={0.82}>
             <Ionicons name="create-outline" size={15} color="#fff" />
@@ -264,7 +271,7 @@ export default function ProfileScreen({ navigation }) {
             >
               {broadcasting
                 ? <ActivityIndicator size="small" color={broadcastOn ? "#ef4444" : "#fff"} />
-                : <Text style={[styles.broadcastBtnText, broadcastOn && { color: "#ef4444" }]}>
+                : <Text style={[styles.broadcastBtnText, broadcastOn && { color: colors.danger }]}>
                     {broadcastOn ? "Turn Off" : "Go Live"}
                   </Text>
               }
@@ -282,7 +289,7 @@ export default function ProfileScreen({ navigation }) {
               <Text style={{ fontFamily: fonts.bodyBold, fontSize: 15, color: colors.textHeading }}>My Skills</Text>
               <TouchableOpacity
                 onPress={() => navigation.navigate("BecomeExpert", { editMode: true })}
-                style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: "#F3F4F6", alignItems: "center", justifyContent: "center" }}
+                style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: colors.surface, alignItems: "center", justifyContent: "center" }}
               >
                 <Ionicons name="pencil" size={15} color={colors.textHeading} />
               </TouchableOpacity>
@@ -411,19 +418,19 @@ export default function ProfileScreen({ navigation }) {
 function StatCell({ label, value, highlight }) {
   return (
     <View style={styles.statCell}>
-      <Text style={[styles.statValue, highlight && { color: "#d97706" }]}>{value}</Text>
+      <Text style={[styles.statValue, highlight && { color: colors.money }]}>{value}</Text>
       <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F8F9FA" },
+  container: { flex: 1, backgroundColor: colors.bg },
   center:    { flex: 1, justifyContent: "center", alignItems: "center" },
 
   // ── Hero ──────────────────────────────────────────────────────
   hero: {
-    backgroundColor: "#000",
+    backgroundColor: colors.primary,
     paddingHorizontal: spacing.xl,
     paddingBottom: 40,
     alignItems: "center",
@@ -434,6 +441,16 @@ const styles = StyleSheet.create({
   heroTopBar: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     width: "100%", paddingVertical: spacing.sm, marginBottom: spacing.lg,
+  },
+  heroBackBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.18)",
+    backgroundColor: "rgba(255,255,255,0.10)",
   },
   heroTopTitle:  { fontFamily: fonts.bodyBold, fontSize: 20, color: "#fff" },
   heroEditBtn:   { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 7, paddingHorizontal: 14, borderRadius: radius.pill, borderWidth: 1, borderColor: "rgba(255,255,255,0.2)", backgroundColor: "rgba(255,255,255,0.1)" },
@@ -448,7 +465,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderRadius: 15, width: 30, height: 30,
     justifyContent: "center", alignItems: "center",
-    borderWidth: 1, borderColor: "#E5E7EB",
+    borderWidth: 1, borderColor: colors.borderSubtle,
     ...shadow.sm,
   },
   heroName:     { fontFamily: fonts.bodyBold, fontSize: 24, color: "#fff", marginBottom: 5 },
@@ -459,15 +476,15 @@ const styles = StyleSheet.create({
   // ── Stats ─────────────────────────────────────────────────────
   statsCard:  { flexDirection: "row", marginHorizontal: spacing.xl, marginTop: -28, borderRadius: 18, ...shadow.sm },
   statCell:   { flex: 1, alignItems: "center", paddingVertical: spacing.md },
-  statValue:  { fontFamily: fonts.bodyBold, fontSize: 18, color: "#111827" },
-  statLabel:  { fontFamily: fonts.bodyBold, fontSize: 10, color: "#9CA3AF", marginTop: 3, textTransform: "uppercase", letterSpacing: 0.8 },
-  statDivider:{ width: 1, backgroundColor: "#F3F4F6", marginVertical: spacing.sm },
+  statValue:  { fontFamily: fonts.bodyBold, fontSize: 18, color: colors.textHeading },
+  statLabel:  { fontFamily: fonts.bodyBold, fontSize: 10, color: colors.textMuted, marginTop: 3, textTransform: "uppercase", letterSpacing: 0.8 },
+  statDivider:{ width: 1, backgroundColor: colors.borderSubtle, marginVertical: spacing.sm },
 
   // ── Skill badges ──────────────────────────────────────────────
   skillBadge: {
     paddingHorizontal: 12, paddingVertical: 6,
-    borderRadius: 20, backgroundColor: "#EEF2FF",
-    borderWidth: 1, borderColor: "#C7D2FE",
+    borderRadius: radius.pill, backgroundColor: colors.surface,
+    borderWidth: 0,
   },
   skillBadgeText: { fontFamily: fonts.bodySemi, fontSize: 13, color: "#4338CA" },
 
@@ -477,7 +494,7 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.xl, marginTop: spacing.lg,
     backgroundColor: "#fff",
     borderRadius: 18, padding: spacing.md,
-    borderWidth: 1, borderColor: "#F3F4F6",
+    borderWidth: 1, borderColor: colors.surface,
     ...shadow.xs,
   },
   becomeTitle: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.textHeading, marginBottom: 3 },
@@ -490,12 +507,12 @@ const styles = StyleSheet.create({
   availDot:   { width: 8, height: 8, borderRadius: 4 },
   availTitle: { fontFamily: fonts.bodyBold, fontSize: 15, color: colors.textHeading },
   availSub:   { fontFamily: fonts.body, fontSize: 12, color: colors.outline, marginTop: 1 },
-  broadcastBtn: { backgroundColor: "#10b981", borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, minWidth: 80, alignItems: "center" },
-  broadcastBtnOff: { backgroundColor: "#fee2e2" },
-  broadcastBtnText: { fontFamily: fonts.bodyBold, fontSize: 13, color: "#fff" },
+  broadcastBtn: { backgroundColor: colors.success, borderRadius: radius.pill, paddingHorizontal: 16, paddingVertical: 8, minHeight: 36, minWidth: 80, alignItems: "center", justifyContent: "center" },
+  broadcastBtnOff: { backgroundColor: colors.dangerLight },
+  broadcastBtnText: { fontFamily: fonts.bodyBold, fontSize: 13, color: colors.onPrimary },
 
   // ── Expert Tools grid ─────────────────────────────────────────
-  toolsCard: { padding: 0, overflow: "hidden", borderRadius: 18, backgroundColor: "#F3F4F6" },
+  toolsCard: { padding: 0, overflow: "hidden", borderRadius: 16, backgroundColor: colors.borderSubtle },
   toolsGrid: { flexDirection: "row", flexWrap: "wrap" },
   toolTile:  {
     width: "33.33%",
@@ -503,19 +520,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: spacing.sm,
-    backgroundColor: "#fff",
+    backgroundColor: colors.surfaceCard,
   },
-  toolTileBorderRight:  { borderRightWidth: 1, borderRightColor: "#F3F4F6" },
-  toolTileBorderBottom: { borderBottomWidth: 1, borderBottomColor: "#F3F4F6" },
-  toolLabel: { fontFamily: fonts.bodyMedium, fontSize: 12, color: "#4B5563", textAlign: "center" },
+  toolTileBorderRight:  { borderRightWidth: 1, borderRightColor: colors.borderSubtle },
+  toolTileBorderBottom: { borderBottomWidth: 1, borderBottomColor: colors.surface },
+  toolLabel: { fontFamily: fonts.bodyMedium, fontSize: 12, color: colors.textSecondary, textAlign: "center" },
 
   // ── Referral ──────────────────────────────────────────────────
   referCard: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    backgroundColor: "#FEFCE8",
+    backgroundColor: colors.surface,
     marginHorizontal: spacing.xl, marginTop: 0, marginBottom: spacing.xl,
-    borderRadius: 18, padding: spacing.lg,
-    borderWidth: 1, borderColor: "#FEF3C7",
+    borderRadius: 16, padding: spacing.lg,
+    borderWidth: 1, borderColor: colors.borderSubtle,
   },
   referLeft:  { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   referEmoji: { fontSize: 28 },
@@ -531,9 +548,9 @@ const styles = StyleSheet.create({
   },
   settingsRowLeft:  { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   settingsRowRight: { flexDirection: "row", alignItems: "center", gap: spacing.xs },
-  settingsIcon:     { width: 32, height: 32, borderRadius: 9, backgroundColor: "#F3F4F6", justifyContent: "center", alignItems: "center" },
-  settingsLabel:    { fontFamily: fonts.bodyMedium, fontSize: 15, color: "#374151" },
-  settingsValue:    { fontFamily: fonts.body, fontSize: 14, color: colors.outline },
+  settingsIcon:     { width: 36, height: 36, borderRadius: 10, backgroundColor: colors.surface, justifyContent: "center", alignItems: "center" },
+  settingsLabel:    { fontFamily: fonts.bodyMedium, fontSize: 15, color: colors.textHeading },
+  settingsValue:    { fontFamily: fonts.body, fontSize: 14, color: colors.textMuted },
 
   // ── Legal row ─────────────────────────────────────────────────
   legalRow:  { flexDirection: "row", justifyContent: "center", alignItems: "center", marginTop: spacing.xl, marginBottom: spacing.lg, gap: spacing.sm },
@@ -553,15 +570,15 @@ const styles = StyleSheet.create({
 
   // ── Layout helpers ────────────────────────────────────────────
   card: {
-    backgroundColor: "#fff",
-    borderRadius: 18,
-    borderWidth: 1, borderColor: "#F3F4F6",
+    backgroundColor: colors.surfaceCard,
+    borderRadius: 16,
+    borderWidth: 1, borderColor: colors.borderSubtle,
     overflow: "hidden",
     ...shadow.xs,
   },
   sectionWrap: { marginHorizontal: spacing.xl, marginBottom: spacing.xl },
   expertToolsWrap: { marginHorizontal: spacing.xl, marginBottom: spacing.xs },
   sectionWrapTight: { marginHorizontal: spacing.xl, marginTop: spacing.lg, marginBottom: spacing.xl },
-  sectionLabel:{ fontFamily: fonts.bodyBold, fontSize: 10, color: "#9CA3AF", textTransform: "uppercase", letterSpacing: 1.5, marginBottom: spacing.sm, marginLeft: 4 },
-  version:     { fontFamily: fonts.bodyMedium, fontSize: 10, color: "#9CA3AF", textAlign: "center", marginBottom: spacing.sm },
+  sectionLabel:{ fontFamily: fonts.bodyBold, fontSize: 10, color: colors.textMuted, textTransform: "uppercase", letterSpacing: 1.5, marginBottom: spacing.sm, marginLeft: 4 },
+  version:     { fontFamily: fonts.bodyMedium, fontSize: 10, color: colors.textMuted, textAlign: "center", marginBottom: spacing.sm },
 });
