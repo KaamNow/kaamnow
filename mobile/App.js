@@ -317,17 +317,17 @@ function RootNavigator() {
 
       {/* ── Profile sub-screens ─────────────────────────── */}
       <Stack.Screen name="EditProfile"      component={EditProfileScreen}      options={{ headerShown: false }} />
-      <Stack.Screen name="EditPhoto"        component={EditPhotoScreen}        options={{ title: "Change Photo" }} />
+      <Stack.Screen name="EditPhoto"        component={EditPhotoScreen}        options={{ headerShown: false }} />
       <Stack.Screen name="BecomeExpert"     component={BecomeExpertScreen}     options={{ headerShown: false }} />
-      <Stack.Screen name="Portfolio"        component={PortfolioScreen}        options={{ title: "My Portfolio" }} />
-      <Stack.Screen name="Certifications"   component={CertificationsScreen}   options={{ title: "Certifications" }} />
-      <Stack.Screen name="VideoProfile"     component={VideoProfileScreen}     options={{ title: "Video Profile" }} />
-      <Stack.Screen name="KYC"              component={KYCScreen}              options={{ title: "Verify Identity" }} />
+      <Stack.Screen name="Portfolio"        component={PortfolioScreen}        options={{ headerShown: false }} />
+      <Stack.Screen name="Certifications"   component={CertificationsScreen}   options={{ headerShown: false }} />
+      <Stack.Screen name="VideoProfile"     component={VideoProfileScreen}     options={{ headerShown: false }} />
+      <Stack.Screen name="KYC"              component={KYCScreen}              options={{ headerShown: false }} />
       <Stack.Screen name="Earnings"         component={EarningsScreen}         options={{ headerShown: false }} />
-      <Stack.Screen name="QRCode"           component={QRCodeScreen}           options={{ title: "My QR Code" }} />
+      <Stack.Screen name="QRCode"           component={QRCodeScreen}           options={{ headerShown: false }} />
       <Stack.Screen name="Activity"         component={ActivityScreen}         options={{ headerShown: false }} />
       <Stack.Screen name="JobDetail"        component={JobDetailScreen}        options={{ headerShown: false }} />
-      <Stack.Screen name="SavedExperts"     component={SavedExpertsScreen}     options={{ title: "Saved Local Experts" }} />
+      <Stack.Screen name="SavedExperts"     component={SavedExpertsScreen}     options={{ headerShown: false }} />
       <Stack.Screen name="SavedAddresses"   component={SavedAddressesScreen}   options={{ headerShown: false }} />
       <Stack.Screen name="AddressForm"      component={AddressFormScreen}       options={{ headerShown: false }} />
       <Stack.Screen name="EmergencyContact" component={EmergencyContactScreen} options={{ headerShown: false }} />

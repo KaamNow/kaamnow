@@ -20,6 +20,7 @@ import { useLanguage } from "../contexts/LanguageContext";
 import { usePincodeLookup } from "../lib/usePincode";
 import { colors, fonts, radius, shadow, spacing } from "../theme";
 import OnboardingWalkthrough, { hasSeenOnboarding, markOnboardingSeen } from "../components/OnboardingWalkthrough";
+import { CARD_IMAGES, getCategoryCardImage } from "../constants/cardImages";
 
 const KAAMNOW_WA_NUMBER = "917834811114";
 
@@ -97,15 +98,15 @@ const T = {
 
 // filterSkill maps to the SKILLS array in MarketplaceScreen
 const CATS = [
-  { label: { en: "Mason",       hi: "मिस्त्री" }, filterSkill: "mason",      icon: "construct-outline",       photo: "https://images.pexels.com/photos/585419/pexels-photo-585419.jpeg?auto=compress&cs=tinysrgb&w=300&h=300&fit=crop" },
-  { label: { en: "Electrician", hi: "बिजली"   }, filterSkill: "electrical",  icon: "flash-outline",           photo: "https://images.pexels.com/photos/1108572/pexels-photo-1108572.jpeg?auto=compress&cs=tinysrgb&w=300&h=300&fit=crop" },
-  { label: { en: "Farming",     hi: "खेती"    }, filterSkill: "farm work",   icon: "leaf-outline",            photo: "https://images.pexels.com/photos/1482101/pexels-photo-1482101.jpeg?auto=compress&cs=tinysrgb&w=300&h=300&fit=crop" },
-  { label: { en: "Cleaning",    hi: "सफाई"    }, filterSkill: "cleaning",    icon: "sparkles-outline",        photo: "https://images.pexels.com/photos/4107112/pexels-photo-4107112.jpeg?auto=compress&cs=tinysrgb&w=300&h=300&fit=crop" },
-  { label: { en: "Plumber",     hi: "प्लंबर"   }, filterSkill: "plumbing",   icon: "water-outline",           photo: "https://images.pexels.com/photos/8486972/pexels-photo-8486972.jpeg?auto=compress&cs=tinysrgb&w=300&h=300&fit=crop" },
-  { label: { en: "Carpenter",   hi: "बढ़ई"    }, filterSkill: "carpentry",   icon: "hammer-outline",          photo: "https://images.pexels.com/photos/3819804/pexels-photo-3819804.jpeg?auto=compress&cs=tinysrgb&w=300&h=300&fit=crop" },
-  { label: { en: "Painter",     hi: "पेंटर"   }, filterSkill: "painting",    icon: "color-palette-outline",   photo: "https://images.pexels.com/photos/1669754/pexels-photo-1669754.jpeg?auto=compress&cs=tinysrgb&w=300&h=300&fit=crop" },
-  { label: { en: "Driver",      hi: "ड्राइवर"  }, filterSkill: "driver",     icon: "car-outline",             photo: "https://images.pexels.com/photos/1390403/pexels-photo-1390403.jpeg?auto=compress&cs=tinysrgb&w=300&h=300&fit=crop" },
-  { label: { en: "Cook",        hi: "रसोइया"  }, filterSkill: "cooking",     icon: "restaurant-outline",      photo: "https://images.pexels.com/photos/2696064/pexels-photo-2696064.jpeg?auto=compress&cs=tinysrgb&w=300&h=300&fit=crop" },
+  { label: { en: "Mason",       hi: "मिस्त्री" }, filterSkill: "mason",      icon: "construct-outline",       photo: getCategoryCardImage("mason") },
+  { label: { en: "Electrician", hi: "बिजली"   }, filterSkill: "electrical",  icon: "flash-outline",           photo: getCategoryCardImage("electrical") },
+  { label: { en: "Farming",     hi: "खेती"    }, filterSkill: "farm work",   icon: "leaf-outline",            photo: getCategoryCardImage("farm work") },
+  { label: { en: "Cleaning",    hi: "सफाई"    }, filterSkill: "cleaning",    icon: "sparkles-outline",        photo: getCategoryCardImage("cleaning") },
+  { label: { en: "Plumber",     hi: "प्लंबर"   }, filterSkill: "plumbing",   icon: "water-outline",           photo: getCategoryCardImage("plumbing") },
+  { label: { en: "Carpenter",   hi: "बढ़ई"    }, filterSkill: "carpentry",   icon: "hammer-outline",          photo: getCategoryCardImage("carpentry") },
+  { label: { en: "Painter",     hi: "पेंटर"   }, filterSkill: "painting",    icon: "color-palette-outline",   photo: getCategoryCardImage("painting") },
+  { label: { en: "Driver",      hi: "ड्राइवर"  }, filterSkill: "driver",     icon: "car-outline",             photo: getCategoryCardImage("driver") },
+  { label: { en: "Cook",        hi: "रसोइया"  }, filterSkill: "cooking",     icon: "restaurant-outline",      photo: getCategoryCardImage("cooking") },
 ];
 
 const INDIGO = colors.primary;
@@ -115,7 +116,7 @@ const GUEST_HERO_CARDS = [
     title: "Need an Expert?",
     subtitle: "Find verified local professionals",
     button: "Book Local Expert",
-    image: "https://images.pexels.com/photos/6474471/pexels-photo-6474471.jpeg?auto=compress&cs=tinysrgb&w=800",
+    image: CARD_IMAGES.landingHero.needExpert,
     kind: "solid",
     overlay: ["rgba(0,0,0,0.15)", "rgba(0,0,0,0.75)"],
   },
@@ -123,7 +124,7 @@ const GUEST_HERO_CARDS = [
     title: "Need Work?",
     subtitle: "Find premium jobs near you",
     button: "Join as Partner",
-    image: "https://images.pexels.com/photos/8961251/pexels-photo-8961251.jpeg?auto=compress&cs=tinysrgb&w=800",
+    image: CARD_IMAGES.landingHero.needWork,
     kind: "outline",
     overlay: ["rgba(0,0,0,0.25)", "rgba(0,0,0,0.85)"],
   },
@@ -372,7 +373,7 @@ export default function LandingScreen({ navigation }) {
 
         <View style={s.guestHeroStack}>
           {GUEST_HERO_CARDS.map((card, index) => (
-            <ImageBackground key={card.title} source={{ uri: card.image }} resizeMode="cover" style={s.guestHeroCard} imageStyle={s.guestHeroImage}>
+            <ImageBackground key={card.title} source={card.image} resizeMode="cover" style={s.guestHeroCard} imageStyle={s.guestHeroImage}>
               <LinearGradient colors={card.overlay} style={s.guestHeroOverlay}>
                 <View style={s.guestHeroCopy}>
                   <Text style={s.guestHeroTitle}>{card.title}</Text>

@@ -92,7 +92,8 @@ export default function ChatScreen({ route, navigation }) {
     }
   };
 
-  const canChat   = engagement?.status === "accepted" || engagement?.status === "completed";
+  const isClosed = ["completed", "cancelled", "rejected"].includes(engagement?.status);
+  const canChat   = engagement?.status === "accepted";
   const otherName = engagement
     ? (engagement.direction === "sent" ? engagement.requested_to_name : engagement.requested_by_name)
     : "…";
@@ -211,12 +212,16 @@ export default function ChatScreen({ route, navigation }) {
         ListEmptyComponent={
           <View style={S.emptyWrap}>
             <Ionicons
-              name={canChat ? "chatbubble-outline" : "lock-closed-outline"}
+              name={canChat ? "chatbubble-outline" : isClosed ? "archive-outline" : "lock-closed-outline"}
               size={32} color={colors.outline}
               style={{ marginBottom: 10 }}
             />
             <Text style={S.emptyText}>
-              {canChat ? "Send your first message" : "Chat opens after the request is accepted"}
+              {canChat
+                ? "Send your first message"
+                : isClosed
+                  ? "No chat messages were sent before this chat was closed"
+                  : "Chat opens after the request is accepted"}
             </Text>
           </View>
         }
@@ -272,8 +277,8 @@ export default function ChatScreen({ route, navigation }) {
         <View style={[S.lockedBar, { paddingBottom: insets.bottom + 14 }]}>
           <Ionicons name="lock-closed-outline" size={15} color={colors.outline} />
           <Text style={S.lockedText}>
-            {engagement?.status === "completed"
-              ? "This job is completed"
+            {isClosed
+              ? "This chat is closed. Chat history is read-only."
               : "Chat unlocks after acceptance"}
           </Text>
         </View>

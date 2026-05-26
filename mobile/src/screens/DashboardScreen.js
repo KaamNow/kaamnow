@@ -11,8 +11,10 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect } from "@react-navigation/native";
 import * as Location from "expo-location";
 import { useAuth } from "../contexts/AuthContext";
+import { useLanguage } from "../contexts/LanguageContext";
 import { colors, fonts } from "../theme";
 import api from "../lib/api";
+import { getCategoryCardImage } from "../constants/cardImages";
 
 // ─── Layout constants (match HTML margin-mobile=16, gap-4=16) ──────────────
 const PAD   = 16;
@@ -22,17 +24,17 @@ const CARD_W = Math.floor((SW - PAD * 2 - GAP) / 2);
 
 // ─── All categories (first 6 shown by default, rest on "View All") ──────────
 const ALL_CATEGORIES = [
-  { skill: "mason",      label: "Mason",       icon: "hammer-outline",    photo: "https://images.unsplash.com/photo-1503387762-592deb58ef4e?w=600&q=80" },
-  { skill: "electrical", label: "Electrician", icon: "flash-outline",     photo: "https://images.unsplash.com/photo-1621905252507-b35492cc74b4?w=600&q=80" },
-  { skill: "farm work",  label: "Farming",     icon: "leaf-outline",      photo: "https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=600&q=80" },
-  { skill: "cleaning",   label: "Cleaning",    icon: "sparkles-outline",  photo: "https://images.unsplash.com/photo-1581578731548-c64695cc6952?w=600&q=80" },
-  { skill: "driver",     label: "Transport",   icon: "car-outline",       photo: "https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?w=600&q=80" },
-  { skill: "welding",    label: "Mechanical",  icon: "construct-outline", photo: "https://images.unsplash.com/photo-1486262715619-67b85e0b08d3?w=600&q=80" },
-  { skill: "plumbing",   label: "Plumber",     icon: "water-outline",     photo: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600&q=80" },
-  { skill: "carpentry",  label: "Carpenter",   icon: "cut-outline",       photo: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=600&q=80" },
-  { skill: "painting",   label: "Painter",     icon: "color-palette-outline", photo: "https://images.unsplash.com/photo-1562259949-e8e7689d7828?w=600&q=80" },
-  { skill: "cooking",    label: "Cook",        icon: "restaurant-outline", photo: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=600&q=80" },
-  { skill: "helper",     label: "Helper",      icon: "hand-right-outline", photo: "https://images.unsplash.com/photo-1521791136064-7986c2920216?w=600&q=80" },
+  { skill: "mason",      label: "Mason",       icon: "hammer-outline",    photo: getCategoryCardImage("mason") },
+  { skill: "electrical", label: "Electrician", icon: "flash-outline",     photo: getCategoryCardImage("electrical") },
+  { skill: "farm work",  label: "Farming",     icon: "leaf-outline",      photo: getCategoryCardImage("farm work") },
+  { skill: "cleaning",   label: "Cleaning",    icon: "sparkles-outline",  photo: getCategoryCardImage("cleaning") },
+  { skill: "driver",     label: "Transport",   icon: "car-outline",       photo: getCategoryCardImage("driver") },
+  { skill: "welding",    label: "Mechanical",  icon: "construct-outline", photo: getCategoryCardImage("welding") },
+  { skill: "plumbing",   label: "Plumber",     icon: "water-outline",     photo: getCategoryCardImage("plumbing") },
+  { skill: "carpentry",  label: "Carpenter",   icon: "cut-outline",       photo: getCategoryCardImage("carpentry") },
+  { skill: "painting",   label: "Painter",     icon: "color-palette-outline", photo: getCategoryCardImage("painting") },
+  { skill: "cooking",    label: "Cook",        icon: "restaurant-outline", photo: getCategoryCardImage("cooking") },
+  { skill: "helper",     label: "Helper",      icon: "hand-right-outline", photo: getCategoryCardImage("helper") },
 ];
 
 function timeAgo(iso) {
@@ -46,6 +48,7 @@ function timeAgo(iso) {
 // ─── Screen ────────────────────────────────────────────────────────────────
 export default function DashboardScreen({ navigation }) {
   const { user, refreshUser } = useAuth();
+  const { lang, setLang } = useLanguage();
   const insets = useSafeAreaInsets();
   const [urgentJobs, setUrgentJobs]   = useState([]);
   const [unreadChats, setUnreadChats]   = useState(0);
@@ -145,8 +148,8 @@ export default function DashboardScreen({ navigation }) {
     finally { setLocSaving(false); }
   };
 
-  const avatarUri = user?.avatar_url || user?.photo_url || null;
-  const initials  = (user?.name || "?")[0].toUpperCase();
+  const nextLang = lang === "hi" ? "en" : "hi";
+  const toggleLanguage = () => setLang(nextLang);
 
   // build category rows from the full or trimmed list
   const visibleCats = showAllCats ? ALL_CATEGORIES : ALL_CATEGORIES.slice(0, 4);
@@ -169,6 +172,14 @@ export default function DashboardScreen({ navigation }) {
         </TouchableOpacity>
 
         <View style={s.topActions}>
+          <TouchableOpacity style={s.langToggle} onPress={toggleLanguage} activeOpacity={0.78}>
+            <View style={[s.langSegment, lang === "en" && s.langSegmentActive]}>
+              <Text style={[s.langText, lang === "en" && s.langTextActive]}>EN</Text>
+            </View>
+            <View style={[s.langSegment, lang === "hi" && s.langSegmentActive]}>
+              <Text style={[s.langText, lang === "hi" && s.langTextActive]}>हि</Text>
+            </View>
+          </TouchableOpacity>
           <TouchableOpacity style={s.iconCircle} onPress={() => navigation.navigate("Notifications")}>
             <Ionicons name="notifications-outline" size={22} color={colors.textHeading} />
             {unreadNotifs > 0 && (
@@ -176,12 +187,6 @@ export default function DashboardScreen({ navigation }) {
                 <Text style={s.notifBadgeTxt}>{unreadNotifs > 9 ? "9+" : String(unreadNotifs)}</Text>
               </View>
             )}
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => navigation.navigate("Profile")}>
-            {avatarUri
-              ? <Image source={{ uri: avatarUri }} style={s.avatar} />
-              : <View style={[s.avatar, s.avatarFb]}><Text style={s.avatarTxt}>{initials}</Text></View>
-            }
           </TouchableOpacity>
         </View>
       </View>
@@ -248,7 +253,7 @@ export default function DashboardScreen({ navigation }) {
                   activeOpacity={0.88}
                   onPress={() => navigation.navigate("Marketplace", { skill: cat.skill })}
                 >
-                  <Image source={{ uri: cat.photo }} style={s.catImg} resizeMode="cover" />
+                  <Image source={cat.photo} style={s.catImg} resizeMode="cover" />
                   <LinearGradient
                     colors={["transparent", "rgba(0,0,0,0.65)"]}
                     style={s.catGrad}
@@ -489,6 +494,41 @@ const s = StyleSheet.create({
   locRow:   { flexDirection: "row", alignItems: "center", gap: 2, marginTop: 1 },
   locText:  { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.textHeading, maxWidth: 180 },
   topActions: { flexDirection: "row", alignItems: "center", gap: 10 },
+  langToggle: {
+    height: 40,
+    minWidth: 78,
+    borderRadius: 20,
+    backgroundColor: colors.surface,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 3,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+  },
+  langSegment: {
+    minWidth: 34,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 8,
+  },
+  langSegmentActive: {
+    backgroundColor: colors.surfaceCard,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 1,
+  },
+  langText: {
+    fontFamily: fonts.bodyBold,
+    fontSize: 12,
+    color: colors.textMuted,
+    letterSpacing: 0.2,
+  },
+  langTextActive: { color: colors.textHeading },
   iconCircle: {
     width: 40, height: 40, borderRadius: 20,
     backgroundColor: colors.surface,
@@ -501,9 +541,6 @@ const s = StyleSheet.create({
     paddingHorizontal: 3, borderWidth: 1.5, borderColor: colors.surfaceCard,
   },
   notifBadgeTxt: { fontFamily: fonts.bodyBold, fontSize: 9, color: colors.onPrimary },
-  avatar:   { width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: colors.borderSubtle },
-  avatarFb: { backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" },
-  avatarTxt:{ fontFamily: fonts.bodyBold, fontSize: 16, color: colors.onPrimary },
 
   // ── Body
   body: { paddingHorizontal: PAD, paddingTop: 16, gap: 24 },

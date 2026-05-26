@@ -17,44 +17,45 @@ import { useAuth }     from "../contexts/AuthContext";
 import { useLanguage } from "../contexts/LanguageContext";
 import { usePincodeLookup } from "../lib/usePincode";
 import { colors, fonts, radius, shadow, spacing } from "../theme";
+import { getPostJobCategoryImage } from "../constants/cardImages";
 
 /* ── Data ─────────────────────────────────────────────────────────────── */
 const CATEGORIES = [
   {
     v: "construction", icon: "🏗️", label: "Construction", color: "#FEF3C7",
-    image: "https://lh3.googleusercontent.com/aida/ADBb0uijJcOKpViZw94lNeoaesnzMM6OnIbDvEVnz2Oyfl7m2660IKjIq1-TCS9KkEKkOi2Ebh_MHyvbX_a9XX_g9smFkSPGx8iON5EMOAzNQ8JJE0WYyCwONVyrtRehRApB8SY_JkekdNUGemVNtadOPwYCzcImqpgNUbqxWqBTUW4Ptfbc1ijp58VsSEDTO8OE3SP8u8L0WISBe4VJT5O2VOTMRJM6q1rgD7nT7guq_IQUFEIPpG-huVB_nM0",
+    image: getPostJobCategoryImage("construction"),
   },
   {
     v: "farm", icon: "🌾", label: "Agriculture", color: "#D1FAE5",
-    image: "https://lh3.googleusercontent.com/aida/ADBb0ujcGO8Yr9Ke1W_DZNOaNNv-KSca3rIoZZq3G_j1eqpujVUGgAzJL6GEkalHZQJPjTKXSdrTK8rb5Wyz5HUg8wSy2_Rxpu0sIjrZScADQ6_an3nEHF6faaC6CPQanhiItXK-6kcX_KQZ2KbccgBwO5qefXtF_ZuCBtvFGzGRdjbx_NnfY8_ZJK_oreAJVzecjnXB_-pPEx2_dIkGvjukUWCM0xBVIyojcOQb5dPO8FatgOg7wzTnnCd1Gqk",
+    image: getPostJobCategoryImage("farm"),
   },
   {
     v: "electrical", icon: "⚡", label: "Electrical", color: "#FDE8FF",
-    image: "https://lh3.googleusercontent.com/aida/ADBb0uia9109NbLab5nlGuUIK6031TrjhjArGhnnL_37umiyTPp_UqRviTAZuhV4CTwk9SAY73r_A02IxchTORkZpaz-Jm4uuAObOuu2jGdjyIrrGtDgr9vtxhNRsdbaSHph-wFiPWEwBFbBJlSuz79A_RtmTkuwZEh9WZ1FiXrhQ0ZJUzi2NULk9aQUIfKhiX4P5j_DgrKYp2lkPiYWukaD6QWQ_H3OKAhkk8RHMYJziA6Oqut60X5dInjFJAU",
+    image: getPostJobCategoryImage("electrical"),
   },
   {
     v: "cleaning", icon: "✨", label: "Cleaning", color: "#E0F2FE",
-    image: "https://lh3.googleusercontent.com/aida/ADBb0ui-PwC-iBi81It8DxtKcaNuTll5gdZHeIt_4EhcGOkydYV6YEdgNumwBU8TDJNhnhFWOw-jP3zWF8L7Yk3MLwN8nrDS8APnr_a5mkKQWl5t0hE3XbB1Zh0ofPNSGHHmfIgX3xg5DKeItU_FWSiSlrtaaTQ5gbdmAtxqk91J6Yzced1HwufuFHLY-HjipmtwUiem-KRqrMw54Qyids6wcDzZrhq3868NALS8GNLO1kLrHy1gHblk47_UjjM",
+    image: getPostJobCategoryImage("cleaning"),
   },
   {
     v: "transport", icon: "🚛", label: "Transport", color: "#FFF7ED",
-    image: "https://lh3.googleusercontent.com/aida/ADBb0ugiHLhmLRKn0_akmcLIVORwSAjXb8bKumcKophmC2WsGkmc0F4kwDlPtSHCzp2wy-F4u2rnCnbVZ2HAFo7R6iiNErXscSvEewmLbvnTPqQIDULh3n2Q9XhtdvUQawP4vETnJnOdonYMGHrS36K5ed2FjjD58N6kiJ0Lg6yMryiffHjrDHrklfNI6zWZPzoWKVVf8vaQiIgAj0N8MJXvEbVAaD_VmGeoQoXuM_9FWNWPo5cKWbXw60u8TD4",
+    image: getPostJobCategoryImage("transport"),
   },
   {
     v: "mechanical", icon: "🔧", label: "Mechanical", color: "#EEF2FF",
-    image: "https://lh3.googleusercontent.com/aida/ADBb0uhB8I05nE-hKWlcxywRMQG6CFB0dADbQKGf6sEI2yRKsm6uuVPPc0Hkv_P36UDAFTVDyUhc8PDrh7nG0ZsDN6hGos9FNyJewAtyRE8wvdBd7vTmAZDj3OkYIrXE85G9a1CAs9ubBzSzcx9a-LCWzDT0mLc8Qzw29KxXrATzlYQC1pyXIQIlr1njVBRAWjwItNibZGK7pHGA2Dc_DfwA0wDnvdW_cjLNFGtjK8hwCw6rzBbTdfDKKJNQz-I",
+    image: getPostJobCategoryImage("mechanical"),
   },
   {
     v: "home", icon: "🏠", label: "Home Services", color: "#FFF1F2",
-    image: "https://images.unsplash.com/photo-1556909114-f6e7ad7d3136?w=400&h=400&fit=crop&q=80",
+    image: getPostJobCategoryImage("home"),
   },
   {
     v: "tailoring", icon: "✂️", label: "Tailoring", color: "#F0FDF4",
-    image: "https://images.unsplash.com/photo-1558769132-cb1aea458c5e?w=400&h=400&fit=crop&q=80",
+    image: getPostJobCategoryImage("tailoring"),
   },
   {
     v: "other", icon: "📦", label: "Other", color: "#F9FAFB",
-    image: "https://images.unsplash.com/photo-1581090464777-f3220bbe1b8b?w=400&h=400&fit=crop&q=80",
+    image: getPostJobCategoryImage("other"),
   },
 ];
 
@@ -386,7 +387,7 @@ export default function PostJobScreen({ navigation }) {
               <View style={S.catGrid}>
                 {CATEGORIES.map(c => (
                   <TouchableOpacity key={c.v} activeOpacity={0.85} style={[S.catCard, form.category === c.v && S.catCardActive]} onPress={() => setForm(f => ({ ...f, category: c.v, categoryLabel: c.label, skill: null, customSkill: "" }))}>
-                    <Image source={{ uri: c.image }} style={S.catImage} resizeMode="contain" />
+                    <Image source={c.image} style={S.catImage} resizeMode="contain" />
                     <Text style={[S.catLabel, form.category === c.v && S.catLabelActive]}>{c.label.toUpperCase()}</Text>
                   </TouchableOpacity>
                 ))}
@@ -399,7 +400,7 @@ export default function PostJobScreen({ navigation }) {
             <View>
               {/* Category context banner */}
               <View style={[S.contextBanner, { backgroundColor: cat?.color || "#f0f0f5" }]}>
-                <Image source={{ uri: cat?.image }} style={S.contextImage} resizeMode="contain" />
+                {cat?.image ? <Image source={cat.image} style={S.contextImage} resizeMode="contain" /> : null}
                 <View style={{ flex: 1 }}>
                   <Text style={S.contextTag}>SELECTED CATEGORY</Text>
                   <Text style={S.contextTitle}>{cat?.label}</Text>
@@ -452,7 +453,7 @@ export default function PostJobScreen({ navigation }) {
             <View>
               {/* Context banner */}
               <View style={[S.contextBanner, { backgroundColor: cat?.color || "#f0f0f5" }]}>
-                <Image source={{ uri: cat?.image }} style={S.contextImage} resizeMode="contain" />
+                {cat?.image ? <Image source={cat.image} style={S.contextImage} resizeMode="contain" /> : null}
                 <View style={{ flex: 1 }}>
                   <Text style={S.contextTag}>YOUR SELECTION</Text>
                   <Text style={S.contextTitle}>{effectiveSkill || cat?.label}</Text>
@@ -764,7 +765,7 @@ export default function PostJobScreen({ navigation }) {
               {/* Hero card */}
               <View style={S.reviewHero}>
                 <View style={[S.reviewHeroBg, { backgroundColor: cat?.color || "#f0f0f5" }]}>
-                  <Image source={{ uri: cat?.image }} style={S.reviewHeroImage} resizeMode="contain" />
+                  {cat?.image ? <Image source={cat.image} style={S.reviewHeroImage} resizeMode="contain" /> : null}
                 </View>
                 <View style={S.reviewHeroBody}>
                   <Text style={S.reviewHeroTitle}>Need {form.workers_needed} {effectiveSkill}</Text>

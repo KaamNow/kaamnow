@@ -13,6 +13,22 @@ from ..whatsapp_notify import _send as _wa_send
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
+CHAT_OPEN_STATUS = "accepted"
+CHAT_CLOSED_STATUSES = {"completed", "cancelled", "rejected"}
+
+
+def _message_notification_filter(user_id: str, engagement_id: str) -> dict:
+    return {
+        "user_id": user_id,
+        "read": False,
+        "$or": [
+            {"type": "new_message", "work_request_id": engagement_id},
+            {"kind": "new_message", "ref_id": engagement_id},
+            {"kind": "new_message", "work_request_id": engagement_id},
+            {"type": "new_message", "ref_id": engagement_id},
+        ],
+    }
+
 
 async def _engagement_for_chat(engagement_id: str, user: dict) -> tuple[dict, str]:
     doc = await db.work_requests.find_one({"id": engagement_id}, {"_id": 0})
@@ -39,6 +55,10 @@ async def messages(engagement_id: str, user: dict = Depends(get_current_user)):
         {"work_request_id": engagement_id, "receiver_id": user["id"], "read": False},
         {"$set": {"read": True, "read_at": now}},
     )
+    await db.notifications.update_many(
+        _message_notification_filter(user["id"], engagement_id),
+        {"$set": {"read": True, "read_at": now}},
+    )
     rows = (
         await db.messages.find({"work_request_id": engagement_id}, {"_id": 0})
         .sort("created_at", -1)
@@ -56,7 +76,12 @@ async def send_message(
     _: None = Depends(chat_write_limit),
 ):
     engagement, receiver_id = await _engagement_for_chat(engagement_id, user)
-    if engagement.get("status") not in ("accepted", "completed"):
+    status = engagement.get("status")
+    if status in CHAT_CLOSED_STATUSES:
+        raise HTTPException(
+            status_code=403, detail="This chat is closed. Chat history is read-only."
+        )
+    if status != CHAT_OPEN_STATUS:
         raise HTTPException(
             status_code=403, detail="Chat is only available after the request is accepted"
         )
@@ -146,7 +171,23 @@ async def _push_and_wa(user_id: str, title: str, body: str, ref_id: str, whatsap
 
 @router.get("/unread-count")
 async def unread_count(user: dict = Depends(get_current_user)):
-    count = await db.messages.count_documents({"receiver_id": user["id"], "read": False})
+    active_requests = await db.work_requests.find(
+        {
+            "status": CHAT_OPEN_STATUS,
+            "$or": [
+                {"requested_by_user_id": user["id"]},
+                {"requested_to_user_id": user["id"]},
+            ],
+        },
+        {"_id": 0, "id": 1},
+    ).to_list(None)
+    active_ids = [r["id"] for r in active_requests if r.get("id")]
+    if not active_ids:
+        return {"count": 0}
+
+    count = await db.messages.count_documents(
+        {"receiver_id": user["id"], "read": False, "work_request_id": {"$in": active_ids}}
+    )
     return {"count": count}
 
 
@@ -157,8 +198,13 @@ async def read_all(
     _: None = Depends(chat_write_limit),
 ):
     await _engagement_for_chat(engagement_id, user)
+    now = utc_now_iso()
     await db.messages.update_many(
         {"work_request_id": engagement_id, "receiver_id": user["id"], "read": False},
-        {"$set": {"read": True, "read_at": utc_now_iso()}},
+        {"$set": {"read": True, "read_at": now}},
+    )
+    await db.notifications.update_many(
+        _message_notification_filter(user["id"], engagement_id),
+        {"$set": {"read": True, "read_at": now}},
     )
     return {"ok": True}

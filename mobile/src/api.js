@@ -25,6 +25,12 @@ export default api;
 
 export function formatApiError(err) {
   const detail = err?.response?.data?.detail;
+  if (err?.message === "Network Error" || err?.code === "ERR_NETWORK") {
+    return `Cannot reach KaamNow server. Check internet/backend URL: ${API_URL}`;
+  }
+  if (err?.code === "ECONNABORTED") {
+    return `KaamNow server timed out. Please try again. (${API_URL})`;
+  }
   if (!detail) return err?.message || "Something went wrong";
   if (typeof detail === "string") return detail;
   if (Array.isArray(detail))

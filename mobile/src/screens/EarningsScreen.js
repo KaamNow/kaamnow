@@ -33,6 +33,9 @@ export default function EarningsScreen({ navigation }) {
 
   const engagements = data?.engagements || [];
   const avgRating = data?.avg_rating;
+  const jobsDone = Number(data?.jobs_done || 0);
+  const totalAllTime = Number(data?.total_all_time || 0);
+  const avgPerJob = jobsDone > 0 ? Math.round(totalAllTime / jobsDone) : null;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -61,7 +64,7 @@ export default function EarningsScreen({ navigation }) {
           <View style={styles.statsRow}>
             <View style={styles.statBox}>
               <Ionicons name="briefcase-outline" size={18} color="rgba(255,255,255,0.8)" />
-              <Text style={styles.statNum}>{data?.jobs_done || 0}</Text>
+              <Text style={styles.statNum}>{jobsDone}</Text>
               <Text style={styles.statLabel}>Jobs Done</Text>
             </View>
             <View style={styles.statDivider} />
@@ -74,8 +77,8 @@ export default function EarningsScreen({ navigation }) {
             <View style={styles.statBox}>
               <Ionicons name="trending-up-outline" size={18} color="rgba(255,255,255,0.8)" />
               <Text style={styles.statNum}>
-                {data?.jobs_done > 0
-                  ? `₹${Math.round((data.total_this_month || 0) / data.jobs_done).toLocaleString("en-IN")}`
+                {avgPerJob
+                  ? `₹${avgPerJob.toLocaleString("en-IN")}`
                   : "—"}
               </Text>
               <Text style={styles.statLabel}>Per Job</Text>

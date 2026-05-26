@@ -277,8 +277,45 @@ async def my_earnings(user: dict = Depends(get_current_user)):
     ).to_list(500)
 
     all_completed = completed
-    this_month = [e for e in all_completed if (e.get("updated_at") or "")[:10] >= first_of_month]
-    total_this_month = sum(e.get("daily_rate") or e.get("payment_amount") or 0 for e in this_month)
+
+    job_ids = [e.get("job_id") for e in all_completed if e.get("job_id")]
+    jobs_by_id = {}
+    if job_ids:
+        jobs = await db.jobs.find(
+            {"id": {"$in": list(set(job_ids))}},
+            {
+                "_id": 0,
+                "id": 1,
+                "title": 1,
+                "date_required": 1,
+                "budget_min": 1,
+                "budget_max": 1,
+                "daily_rate": 1,
+            },
+        ).to_list(500)
+        jobs_by_id = {j["id"]: j for j in jobs if j.get("id")}
+
+    def _amount(e):
+        job = jobs_by_id.get(e.get("job_id"), {})
+        value = (
+            e.get("payment_amount")
+            or e.get("proposed_price")
+            or e.get("daily_rate")
+            or job.get("daily_rate")
+            or job.get("budget_max")
+            or job.get("budget_min")
+            or 0
+        )
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return 0
+
+    def _completed_date(e):
+        return e.get("completed_at") or e.get("updated_at") or e.get("created_at") or ""
+
+    this_month = [e for e in all_completed if _completed_date(e)[:10] >= first_of_month]
+    total_this_month = sum(_amount(e) for e in this_month)
     jobs_done = len(all_completed)
 
     def _expert_rating(e):
@@ -297,7 +334,8 @@ async def my_earnings(user: dict = Depends(get_current_user)):
     ratings = [r for e in all_completed if (r := _expert_rating(e)) is not None]
     avg_rating = round(sum(ratings) / len(ratings), 1) if ratings else None
 
-    total_all_time = sum(e.get("daily_rate") or e.get("payment_amount") or 0 for e in all_completed)
+    total_all_time = sum(_amount(e) for e in all_completed)
+    sorted_completed = sorted(all_completed, key=_completed_date, reverse=True)
 
     return {
         "total_this_month": total_this_month,
@@ -307,12 +345,22 @@ async def my_earnings(user: dict = Depends(get_current_user)):
         "engagements": [
             {
                 "id": e["id"],
-                "job_title": e.get("job_title") or e.get("title", ""),
-                "job_date": e.get("job_date", ""),
-                "payment_amount": e.get("daily_rate") or e.get("payment_amount"),
+                "job_title": (
+                    e.get("job_title")
+                    or e.get("title")
+                    or e.get("job_summary", {}).get("title")
+                    or jobs_by_id.get(e.get("job_id"), {}).get("title")
+                    or "Completed Job"
+                ),
+                "job_date": (
+                    e.get("job_date")
+                    or jobs_by_id.get(e.get("job_id"), {}).get("date_required")
+                    or _completed_date(e)[:10]
+                ),
+                "payment_amount": _amount(e),
                 "rating": _expert_rating(e),
             }
-            for e in all_completed
+            for e in sorted_completed
         ],
     }
 
@@ -556,7 +604,10 @@ async def public_user_qr_png(user_id: str):
         if sp
         else f"https://kaamnow.com/users/{user_id}"
     )
-    image = generate_url_qr(target)
+    try:
+        image = generate_url_qr(target)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return StreamingResponse(
         iter([image]),
         media_type="image/png",

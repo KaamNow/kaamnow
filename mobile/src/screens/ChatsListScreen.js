@@ -59,13 +59,13 @@ export default function ChatsListScreen({ navigation }) {
   const incoming = requests.filter(e => e.status === "requested" && e.direction === "received");
   const active   = requests.filter(e => e.status === "accepted");
   const waiting  = requests.filter(e => e.status === "requested" && e.direction === "sent");
-  const done     = requests.filter(e => e.status === "completed");
+  const done     = requests.filter(e => ["completed", "cancelled", "rejected"].includes(e.status));
 
   const sections = [
     ...(incoming.length > 0 ? [{ key: "incoming", title: `Incoming Requests · ${incoming.length}`, data: incoming }] : []),
     ...(active.length   > 0 ? [{ key: "active",   title: "Active Chats",      data: active   }] : []),
     ...(waiting.length  > 0 ? [{ key: "waiting",  title: "My Applications",   data: waiting  }] : []),
-    ...(done.length     > 0 ? [{ key: "done",     title: "Completed",         data: done     }] : []),
+    ...(done.length     > 0 ? [{ key: "done",     title: "Closed",            data: done     }] : []),
   ];
 
   // ── Row renderers ─────────────────────────────────────────────────────────
@@ -208,9 +208,15 @@ export default function ChatsListScreen({ navigation }) {
             <Text style={S.jobLabel} numberOfLines={1}>{jobTitle}</Text>
             <View style={S.roleChip}><Text style={S.roleChipText}>{roleTag}</Text></View>
           </View>
-          <View style={[S.badge, { backgroundColor: colors.successLight }]}>
-            <Ionicons name="checkmark-circle-outline" size={10} color={colors.success} />
-            <Text style={[S.badgeText, { color: colors.success }]}>Completed</Text>
+          <View style={[S.badge, { backgroundColor: item.status === "completed" ? colors.successLight : colors.surface }]}>
+            <Ionicons
+              name={item.status === "completed" ? "checkmark-circle-outline" : "archive-outline"}
+              size={10}
+              color={item.status === "completed" ? colors.success : colors.textSecondary}
+            />
+            <Text style={[S.badgeText, { color: item.status === "completed" ? colors.success : colors.textSecondary }]}>
+              {item.status === "completed" ? "Completed" : item.status === "rejected" ? "Declined" : "Cancelled"}
+            </Text>
           </View>
         </View>
         <Ionicons name="chevron-forward" size={16} color={colors.outline} style={{ marginLeft: 4 }} />

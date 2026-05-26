@@ -12,16 +12,19 @@ import EmptyState from "../components/EmptyState";
 import TrustBadge from "../components/TrustBadge";
 import { useAuth } from "../contexts/AuthContext";
 import { colors, fonts, radius, shadow, spacing } from "../theme";
+import { CARD_IMAGES } from "../constants/cardImages";
 
-const HERO_FALLBACK =
-  "https://images.unsplash.com/photo-1581092160562-40aa08e78837?q=80&w=1200&auto=format&fit=crop";
-const VIDEO_FALLBACK =
-  "https://images.unsplash.com/photo-1509391366360-2e959784a276?q=80&w=1200&auto=format&fit=crop";
+const HERO_FALLBACK = CARD_IMAGES.workerProfile.heroFallback;
+const VIDEO_FALLBACK = CARD_IMAGES.workerProfile.videoFallback;
 
 const fullUrl = (url) => {
   if (!url) return null;
+  if (typeof url !== "string") return url;
   return url.startsWith("http") ? url : `${API_URL}${url}`;
 };
+
+const imageSource = (source) =>
+  typeof source === "string" ? { uri: source } : source;
 
 const prettySkill = (value) => {
   if (!value) return "";
@@ -239,7 +242,7 @@ export default function WorkerProfileScreen({ route, navigation }) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: insets.bottom + 132 }}
       >
-        <ImageBackground source={{ uri: view.heroPhoto }} style={s.heroImage} imageStyle={s.heroImg}>
+        <ImageBackground source={imageSource(view.heroPhoto)} style={s.heroImage} imageStyle={s.heroImg}>
           <View style={s.heroShade} />
           <View style={s.verifiedPill}>
             <Ionicons name={view.verified ? "shield-checkmark" : "shield-outline"} size={13} color="#fff" />
@@ -313,7 +316,7 @@ export default function WorkerProfileScreen({ route, navigation }) {
               />
             ) : (
               <>
-                <Image source={{ uri: VIDEO_FALLBACK }} style={s.videoImage} />
+                <Image source={imageSource(VIDEO_FALLBACK)} style={s.videoImage} />
                 <View style={s.videoOverlay}>
                   <View style={s.playCircle}>
                     <Ionicons name="play" size={34} color="#fff" style={{ marginLeft: 3 }} />

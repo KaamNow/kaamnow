@@ -8,7 +8,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../contexts/AuthContext";
 import { useTranslation } from "../i18n";
 import { colors, fonts, spacing, radius } from "../theme";
-import api, { API_URL } from "../api";
+import api from "../api";
+
+const qrServerUri = (url) =>
+  `https://api.qrserver.com/v1/create-qr-code/?size=360x360&format=png&data=${encodeURIComponent(url)}`;
 
 export default function QRCodeScreen({ navigation }) {
   const { user } = useAuth();
@@ -16,19 +19,28 @@ export default function QRCodeScreen({ navigation }) {
   const insets = useSafeAreaInsets();
   const [qrUri, setQrUri] = useState(null);
   const [profileUrl, setProfileUrl] = useState(null);
-  const [error] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!user?.id) { setLoading(false); return; }
-    // Direct PNG URL — avoids data: URI rendering issues in Expo
-    setQrUri(`${API_URL}/api/service-profiles/user/${user.id}/qr-png`);
-    // Fetch profile URL separately for the share button
     (async () => {
+      const fallbackProfileUrl = `https://kaamnow.com/users/${user.id}`;
       try {
-        const resp = await api.get("/service-profiles/mine");
-        setProfileUrl(resp.data?.id ? `https://kaamnow.com/local-expert/${resp.data.id}` : null);
-      } catch {}
+        const resp = await api.get("/service-profiles/mine/qr-code-b64");
+        const nextProfileUrl = resp.data?.profile_url || fallbackProfileUrl;
+        if (resp.data?.b64 && resp.data.b64.length > 500) {
+          setQrUri(`data:image/png;base64,${resp.data.b64}`);
+        } else {
+          setQrUri(qrServerUri(nextProfileUrl));
+        }
+        setProfileUrl(nextProfileUrl);
+        setError("");
+      } catch (err) {
+        setQrUri(qrServerUri(fallbackProfileUrl));
+        setProfileUrl(fallbackProfileUrl);
+        setError(err?.response?.data?.detail || "");
+      }
       finally { setLoading(false); }
     })();
   }, [user?.id]);
@@ -65,6 +77,10 @@ export default function QRCodeScreen({ navigation }) {
                 source={{ uri: qrUri }}
                 style={styles.qr}
                 resizeMode="contain"
+                onError={() => {
+                  const url = profileUrl || (user?.id ? `https://kaamnow.com/users/${user.id}` : "");
+                  if (url && !qrUri?.includes("api.qrserver.com")) setQrUri(qrServerUri(url));
+                }}
               />
             </View>
           ) : (
