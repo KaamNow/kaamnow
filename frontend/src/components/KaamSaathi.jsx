@@ -31,9 +31,9 @@ export default function KaamSaathi() {
           0%, 100% { opacity: 1; }
           50%       { opacity: 0.45; }
         }
-        /* Mobile: tighter pill */
+        /* Mobile: sit above the sticky bottom bar (~68px) */
         @media (max-width: 640px) {
-          .ks-pill { bottom: 16px !important; right: 16px !important; padding: 8px 14px 8px 8px !important; gap: 7px !important; }
+          .ks-pill { bottom: 80px !important; right: 14px !important; padding: 8px 14px 8px 8px !important; gap: 7px !important; }
           .ks-label { font-size: 13px !important; }
           .ks-dot { width: 7px !important; height: 7px !important; }
         }

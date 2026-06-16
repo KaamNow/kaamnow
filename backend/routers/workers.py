@@ -42,12 +42,29 @@ def _skill_names(items: Optional[Union[list[dict], list[str]]]) -> set[str]:
     names = set()
     for item in items or []:
         if isinstance(item, dict):
-            value = item.get("skill")
+            skill = item.get("skill")
+            category = item.get("category")
+            if skill:
+                names.add(str(skill).strip().lower())
+            # Include category for matching (e.g. "Painting" → "painting" matches filter "painting")
+            if category and category.lower() not in ("legacy", "general", ""):
+                names.add(str(category).strip().lower())
         else:
-            value = item
-        if value:
-            names.add(str(value).strip().lower())
+            if item:
+                names.add(str(item).strip().lower())
     return names
+
+
+def _skill_soft_match(worker_skills: set[str], filter_skills: list[str]) -> bool:
+    """Soft match: exact OR common 5-char prefix (painter ↔ painting, electrician ↔ electrical)."""
+    for fs in filter_skills:
+        for ws in worker_skills:
+            if fs == ws:
+                return True
+            min_len = min(len(fs), len(ws))
+            if min_len >= 5 and fs[:5] == ws[:5]:
+                return True
+    return False
 
 
 def _worker_skill_names(worker: dict) -> set[str]:
@@ -69,7 +86,7 @@ def _worker_wage(worker: dict) -> dict:
 
 def _rank_worker(worker: dict, pincode: Optional[str], skills: list[str]) -> tuple[int, int, float, int]:
     worker_skills = _worker_skill_names(worker)
-    skill_match_count = len(worker_skills.intersection(skills)) if skills else 0
+    skill_match_count = sum(1 for s in skills if _skill_soft_match(worker_skills, [s])) if skills else 0
     same_pincode = bool(pincode and _worker_pincode(worker) == pincode)
 
     if skill_match_count and same_pincode:
@@ -175,22 +192,86 @@ async def search_workers(
     pincode: Optional[str] = None,
     skills: Optional[str] = None,
     available_only: bool = False,
+    q: Optional[str] = None,
     user: Optional[dict] = Depends(get_optional_user),
 ):
-    selected_pincode = pincode or ((user or {}).get("address") or {}).get("pincode")
+    # Only use explicitly-provided pincode for filtering — never auto-fill from user profile
+    explicit_pincode = pincode if (pincode and len(pincode) == 6) else None
+    # User pincode used only for ranking (not filtering)
+    rank_pincode = explicit_pincode or ((user or {}).get("address") or {}).get("pincode")
     selected_skills = _split_skills(skills)
 
     query = {}
     if available_only:
-        query["available"] = True
+        query["$or"] = [{"available": True}, {"availability_status": "available"}]
 
     workers = await db.workers.find(query, {"_id": 0}).limit(200).to_list(200)
-    workers.sort(key=lambda worker: _rank_worker(worker, selected_pincode, selected_skills))
-    return [_enrich_worker_for_search(worker, selected_pincode, selected_skills) for worker in workers]
+
+    # Strict pincode filter — ONLY when user explicitly provided a pincode
+    if explicit_pincode:
+        workers = [w for w in workers if _worker_pincode(w) == explicit_pincode]
+
+    # Filter by skill — soft match (exact + common prefix) to handle "painter" ↔ "painting"
+    if selected_skills:
+        workers = [w for w in workers if _skill_soft_match(_worker_skill_names(w), selected_skills)]
+
+    # Text search filter (name, village, skill)
+    if q:
+        lq = q.lower()
+        workers = [
+            w for w in workers
+            if lq in (w.get("name") or "").lower()
+            or lq in (w.get("village") or "").lower()
+            or any(lq in s.lower() for s in _worker_skill_names(w))
+        ]
+
+    workers.sort(key=lambda worker: _rank_worker(worker, rank_pincode, selected_skills))
+    return [_enrich_worker_for_search(worker, rank_pincode, selected_skills) for worker in workers]
 
 @router.get("/me/profile")
 async def my_worker_profile(user: dict = Depends(get_current_user)):
-    return await db.workers.find_one({"user_id": user["id"]}, {"_id": 0})
+    worker = await db.workers.find_one({"user_id": user["id"]}, {"_id": 0})
+    if not worker:
+        raise HTTPException(status_code=404, detail="Worker profile not found")
+    return worker
+
+
+@router.patch("/profile", response_model=WorkerOut)
+async def update_worker_profile(
+    body: WorkerProfileIn,
+    user: dict = Depends(get_current_user),
+):
+    """Partial profile update - only provided fields are updated."""
+    if user["role"] != "worker":
+        raise HTTPException(status_code=403, detail="Only workers can update profiles")
+
+    now = datetime.now(timezone.utc).isoformat()
+    profile = body.model_dump(exclude_unset=True)
+    profile["last_active_at"] = now
+
+    # Handle address if provided
+    if "address" in profile and profile["address"]:
+        profile["address"] = _legacy_address(profile)
+        if profile["address"]["village"]:
+            profile["village"] = profile["address"]["village"]
+        if profile["address"]["district"]:
+            profile["district"] = profile["address"]["district"]
+        if profile["address"]["state"]:
+            profile["state"] = profile["address"]["state"]
+
+    # Handle structured_skills if provided
+    if "structured_skills" in profile:
+        profile["structured_skills"] = profile.get("structured_skills") or []
+
+    result = await db.workers.update_one(
+        {"user_id": user["id"]},
+        {"$set": profile}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Worker profile not found")
+
+    worker = await db.workers.find_one({"user_id": user["id"]}, {"_id": 0})
+    return worker
 
 
 @router.patch("/me/availability")

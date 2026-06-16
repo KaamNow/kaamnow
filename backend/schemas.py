@@ -1,6 +1,6 @@
 from typing import List, Optional, Literal
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 
 class Address(BaseModel):
@@ -17,52 +17,73 @@ class StructuredSkill(BaseModel):
     skill: str
 
 
-class RegisterIn(BaseModel):
-    email: EmailStr
-    password: str = Field(min_length=6)
-    name: str
-    role: Literal["worker", "customer"] = "customer"
-    village: Optional[str] = None
-    phone: Optional[str] = None
-    address: Optional[Address] = None
-    photo_url: Optional[str] = None
-    preferred_language: Optional[str] = "en"
-
-
-class LoginIn(BaseModel):
-    email: EmailStr
-    password: str
-
-
 class UserOut(BaseModel):
     id: str
-    email: EmailStr
+    phone_primary: Optional[str] = None
+    phone_verified: Optional[bool] = False
     name: str
     role: str
+    pincode: Optional[str] = None
     village: Optional[str] = None
-    phone: Optional[str] = None
-    phone_verified: Optional[bool] = False
     address: Optional[Address] = None
     photo_url: Optional[str] = None
     preferred_language: Optional[str] = "en"
+    avatar_color: Optional[str] = None
+    created_at: Optional[str] = None
 
 
 class AuthResponse(BaseModel):
     user: UserOut
-    token: str
+    access_token: str
+    refresh_token: Optional[str] = None
+
+
+# ============ PHONE-FIRST OTP SCHEMAS ============
+
+class SendOTPRequest(BaseModel):
+    """Step 1: User provides phone number"""
+    phone: str = Field(..., pattern=r'^\+91[0-9]{10}$', description="Phone with +91 prefix")
+
+
+class SendOTPResponse(BaseModel):
+    """Response: OTP sent, token for verification"""
+    otp_token: str
+    expires_in: int = 900
+    message: str = "OTP sent successfully"
+    otp_code: Optional[str] = None  # Only for development/testing
+
+
+class VerifyOTPRequest(BaseModel):
+    """Step 2: User provides OTP received"""
+    phone: str = Field(..., pattern=r'^\+91[0-9]{10}$')
+    otp: str = Field(..., pattern=r'^[0-9]{6}$', description="6-digit OTP")
+
+
+class VerifyOTPResponse(BaseModel):
+    """Response: OTP verified, ready for profile completion"""
+    otp_token: str
+    created_user: bool
+
+
+class SignupCompleteRequest(BaseModel):
+    """Step 3: Complete signup with name + role"""
+    name: str = Field(..., min_length=2, max_length=100)
+    role: Literal["worker", "customer"]
+    password: Optional[str] = Field(None, min_length=8, description="Optional - OTP auth supported")
+    preferred_language: Optional[str] = "en"
 
 
 class WorkerProfileIn(BaseModel):
-    skills: List[str]
-    daily_rate: int
+    skills: Optional[List[str]] = Field(default_factory=list)
+    daily_rate: Optional[int] = None
     bio: Optional[str] = ""
-    village: str
+    village: Optional[str] = None
     district: Optional[str] = ""
     state: Optional[str] = ""
-    lat: float
-    lng: float
+    lat: Optional[float] = None
+    lng: Optional[float] = None
     available: bool = True
-    structured_skills: List[StructuredSkill] = Field(default_factory=list)
+    structured_skills: Optional[List[StructuredSkill]] = Field(default_factory=list)
     address: Optional[Address] = None
     availability_status: Optional[Literal["available", "not_available"]] = None
 
@@ -71,15 +92,15 @@ class WorkerOut(BaseModel):
     id: str
     user_id: str
     name: str
-    skills: List[str]
-    daily_rate: int
-    bio: str
-    village: str
-    district: str
-    state: str
-    lat: float
-    lng: float
-    available: bool
+    skills: Optional[List[str]] = Field(default_factory=list)
+    daily_rate: Optional[int] = None
+    bio: Optional[str] = ""
+    village: Optional[str] = None
+    district: Optional[str] = ""
+    state: Optional[str] = ""
+    lat: Optional[float] = None
+    lng: Optional[float] = None
+    available: bool = True
     trust_tier: int
     avg_rating: float
     total_jobs: int
@@ -146,7 +167,7 @@ class RatingIn(BaseModel):
 
 
 class WaitlistIn(BaseModel):
-    email: EmailStr
+    phone: str = Field(..., pattern=r'^\+91[0-9]{10}$')
     name: Optional[str] = ""
     role: Optional[str] = "customer"
 

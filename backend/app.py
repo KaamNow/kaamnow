@@ -10,6 +10,7 @@ from slowapi.errors import RateLimitExceeded
 
 from .config import settings
 from .db import close_client
+from .otp_service import init_otp_service
 from .routers import (
     admin_router,
     auth_router,
@@ -60,14 +61,22 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def on_startup() -> None:
-    # Security: warn loudly if admin credentials are not set in env
-    if not settings.admin_email or not settings.admin_password:
-        logger.warning(
-            "SECURITY WARNING: ADMIN_EMAIL or ADMIN_PASSWORD env vars are not set. "
-            "Admin seeding will be skipped. Set these in your .env file before deploying."
-        )
+    # Initialize OTP service (WhatsApp → SMS → Voice multi-channel delivery)
+    # All providers are currently mocked for testing with dummy OTP.
+    # To use real providers, set environment variables:
+    #   - MSG91_API_KEY, MSG91_SENDER_ID (for WhatsApp)
+    #   - EXOTEL_API_KEY, EXOTEL_SENDER_ID (for SMS)
+    #   - VOICE_OTP_API_KEY, TTS_API_KEY (for Voice)
+    init_otp_service(
+        whatsapp_api_key=os.getenv("MSG91_API_KEY"),
+        sms_api_key=os.getenv("EXOTEL_API_KEY"),
+        voice_api_key=os.getenv("VOICE_OTP_API_KEY"),
+        default_language=getattr(settings, "default_language", "en")
+    )
+    logger.info("OTP service initialized (all channels mocked for testing)")
+
     await seed_data()
-    logger.info("Seed data ensured.")
+    logger.info("Seed data loaded.")
 
 
 @app.on_event("shutdown")

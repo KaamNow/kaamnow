@@ -29,13 +29,13 @@ async def _notify(user_id: str, title: str, body: str, kind: str, ref_id: str = 
     # Fire WhatsApp for events the worker cares about in real-time
     if kind in ("booking_accepted", "booking_rejected", "interest_withdrawn", "booking_request"):
         try:
-            user = await db.users.find_one({"id": user_id}, {"_id": 0, "phone": 1})
-            if user and user.get("phone"):
+            user = await db.users.find_one({"id": user_id}, {"_id": 0, "phone_primary": 1})
+            if user and user.get("phone_primary"):
                 from .whatsapp_notify import _send as _wa_send
                 import threading
                 threading.Thread(
                     target=_wa_send,
-                    args=(user["phone"], f"{title}\n{body}"),
+                    args=(user["phone_primary"], f"{title}\n{body}"),
                     daemon=True,
                 ).start()
         except Exception:
@@ -59,6 +59,8 @@ def booking_status_from_engagement(status: str) -> str:
 
 
 def engagement_to_booking(engagement: dict) -> dict:
+    status = engagement.get("status", "")
+    accepted = status in ("accepted", "completed")
     return {
         "id": engagement["id"],
         "job_id": engagement["job_id"],
@@ -69,14 +71,18 @@ def engagement_to_booking(engagement: dict) -> dict:
         "job_title": engagement.get("job_title"),
         "job_date": engagement.get("job_date"),
         "daily_rate": engagement.get("daily_rate"),
-        "status": booking_status_from_engagement(engagement.get("status", "")),
+        "status": booking_status_from_engagement(status),
         "rating": (engagement.get("worker_rating") or {}).get("stars"),
         "comment": (engagement.get("worker_rating") or {}).get("comment"),
         "customer_rating": (engagement.get("customer_rating") or {}).get("stars"),
         "customer_comment": (engagement.get("customer_rating") or {}).get("comment"),
         "source": engagement.get("source"),
-        "engagement_status": engagement.get("status"),
+        "engagement_status": status,
         "created_at": engagement.get("created_at"),
+        # Contact details — only unlocked after acceptance
+        "customer_phone": engagement.get("customer_phone") if accepted else None,
+        "worker_phone": engagement.get("worker_phone") if accepted else None,
+        "customer_village": engagement.get("customer_village") if accepted else None,
     }
 
 
@@ -265,8 +271,11 @@ async def accept_engagement(engagement_id: str, user: dict) -> dict:
     now = utc_now_iso()
 
     # Fetch contact details for sharing
-    worker_user = await db.users.find_one({"id": engagement_worker.get("user_id")}, {"_id": 0, "phone": 1, "name": 1})
-    customer_user = await db.users.find_one({"id": engagement["customer_id"]}, {"_id": 0, "phone": 1, "name": 1})
+    worker_user = await db.users.find_one({"id": engagement_worker.get("user_id")}, {"_id": 0, "phone_primary": 1, "name": 1})
+    customer_user = await db.users.find_one({"id": engagement["customer_id"]}, {"_id": 0, "phone_primary": 1, "name": 1, "village": 1, "address": 1})
+
+    customer_phone = customer_user.get("phone_primary") if customer_user else None
+    customer_village = ((customer_user.get("address") or {}).get("village") or customer_user.get("village")) if customer_user else None
 
     await db.engagements.update_one(
         {"id": engagement_id},
@@ -274,8 +283,9 @@ async def accept_engagement(engagement_id: str, user: dict) -> dict:
             "status": "accepted",
             "accepted_at": now,
             "updated_at": now,
-            "worker_phone": worker_user.get("phone") if worker_user else None,
-            "customer_phone": customer_user.get("phone") if customer_user else None,
+            "worker_phone": worker_user.get("phone_primary") if worker_user else None,
+            "customer_phone": customer_phone,
+            "customer_village": customer_village,
         }},
     )
 
@@ -301,12 +311,12 @@ async def accept_engagement(engagement_id: str, user: dict) -> dict:
     await _notify(
         engagement_worker.get("user_id", ""),
         f"✅ Booking confirmed: {engagement.get('job_title')}",
-        f"Your interest was approved! Contact the customer at {customer_user.get('phone', 'N/A') if customer_user else 'N/A'}.",
+        f"Your interest was approved! Contact the customer at {customer_user.get('phone_primary', 'N/A') if customer_user else 'N/A'}.",
         "booking_accepted",
         engagement_id,
     )
 
-    return {"ok": True, "worker_phone": worker_user.get("phone") if worker_user else None, "customer_phone": customer_user.get("phone") if customer_user else None}
+    return {"ok": True, "worker_phone": worker_user.get("phone_primary") if worker_user else None, "customer_phone": customer_user.get("phone_primary") if customer_user else None}
 
 
 async def reject_engagement(engagement_id: str, user: dict) -> dict:
@@ -356,17 +366,24 @@ async def cancel_engagement(engagement_id: str, user: dict) -> dict:
     # If worker is cancelling, notify customer; if customer cancels, notify worker
     if user["role"] == "worker":
         worker_name = engagement.get("worker_name", "A worker")
-        await _notify(
-            engagement["customer_id"],
-            f"Interest withdrawn: {engagement.get('job_title')}",
-            f"{worker_name} has withdrawn their interest. Your job is back open.",
-            "interest_withdrawn",
-            engagement_id,
-        )
-        # Reopen job if it was marked booked
-        await db.jobs.update_one(
-            {"id": engagement["job_id"], "status": "booked"},
-            {"$set": {"status": "open"}}
+        was_accepted = engagement["status"] == "accepted"
+        title = f"Booking cancelled: {engagement.get('job_title')}" if was_accepted else f"Interest withdrawn: {engagement.get('job_title')}"
+        body = f"{worker_name} has cancelled the booking. Please look for another worker." if was_accepted else f"{worker_name} has withdrawn their interest. Your job is back open."
+        await _notify(engagement["customer_id"], title, body, "booking_rejected", engagement_id)
+
+        # Reopen job + decrement filled_count if accepted booking cancelled
+        job = await db.jobs.find_one({"id": engagement["job_id"]}, {"_id": 0})
+        if job:
+            accepted_ids = [w for w in (job.get("accepted_worker_ids") or []) if w != engagement["worker_id"]]
+            new_filled = len(accepted_ids)
+            await db.jobs.update_one(
+                {"id": engagement["job_id"]},
+                {"$set": {"status": "open", "accepted_worker_ids": accepted_ids, "filled_count": new_filled}}
+            )
+        # Restore worker availability immediately
+        await db.workers.update_one(
+            {"id": engagement["worker_id"]},
+            {"$set": {"available": True, "availability_status": "available"}}
         )
     elif user["role"] == "customer":
         eng_worker = await db.workers.find_one({"id": engagement["worker_id"]}, {"_id": 0})
@@ -386,15 +403,58 @@ async def complete_engagement(engagement_id: str, user: dict) -> dict:
     engagement = await db.engagements.find_one({"id": engagement_id})
     if not engagement:
         raise HTTPException(status_code=404, detail="Engagement not found")
-    if user["role"] != "customer" or engagement["customer_id"] != user["id"]:
-        raise HTTPException(status_code=403, detail="Only the customer can complete this request")
+
+    # Both customer AND worker can mark as completed
+    is_customer = user["role"] == "customer" and engagement["customer_id"] == user["id"]
+    worker_doc = await db.workers.find_one({"id": engagement["worker_id"]}, {"_id": 0, "user_id": 1})
+    is_worker = user["role"] == "worker" and worker_doc and worker_doc.get("user_id") == user["id"]
+
+    if not is_customer and not is_worker:
+        raise HTTPException(status_code=403, detail="Only the customer or assigned worker can complete this booking")
     if engagement["status"] != "accepted":
         raise HTTPException(status_code=400, detail="Only accepted engagements can be completed")
 
+    now = utc_now_iso()
     await db.engagements.update_one(
         {"id": engagement_id},
-        {"$set": {"status": "completed", "completed_at": utc_now_iso(), "updated_at": utc_now_iso()}},
+        {"$set": {"status": "completed", "completed_at": now, "updated_at": now}},
     )
+
+    # Restore worker availability + update total_jobs count
+    if worker_doc:
+        completed_count = await db.engagements.count_documents(
+            {"worker_id": engagement["worker_id"], "status": "completed"}
+        )
+        await db.workers.update_one(
+            {"id": engagement["worker_id"]},
+            {"$set": {"available": True, "availability_status": "available", "total_jobs": completed_count}}
+        )
+
+    # Mark the parent job as completed
+    await db.jobs.update_one(
+        {"id": engagement["job_id"]},
+        {"$set": {"status": "completed"}}
+    )
+
+    # Notify the other party
+    if is_worker:
+        await _notify(
+            engagement["customer_id"],
+            f"Work completed: {engagement.get('job_title')}",
+            f"{engagement.get('worker_name', 'Worker')} has marked the work as completed. Please rate the worker.",
+            "booking_completed",
+            engagement_id,
+        )
+    else:
+        if worker_doc:
+            await _notify(
+                worker_doc.get("user_id", ""),
+                f"Work marked complete: {engagement.get('job_title')}",
+                "The customer has marked the work as completed. Thank you!",
+                "booking_completed",
+                engagement_id,
+            )
+
     return {"ok": True}
 
 
@@ -421,16 +481,16 @@ async def rate_engagement(engagement_id: str, rating: int, comment: str, user: d
             }
         )
         
-        # Recompute worker rating
+        # Recompute worker avg_rating only — total_jobs is set by complete_engagement
         pipeline = [
             {"$match": {"worker_id": engagement["worker_id"], "worker_rating": {"$ne": None}}},
-            {"$group": {"_id": "$worker_id", "avg": {"$avg": "$worker_rating.stars"}, "count": {"$sum": 1}}},
+            {"$group": {"_id": "$worker_id", "avg": {"$avg": "$worker_rating.stars"}}},
         ]
         agg = await db.engagements.aggregate(pipeline).to_list(1)
         if agg:
             await db.workers.update_one(
                 {"id": engagement["worker_id"]},
-                {"$set": {"avg_rating": round(agg[0]["avg"], 2), "total_jobs": agg[0]["count"]}},
+                {"$set": {"avg_rating": round(agg[0]["avg"], 2)}},
             )
             
     elif user["role"] == "worker":

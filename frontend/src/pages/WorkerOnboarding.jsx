@@ -3,102 +3,24 @@ import { useNavigate } from "react-router-dom";
 import api from "@/lib/api";
 import { useAuth, formatApiError } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import LocationPicker from "@/components/LocationPicker";
 import { usePincodeLookup } from "@/lib/usePincode";
 import {
   User,
   Phone,
   MapPin,
-  Briefcase,
-  Camera,
   ChevronRight,
   ChevronLeft,
   Check,
   Loader2,
   CheckCircle2,
   AlertCircle,
-  Hammer,
-  Leaf,
-  Paintbrush,
-  Wrench,
-  Zap,
-  HelpingHand,
-  Sparkles,
-  Scissors,
-  Truck,
-  Building2,
-  Wheat,
-  Wind,
-  Navigation,
 } from "lucide-react";
 
-/* ─── Skill Categories ─────────────────────────────────────────────────── */
-const SKILL_CATEGORIES = [
-  {
-    category: "Construction",
-    icon: Building2,
-    color: "#e85a25",
-    bg: "#fff4f0",
-    skills: ["Mason", "Carpenter", "Painter", "Welder", "Plumber", "Helper"],
-  },
-  {
-    category: "Agriculture",
-    icon: Wheat,
-    color: "#16a34a",
-    bg: "#f0fdf4",
-    skills: ["Harvesting", "Irrigation", "Pesticide", "Plowing", "Farm helper"],
-  },
-  {
-    category: "Electrical",
-    icon: Zap,
-    color: "#d97706",
-    bg: "#fffbeb",
-    skills: ["Wiring", "Motor repair", "Panel work", "Electrician"],
-  },
-  {
-    category: "Cleaning",
-    icon: Sparkles,
-    color: "#3f37c9",
-    bg: "#f0f0ff",
-    skills: ["House cleaning", "Sweeping", "Vessel washing", "Laundry"],
-  },
-  {
-    category: "Transport",
-    icon: Truck,
-    color: "#0284c7",
-    bg: "#f0f9ff",
-    skills: ["Driving", "Loading", "Delivery", "Tractor operator"],
-  },
-  {
-    category: "Mechanical",
-    icon: Wrench,
-    color: "#9333ea",
-    bg: "#faf0ff",
-    skills: ["Pump repair", "Engine work", "Welding", "Tool repair"],
-  },
-  {
-    category: "Tailoring",
-    icon: Scissors,
-    color: "#db2777",
-    bg: "#fff0f6",
-    skills: ["Stitching", "Embroidery", "Alterations", "Fabric cutting"],
-  },
-  {
-    category: "General",
-    icon: HelpingHand,
-    color: "#4b5563",
-    bg: "#f9fafb",
-    skills: ["Daily labour", "Watchman", "Peon", "Loader", "General helper"],
-  },
-];
+/* ─── Skill Categories (Moved to SkillSelectorModal - Deferred Collection) ─── */
 
 const STEPS = [
   { id: "name", label: "Your Name", icon: User },
-  { id: "phone", label: "Phone", icon: Phone },
   { id: "address", label: "Address", icon: MapPin },
-  { id: "location", label: "Location", icon: Navigation },
-  { id: "skills", label: "Skills", icon: Briefcase },
-  { id: "photo", label: "Profile Photo", icon: Camera },
 ];
 
 /* ─── Progress Bar ─────────────────────────────────────────────────────── */
@@ -134,52 +56,7 @@ function StepHeader({ icon: Icon, label, desc }) {
   );
 }
 
-/* ─── Skill Card ───────────────────────────────────────────────────────── */
-function SkillCard({ category, icon: Icon, color, bg, skills, selected, onToggle }) {
-  const selectedInCat = skills.filter((s) => selected.some((x) => x.skill === s && x.category === category));
-  return (
-    <div
-      className="kn-card p-4 cursor-default"
-      style={{ borderColor: selectedInCat.length ? color : undefined }}
-    >
-      <div className="flex items-center gap-2 mb-3">
-        <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: bg }}>
-          <Icon size={16} style={{ color }} />
-        </div>
-        <span className="font-bold text-sm">{category}</span>
-        {selectedInCat.length > 0 && (
-          <span
-            className="ml-auto text-xs font-bold px-2 py-0.5 rounded-full"
-            style={{ background: bg, color }}
-          >
-            {selectedInCat.length} selected
-          </span>
-        )}
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {skills.map((skill) => {
-          const active = selected.some((x) => x.skill === skill && x.category === category);
-          return (
-            <button
-              key={skill}
-              type="button"
-              onClick={() => onToggle(category, skill)}
-              className="text-xs px-3 py-1.5 rounded-full border font-semibold transition-all duration-150"
-              style={
-                active
-                  ? { background: color, color: "#fff", borderColor: color }
-                  : { background: bg, color, borderColor: "transparent" }
-              }
-            >
-              {active && <Check size={10} className="inline mr-1" />}
-              {skill}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
+/* ─── SkillCard Component (Moved to SkillSelectorModal - Deferred Collection) ─── */
 
 /* ─── Main Component ───────────────────────────────────────────────────── */
 export default function WorkerOnboarding() {
@@ -209,11 +86,6 @@ export default function WorkerOnboarding() {
     pincode: user?.address?.pincode || "",
   });
   const { pincode: pincodeVal, setPincode: setPincodeVal, status: pinStatus, result: pinResult, errorMsg: pinError } = usePincodeLookup();
-  const [selectedSkills, setSelectedSkills] = useState([]); // [{category, skill}]
-  const [bio, setBio] = useState("");
-  const [photoFile, setPhotoFile] = useState(null);
-  const [photoPreview, setPhotoPreview] = useState(null);
-  const [locationCoords, setLocationCoords] = useState({ lat: null, lng: null });
 
   useEffect(() => {
     const loadWorker = async () => {
@@ -226,13 +98,6 @@ export default function WorkerOnboarding() {
           if (r.data.address) {
             setAddress(r.data.address);
             if (r.data.address.pincode) setPincodeVal(r.data.address.pincode);
-          }
-          if (r.data.structured_skills) setSelectedSkills(r.data.structured_skills);
-          setBio(r.data.bio || "");
-          setPhotoPreview(r.data.photo_url);
-          // Restore saved location
-          if (r.data.lat && r.data.lng) {
-            setLocationCoords({ lat: r.data.lat, lng: r.data.lng });
           }
         }
       } catch (e) {
@@ -252,43 +117,23 @@ export default function WorkerOnboarding() {
         district: pinResult.district,
         state: pinResult.state,
         pincode: pincodeVal,
-        village: prev.village || pinResult.name,
+        post: prev.post || pinResult.name,
+        block: prev.block || pinResult.block || "",
       }));
     }
   }, [pinResult, pincodeVal]);
 
   if (loading) return <div className="p-12 text-center text-gray-500 font-display text-xl animate-pulse">Loading profile...</div>;
 
-  const toggleSkill = (category, skill) => {
-    setSelectedSkills((prev) => {
-      const exists = prev.some((x) => x.category === category && x.skill === skill);
-      return exists
-        ? prev.filter((x) => !(x.category === category && x.skill === skill))
-        : [...prev, { category, skill }];
-    });
-  };
-
-  const handlePhotoChange = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setPhotoFile(file);
-    const reader = new FileReader();
-    reader.onload = (ev) => setPhotoPreview(ev.target.result);
-    reader.readAsDataURL(file);
-  };
-
   const canProceed = () => {
     if (step === 0) return (name || "").trim().length >= 2;
-    if (step === 1) return true; // phone optional — verified or skipped
-    if (step === 2) return (address?.village || "").trim().length >= 2;
-    if (step === 3) return true; // location optional — can skip
-    if (step === 4) return selectedSkills.length >= 1;
-    return true; // photo optional
+    if (step === 1) return (address?.village || "").trim().length >= 2;
+    return true;
   };
 
   const next = () => {
     if (!canProceed()) {
-      if (step === 2) toast.error("Please enter your village or town name");
+      if (step === 1) toast.error("Please enter your village or town name");
       else toast.error("Please fill this step first");
       return;
     }
@@ -329,51 +174,34 @@ export default function WorkerOnboarding() {
   const handleSubmit = async () => {
     setSaving(true);
     try {
-      // First, update the base user profile with the phone number and name
+      // Update base user profile with name, phone, and address
       await api.patch("/auth/me", {
         name,
         phone,
         village: address.village,
         pincode: address.pincode,
+        address,
       });
 
-      // Then build payload for Worker Profile
-      const skills = selectedSkills.map((x) => x.skill.toLowerCase());
+      // Create minimal worker profile (skills deferred to job feed)
       const payload = {
-        skills,
-        structured_skills: selectedSkills,
         daily_rate: Number(daily_rate),
-        bio,
         village: address.village,
         district: address.district || "",
         state: address.state || "",
-        lat: locationCoords.lat || 22.9734,
-        lng: locationCoords.lng || 78.6569,
-        available: true,
         address,
         availability_status: "available",
+        structured_skills: [], // Empty initially - collected on job feed
       };
 
       await api.post("/workers/profile", payload);
 
-      // Upload photo if provided
-      if (photoFile) {
-        try {
-          const fd = new FormData();
-          fd.append("file", photoFile);
-          await api.post("/workers/me/photo", fd, {
-            headers: { "Content-Type": "multipart/form-data" },
-          });
-        } catch {
-          // Photo upload is optional; don't block onboarding
-        }
-      }
-
-      toast.success("🎉 Profile created! Welcome to KaamNow!");
+      toast.success("🎉 Profile created! Let's find you some jobs!");
       if (window.posthog) {
-        window.posthog.capture("worker_onboarded", { skills });
+        window.posthog.capture("worker_onboarded");
       }
-      nav("/worker/dashboard");
+      // Redirect to job feed, not dashboard
+      nav("/worker/job-feed");
     } catch (err) {
       toast.error(formatApiError(err));
     } finally {
@@ -430,78 +258,10 @@ export default function WorkerOnboarding() {
           </div>
         )}
 
-        {/* ─── Step 1: Phone ─── */}
+        {/* ─── Step 1: Address ─── */}
         {step === 1 && (
           <div className="fade-up kn-card p-8">
-            <StepHeader icon={Phone} label="Phone Number" desc="Your phone helps customers reach you quickly." />
-            <label className="block text-sm font-bold text-gray-700 mb-2">Mobile number</label>
-            <div className={`flex items-center border-2 rounded-xl overflow-hidden transition-colors h-14 ${phoneVerified ? 'border-green-500 bg-green-50' : 'border-gray-200 focus-within:border-[#3f37c9] bg-white'}`}>
-              <span className={`px-4 font-bold h-full flex items-center border-r-2 ${phoneVerified ? 'border-green-200 text-green-700 bg-green-100' : 'border-gray-100 text-gray-500 bg-gray-50'}`}>+91</span>
-              <input
-                data-testid="onboard-phone"
-                autoFocus
-                type="tel"
-                value={phone || ""}
-                onChange={(e) => {
-                  setPhone(e.target.value.replace(/\D/g, "").slice(0, 10));
-                  setPhoneVerified(false);
-                  setOtpSent(false);
-                  setOtp("");
-                }}
-                disabled={phoneVerified}
-                onKeyDown={(e) => e.key === "Enter" && next()}
-                placeholder="Mobile number (10 digits)"
-                className="flex-1 px-4 outline-none w-full text-lg font-semibold h-full bg-transparent"
-                maxLength={10}
-              />
-              {phoneVerified && (
-                <span className="px-4 text-green-600 font-bold flex items-center">
-                  <Check size={18} className="mr-1" /> Verified
-                </span>
-              )}
-            </div>
-
-            {!phoneVerified && phone.length === 10 && !otpSent && (
-              <button 
-                onClick={sendOtp}
-                disabled={otpLoading}
-                className="mt-4 w-full btn-outline"
-              >
-                {otpLoading ? "Sending..." : "Send OTP"}
-              </button>
-            )}
-
-            {otpSent && !phoneVerified && (
-              <div className="mt-4 p-4 border border-gray-200 rounded-xl bg-gray-50 animate-in fade-in slide-in-from-top-2">
-                <label className="block text-sm font-bold text-gray-700 mb-2">Enter OTP</label>
-                <input
-                  type="text"
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 6))}
-                  placeholder="6-digit code"
-                  className="kn-input text-center text-xl tracking-[0.5em] font-mono"
-                  maxLength={6}
-                />
-                <button 
-                  onClick={verifyOtp}
-                  disabled={otpLoading || otp.length < 4}
-                  className="mt-3 w-full btn-saffron"
-                >
-                  {otpLoading ? "Verifying..." : "Verify OTP"}
-                </button>
-              </div>
-            )}
-
-            <div className="mt-4 rounded-xl p-3 text-sm text-gray-600" style={{ background: "#fff4f0" }}>
-              📱 Phone helps customers reach you. You can add/verify it later from your dashboard.
-            </div>
-          </div>
-        )}
-
-        {/* ─── Step 2: Address ─── */}
-        {step === 2 && (
-          <div className="fade-up kn-card p-8">
-            <StepHeader icon={MapPin} label="Your Address" desc="Enter your pincode — village, district, and state will fill automatically." />
+            <StepHeader icon={MapPin} label="Your Address" desc="Enter your pincode — district, state, and post office fill automatically. Type your village name." />
             <div className="space-y-3">
 
               {/* Pincode first — auto-fills the rest */}
@@ -543,7 +303,7 @@ export default function WorkerOnboarding() {
                   data-testid="onboard-village"
                   value={address.village}
                   onChange={(e) => setAddress({ ...address, village: e.target.value })}
-                  placeholder={pinStatus === "loading" ? "Fetching from pincode…" : "e.g. Ramnagar"}
+                  placeholder="e.g. Ramnagar"
                   className="kn-input"
                 />
               </div>
@@ -597,113 +357,6 @@ export default function WorkerOnboarding() {
           </div>
         )}
 
-        {/* ─── Step 3: Location Map ─── */}
-        {step === 3 && (
-          <div className="fade-up kn-card p-6">
-            <StepHeader
-              icon={Navigation}
-              label="Your Location"
-              desc="Customers nearby will see you on the map. Tap your village/area or use GPS. You can skip this for now."
-            />
-            <LocationPicker
-              lat={locationCoords.lat}
-              lng={locationCoords.lng}
-              onChange={({ lat, lng }) => setLocationCoords({ lat, lng })}
-              height="300px"
-            />
-            {!locationCoords.lat && (
-              <p className="text-xs text-gray-400 mt-3 text-center">
-                No location? That's fine — tap <strong>Continue</strong> to skip for now.
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* ─── Step 4: Skills ─── */}
-        {step === 4 && (
-          <div className="fade-up">
-            <div className="kn-card p-6 mb-4">
-              <StepHeader icon={Briefcase} label="Your Skills" desc="Select all skills that apply. Customers will match jobs to your skills." />
-              {selectedSkills.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-4 p-3 rounded-xl" style={{ background: "#f0f0ff" }}>
-                  {selectedSkills.map((s) => (
-                    <span
-                      key={`${s.category}-${s.skill}`}
-                      className="text-xs px-2 py-1 rounded-full font-bold"
-                      style={{ background: "var(--kn-indigo)", color: "#fff" }}
-                    >
-                      {s.skill}
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-bold text-gray-700 mb-1 mt-2">About you (optional)</label>
-                <textarea
-                  data-testid="onboard-bio"
-                  rows={2}
-                  value={bio}
-                  onChange={(e) => setBio(e.target.value)}
-                  placeholder="Years of experience, tools you own, work style…"
-                  className="kn-input text-sm"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              {SKILL_CATEGORIES.map((cat) => (
-                <SkillCard
-                  key={cat.category}
-                  {...cat}
-                  selected={selectedSkills}
-                  onToggle={toggleSkill}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* ─── Step 5: Photo ─── */}
-        {step === 5 && (
-          <div className="fade-up kn-card p-8 text-center">
-            <StepHeader icon={Camera} label="Profile Photo" desc="A photo builds trust. Customers are more likely to hire workers with photos." />
-
-            <div className="flex flex-col items-center gap-4">
-              {photoPreview ? (
-                <img
-                  src={photoPreview}
-                  alt="Preview"
-                  className="w-28 h-28 rounded-full object-cover border-4"
-                  style={{ borderColor: "var(--kn-saffron)" }}
-                />
-              ) : (
-                <div
-                  className="w-28 h-28 rounded-full flex items-center justify-center text-4xl"
-                  style={{ background: "#f0f0ff", color: "var(--kn-indigo)" }}
-                >
-                  {name?.[0]?.toUpperCase() || "?"}
-                </div>
-              )}
-
-              <label className="btn-outline cursor-pointer flex items-center gap-2 text-sm">
-                <Camera size={14} />
-                {photoPreview ? "Change photo" : "Choose photo"}
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="sr-only"
-                  onChange={handlePhotoChange}
-                  data-testid="onboard-photo"
-                />
-              </label>
-
-              <p className="text-sm text-gray-400">
-                Optional — you can always add it later from your dashboard.
-              </p>
-            </div>
-          </div>
-        )}
 
         {/* ─── Navigation ─── */}
         <div className="mt-6 flex gap-3">
@@ -726,7 +379,7 @@ export default function WorkerOnboarding() {
               "Saving…"
             ) : step === STEPS.length - 1 ? (
               <>
-                <Check size={16} /> Complete setup
+                <Check size={16} /> See Job Feed
               </>
             ) : (
               <>
@@ -735,15 +388,6 @@ export default function WorkerOnboarding() {
             )}
           </button>
         </div>
-
-        {step === 4 && !saving && (
-          <button
-            onClick={handleSubmit}
-            className="mt-3 w-full text-center text-sm text-gray-400 underline"
-          >
-            Skip photo, complete setup
-          </button>
-        )}
       </div>
     </div>
   );

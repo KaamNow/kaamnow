@@ -23,7 +23,7 @@ class Settings(BaseModel):
     cookie_secure: bool = False
     cors_origins: str = "*"
     # Security: these MUST be set via env vars in production — no defaults
-    admin_email: str = Field(default="")
+    admin_phone: str = Field(default="")
     admin_password: str = Field(default="")
 
     gupshup_api_url: Optional[str] = None
@@ -54,7 +54,7 @@ settings = Settings(
     jwt_expiry_days=int(os.getenv("JWT_EXPIRY_DAYS", "7")),
     cookie_secure=_to_bool(os.getenv("COOKIE_SECURE"), False),
     cors_origins=os.getenv("CORS_ORIGINS", "*"),
-    admin_email=os.getenv("ADMIN_EMAIL", ""),
+    admin_phone=os.getenv("ADMIN_PHONE", ""),
     admin_password=os.getenv("ADMIN_PASSWORD", ""),
     gupshup_api_url=os.getenv("GUPSHUP_API_URL"),
     gupshup_api_key=os.getenv("GUPSHUP_API_KEY"),

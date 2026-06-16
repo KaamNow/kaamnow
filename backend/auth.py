@@ -19,13 +19,36 @@ def verify_password(plain: str, hashed: str) -> bool:
         return False
 
 
-def create_token(user_id: str, email: str) -> str:
+def create_token(user_id: str, phone: str) -> str:
     payload = {
         "sub": user_id,
-        "email": email,
+        "phone": phone,
         "exp": datetime.now(timezone.utc) + timedelta(days=settings.jwt_expiry_days),
     }
     return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
+
+
+def create_temp_token(phone: str, expires_in: int = 900) -> str:
+    """Create a temporary OTP verification token (15 min or 24 hours)"""
+    payload = {
+        "sub": phone,
+        "type": "otp",
+        "exp": datetime.now(timezone.utc) + timedelta(seconds=expires_in),
+    }
+    return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
+
+
+def verify_temp_token(token: str) -> str:
+    """Verify OTP token and return phone number"""
+    try:
+        payload = jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
+        if payload.get("type") != "otp":
+            raise HTTPException(status_code=401, detail="Invalid token type")
+        return payload["sub"]
+    except jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=401, detail="Token expired")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 
 def _get_token(request: Request) -> Optional[str]:

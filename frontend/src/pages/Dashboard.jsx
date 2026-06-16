@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
-import { Link, Navigate } from "react-router-dom";
-import api from "@/lib/api";
+import { Link, Navigate, useNavigate, useLocation } from "react-router-dom";
+import api, { BACKEND_URL } from "@/lib/api";
 import { useAuth, formatApiError } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import {
@@ -20,6 +20,7 @@ import {
   XCircle,
   Settings,
   Bell,
+  Camera,
 } from "lucide-react";
 
 /* ─── Status Badge ─────────────────────────────────────────────────────── */
@@ -43,18 +44,42 @@ function StatusBadge({ status }) {
 
 /* ─── Profile Section ──────────────────────────────────────────────────── */
 function ProfileSection({ user, onUpdate }) {
+  const { refreshUser, logout } = useAuth();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     name: user?.name || "",
     village: user?.village || "",
-    phone: user?.phone || "",
     pincode: user?.address?.pincode || "",
   });
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const fileInputRef = useState(null);
+
+  const photoUrl = user.photo_url
+    ? (user.photo_url.startsWith("http") ? user.photo_url : `${BACKEND_URL}${user.photo_url}`)
+    : null;
+
+  const handlePhotoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      await api.post("/auth/me/photo", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      await refreshUser();
+      toast.success("Profile photo updated!");
+    } catch {
+      toast.error("Failed to upload photo. Try again.");
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
 
   const save = async (e) => {
     e.preventDefault();
     try {
       await api.patch("/auth/me", form);
+      await refreshUser();
       toast.success("Profile updated");
       setEditing(false);
       onUpdate();
@@ -64,80 +89,419 @@ function ProfileSection({ user, onUpdate }) {
   };
 
   return (
-    <div className="kn-card p-6">
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="font-display text-xl">Your Profile</h3>
-        <button
-          onClick={() => setEditing(!editing)}
-          className="text-sm font-bold text-[#3f37c9] hover:underline flex items-center gap-1"
-        >
-          <Settings size={14} /> {editing ? "Cancel" : "Edit Profile"}
+    <div className="kn-card overflow-hidden">
+      {/* Hero strip */}
+      <div className="p-6 pb-0" style={{ background: "linear-gradient(135deg, #f8f7ff 0%, #fff4f0 100%)" }}>
+        <div className="flex items-center gap-4 pb-5">
+          {/* Avatar + upload */}
+            <label className="relative cursor-pointer group shrink-0">
+              <input type="file" accept="image/*" capture="user" className="hidden"
+                onChange={handlePhotoUpload} disabled={uploadingPhoto} />
+              {photoUrl ? (
+                <img src={photoUrl} alt={user.name}
+                  className="w-20 h-20 rounded-2xl object-cover shadow-md border-2 border-white" />
+              ) : (
+                <div className="w-20 h-20 rounded-2xl bg-white flex items-center justify-center text-[#3f37c9] text-3xl font-display shadow-md border-2 border-white">
+                  {uploadingPhoto ? <span className="text-base animate-pulse">...</span> : user.name?.[0]}
+                </div>
+              )}
+              <div className="absolute inset-0 rounded-2xl bg-black/40 opacity-0 group-hover:opacity-100 transition flex items-center justify-center">
+                <Camera size={20} className="text-white" />
+              </div>
+              <div className="absolute -bottom-1.5 -right-1.5 w-7 h-7 bg-[#ff6b35] rounded-full flex items-center justify-center border-2 border-white shadow">
+                <Camera size={11} className="text-white" />
+              </div>
+            </label>
+            <div>
+              <div className="font-display text-2xl text-gray-900">{user.name}</div>
+              <div className="flex items-center gap-2 mt-1">
+                <span className="text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full"
+                  style={{ background: "#f0f0ff", color: "#3f37c9" }}>Customer</span>
+                <span className="text-xs text-gray-400">{user.phone_primary || user.phone}</span>
+              </div>
+              <button className="text-xs text-[#ff6b35] font-semibold mt-1.5 hover:underline">
+                {photoUrl ? "Change photo" : "Add photo"}
+              </button>
+            </div>
+        </div>
+        {/* Edit button — full width below avatar row */}
+        <button onClick={() => setEditing(!editing)}
+          className="w-full flex items-center justify-center gap-2 py-2.5 text-sm font-bold border-t border-white/50 transition"
+          style={{ color: editing ? "#6b7280" : "#3f37c9" }}>
+          <Settings size={13} /> {editing ? "Cancel editing" : "Edit Profile"}
         </button>
       </div>
 
-      {editing ? (
-        <form onSubmit={save} className="space-y-4">
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-bold text-gray-500 mb-1 block">Full Name</label>
-              <input
-                className="kn-input"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-              />
+      <div className="p-6">
+        {editing ? (
+          <form onSubmit={save} className="space-y-4">
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs font-bold text-gray-500 mb-1 block uppercase tracking-wider">Full Name</label>
+                <input className="kn-input" value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-gray-500 mb-1 block uppercase tracking-wider">Phone (verified)</label>
+                <input className="kn-input bg-gray-50 text-gray-400 cursor-not-allowed"
+                  value={user?.phone_primary || user?.phone || ""} readOnly />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-gray-500 mb-1 block uppercase tracking-wider">Village</label>
+                <input className="kn-input" value={form.village}
+                  onChange={(e) => setForm({ ...form, village: e.target.value })} />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-gray-500 mb-1 block uppercase tracking-wider">Pincode</label>
+                <input className="kn-input" value={form.pincode} maxLength={6}
+                  onChange={(e) => setForm({ ...form, pincode: e.target.value.replace(/\D/g, "") })} />
+              </div>
             </div>
+            <button type="submit" className="btn-saffron w-full">Save Changes</button>
+          </form>
+        ) : (
+          <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-xs font-bold text-gray-500 mb-1 block">Phone</label>
-              <input
-                className="kn-input"
-                value={form.phone}
-                onChange={(e) => setForm({ ...form, phone: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="text-xs font-bold text-gray-500 mb-1 block">Village</label>
-              <input
-                className="kn-input"
-                value={form.village}
-                onChange={(e) => setForm({ ...form, village: e.target.value })}
-              />
-            </div>
-            <div>
-              <label className="text-xs font-bold text-gray-500 mb-1 block">Pincode</label>
-              <input
-                className="kn-input"
-                value={form.pincode}
-                maxLength={6}
-                onChange={(e) => setForm({ ...form, pincode: e.target.value.replace(/\D/g, "") })}
-              />
-            </div>
-          </div>
-          <button type="submit" className="btn-saffron w-full">Save Changes</button>
-        </form>
-      ) : (
-        <div className="space-y-4">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-full bg-[#f0f0ff] flex items-center justify-center text-[#3f37c9] text-2xl font-display">
-              {user.name?.[0]}
-            </div>
-            <div>
-              <div className="font-display text-2xl">{user.name}</div>
-              <div className="text-gray-500 text-sm">{user.email}</div>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4 pt-4 border-t border-gray-100">
-            <div>
-              <div className="text-xs font-bold text-gray-400 uppercase">Phone</div>
-              <div className="font-semibold">{user.phone || "Not set"}</div>
+              <div className="text-xs font-bold text-gray-400 uppercase tracking-wider">Phone</div>
+              <div className="font-semibold">{user.phone_primary || user.phone || "Not set"}</div>
             </div>
             <div>
               <div className="text-xs font-bold text-gray-400 uppercase">Location</div>
               <div className="font-semibold">{user.village || "Not set"}{user.address?.pincode ? `, ${user.address.pincode}` : ""}</div>
             </div>
           </div>
+        )}
+      </div>
+
+      {/* Danger zone */}
+      <div className="kn-card p-5 border border-red-100">
+        <div className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Danger Zone</div>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <div className="font-semibold text-sm text-gray-700">Deactivate Account</div>
+            <div className="text-xs text-gray-400 mt-0.5">Your profile will be hidden. You can reactivate within 30 days by logging in.</div>
+          </div>
+          <button
+            onClick={async () => {
+              if (!window.confirm("Deactivate your account? You can reactivate within 30 days by logging in again.")) return;
+              try {
+                await api.delete("/auth/me");
+                await logout();
+                toast.success("Account deactivated.");
+              } catch (err) { toast.error(formatApiError(err)); }
+            }}
+            className="flex-shrink-0 px-4 py-2 rounded-xl text-sm font-bold border-2 border-red-200 text-red-500 hover:bg-red-50 transition"
+          >
+            Deactivate
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Overview Tab ─────────────────────────────────────────────────────── */
+function OverviewTab({ user, jobs, bookings, openJobs, activeBookings, directHirePending, completedUnrated, pendingEngagements, complete, reload, setTab, onRate }) {
+
+  // Profile completion (4 steps × 25%)
+  const steps = [
+    { label: "Phone verified", done: !!(user?.phone_primary || user?.phone_verified) },
+    { label: "Village & Pincode", done: !!(user?.address?.pincode || user?.village) },
+    { label: "Profile photo", done: !!user?.photo_url },
+    { label: "First job posted", done: jobs.length > 0 },
+  ];
+  const pct = Math.round((steps.filter(s => s.done).length / steps.length) * 100);
+  const nextStep = steps.find(s => !s.done);
+
+  // Greeting
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? "Suprabhat" : hour < 17 ? "Namaste" : "Shubh Sandhya";
+
+  // Re-post last job
+  const lastJob = jobs[0];
+  const repost = async () => {
+    if (!lastJob) return;
+    try {
+      const payload = {
+        title: lastJob.title,
+        category: lastJob.category,
+        description: lastJob.description,
+        workers_needed: lastJob.workers_needed,
+        daily_rate: lastJob.daily_rate,
+        job_date: new Date(Date.now() + 86400000).toISOString().slice(0, 10),
+        village: lastJob.village,
+        lat: lastJob.lat || 22.9734,
+        lng: lastJob.lng || 78.6569,
+        address: lastJob.address,
+        required_skills: lastJob.required_skills,
+      };
+      const r = await api.post("/jobs", payload);
+      toast.success("Job re-posted!");
+      reload();
+    } catch { toast.error("Could not re-post. Try again."); }
+  };
+
+  // Worker count nearby
+  const [nearbyCount, setNearbyCount] = useState(null);
+  useEffect(() => {
+    const pc = user?.address?.pincode;
+    const url = pc ? `/workers/search?available_only=true` : `/workers/search?available_only=true`;
+    api.get(url).then(r => setNearbyCount(r.data.length)).catch(() => {});
+  }, []);
+
+  return (
+    <div className="space-y-5">
+
+      {/* ── Hero ── */}
+      <div className="rounded-2xl p-6 text-white relative overflow-hidden"
+        style={{ background: "linear-gradient(135deg, #3f37c9 0%, #2f28a8 100%)" }}>
+        <div className="absolute top-0 right-0 w-32 h-32 rounded-full opacity-10"
+          style={{ background: "#fff", transform: "translate(20%, -30%)" }} />
+        <div className="text-white/70 text-sm font-semibold mb-1">{greeting} 🙏</div>
+        <div className="font-display text-2xl mb-1">{user?.name?.split(" ")[0]},</div>
+        <div className="text-white/80 text-sm mb-4">What work do you need help with today?</div>
+        <div className="flex gap-3 flex-wrap">
+          <Link to="/post-job"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl font-bold text-sm transition active:scale-95"
+            style={{ background: "#ff6b35", color: "white", boxShadow: "0 4px 12px rgba(255,107,53,0.4)" }}>
+            <Plus size={16} /> Post a Job
+          </Link>
+          <Link to="/marketplace"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm"
+            style={{ background: "rgba(255,255,255,0.15)", color: "white" }}>
+            Find Workers →
+          </Link>
+        </div>
+        {nearbyCount !== null && (
+          <div className="mt-4 text-xs text-white/60 flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />
+            {nearbyCount} verified workers available near you
+          </div>
+        )}
+      </div>
+
+      {/* ── Profile completion ── */}
+      {pct < 100 && (
+        <div className="kn-card p-5">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <div className="font-bold text-gray-800">Complete your profile</div>
+              <div className="text-xs text-gray-400 mt-0.5">Workers trust profiles more when they're complete</div>
+            </div>
+            <div className="text-2xl font-display" style={{ color: pct >= 75 ? "#16a34a" : pct >= 50 ? "#ff6b35" : "#3f37c9" }}>
+              {pct}%
+            </div>
+          </div>
+          <div className="w-full h-2.5 bg-gray-100 rounded-full overflow-hidden mb-3">
+            <div className="h-full rounded-full transition-all duration-500"
+              style={{ width: `${pct}%`, background: pct >= 75 ? "#16a34a" : pct >= 50 ? "#ff6b35" : "#3f37c9" }} />
+          </div>
+          <div className="space-y-2">
+            {steps.map((s, i) => (
+              <div key={i} className="flex items-center gap-2.5 text-sm">
+                <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
+                  style={{ background: s.done ? "#dcfce7" : "#f3f4f6" }}>
+                  {s.done
+                    ? <CheckCircle2 size={13} style={{ color: "#16a34a" }} />
+                    : <div className="w-2 h-2 rounded-full bg-gray-300" />}
+                </div>
+                <span style={{ color: s.done ? "#6b7280" : "#111827", fontWeight: s.done ? 400 : 600,
+                  textDecoration: s.done ? "line-through" : "none" }}>{s.label}</span>
+                {!s.done && i === steps.indexOf(nextStep) && (
+                  <button onClick={() => setTab("profile")}
+                    className="ml-auto text-xs font-bold text-[#3f37c9] hover:underline">Add →</button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Active jobs ── */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <div className="font-bold text-gray-800 text-base">Your Jobs</div>
+          {pendingEngagements.length > 0 && (
+            <button onClick={() => setTab("pending")}
+              className="text-xs font-bold px-3 py-1 rounded-full"
+              style={{ background: "#fff4f0", color: "#ff6b35" }}>
+              {pendingEngagements.length} response{pendingEngagements.length > 1 ? "s" : ""} waiting
+            </button>
+          )}
+        </div>
+
+        {openJobs.length === 0 && activeBookings.length === 0 ? (
+          /* Empty state */
+          <div className="kn-card p-8 text-center">
+            <div className="text-4xl mb-3">👷</div>
+            <div className="font-display text-xl mb-1">Post your first job</div>
+            <div className="text-sm text-gray-500 mb-5">Connect with verified workers near you in minutes.</div>
+            <Link to="/post-job" className="btn-saffron inline-flex items-center gap-2">
+              <Plus size={16} /> Post a Job
+            </Link>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {/* Direct hire requests awaiting worker acceptance */}
+            {directHirePending?.map(e => (
+              <div key={e.id} className="kn-card overflow-hidden border-l-4" style={{ borderLeftColor: "#f59e0b" }}>
+                <div className="px-4 py-3 flex items-center justify-between gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-sm text-gray-800 truncate">{e.job_title}</div>
+                    <div className="text-xs text-gray-500 mt-0.5">
+                      Sent to 👷 {e.worker_name} · {e.job_date} · ₹{e.daily_rate}/day
+                    </div>
+                  </div>
+                  <span className="text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0"
+                    style={{ background: "#fef9c3", color: "#854d0e" }}>
+                    🟡 Awaiting Worker
+                  </span>
+                </div>
+              </div>
+            ))}
+
+            {/* Active bookings */}
+            {activeBookings.map(b => (
+              <div key={b.id} className="kn-card overflow-hidden">
+                <div className="px-4 pt-4 pb-3 border-b border-gray-50">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-gray-900 text-base leading-tight">{b.job_title}</div>
+                      <div className="text-xs text-gray-400 mt-0.5 uppercase tracking-wider font-semibold">{b.category || "General"}</div>
+                    </div>
+                    <JobStatusChip status="confirmed" />
+                  </div>
+                </div>
+                <div className="px-4 py-3 grid grid-cols-3 gap-3 bg-gray-50/50">
+                  <div><div className="text-[10px] font-bold text-gray-400 uppercase">Worker</div><div className="text-sm font-semibold mt-0.5 truncate">👷 {b.worker_name}</div></div>
+                  <div><div className="text-[10px] font-bold text-gray-400 uppercase">Date</div><div className="text-sm font-semibold mt-0.5">{b.job_date}</div></div>
+                  <div><div className="text-[10px] font-bold text-gray-400 uppercase">Rate</div><div className="text-sm font-semibold mt-0.5">₹{b.daily_rate}/day</div></div>
+                </div>
+                <div className="px-4 pb-4 pt-3 flex gap-2">
+                  {b.worker_phone && (
+                    <a href={`tel:${b.worker_phone}`}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-bold"
+                      style={{ background: "#dcfce7", color: "#15803d" }}>
+                      📞 Call Worker
+                    </a>
+                  )}
+                  <button onClick={() => complete(b.id)}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-bold border-2 border-gray-200 text-gray-500 hover:bg-gray-50 transition">
+                    ✓ Mark Done
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {/* Open jobs */}
+            {openJobs.map(j => {
+              const responses = pendingEngagements.filter(e => e.job_id === j.id).length;
+              const catIcons = { construction:"🏗️", farm:"🌾", electrical:"⚡", cleaning:"✨", transport:"🚛", mechanical:"🔧", tailoring:"✂️", home:"🏠", other:"📦" };
+              return (
+                <div key={j.id} className="kn-card overflow-hidden">
+                  {responses > 0 && (
+                    <div className="px-4 py-2 text-xs font-bold flex items-center gap-1.5" style={{ background: "#fff4f0", color: "#ff6b35" }}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#ff6b35] animate-pulse" />
+                      {responses} worker{responses > 1 ? "s" : ""} interested — tap to review
+                    </div>
+                  )}
+                  <div className="px-4 pt-4 pb-3 border-b border-gray-50">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="text-base">{catIcons[j.category] || "📦"}</span>
+                          <div className="font-bold text-gray-900 text-base leading-tight truncate">{j.title}</div>
+                        </div>
+                        <div className="text-xs text-gray-400 uppercase tracking-wider font-semibold">{j.category || "General"}</div>
+                      </div>
+                      <JobStatusChip status="waiting" />
+                    </div>
+                  </div>
+                  <div className="px-4 py-3 grid grid-cols-4 gap-2 bg-gray-50/50">
+                    <div><div className="text-[10px] font-bold text-gray-400 uppercase">Workers</div><div className="text-sm font-bold mt-0.5">{j.workers_needed}</div></div>
+                    <div><div className="text-[10px] font-bold text-gray-400 uppercase">Rate</div><div className="text-sm font-bold mt-0.5">₹{j.daily_rate}</div></div>
+                    <div><div className="text-[10px] font-bold text-gray-400 uppercase">Date</div><div className="text-sm font-semibold mt-0.5">{j.job_date}</div></div>
+                    <div><div className="text-[10px] font-bold text-gray-400 uppercase">Area</div><div className="text-sm font-semibold mt-0.5 truncate">{j.village || j.address?.pincode || "—"}</div></div>
+                  </div>
+                  <div className="px-4 pb-4 pt-3 flex gap-2">
+                    {responses > 0 && (
+                      <button onClick={() => setTab("pending")}
+                        className="flex-1 py-2.5 rounded-xl text-sm font-bold"
+                        style={{ background: "#ff6b35", color: "white" }}>
+                        See {responses} Response{responses > 1 ? "s" : ""}
+                      </button>
+                    )}
+                    <Link to={`/marketplace?job=${j.id}`}
+                      className="flex-1 flex items-center justify-center py-2.5 rounded-xl text-sm font-bold"
+                      style={{ background: "#f0f0ff", color: "#3f37c9" }}>
+                      Find Workers →
+                    </Link>
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Re-post last job */}
+            {lastJob && (
+              <button onClick={repost}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-gray-200 text-sm font-bold text-gray-500 hover:border-[#ff6b35] hover:text-[#ff6b35] transition">
+                🔁 Re-post: {lastJob.title?.slice(0, 30)}{lastJob.title?.length > 30 ? "…" : ""}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Completed jobs awaiting rating ── */}
+      {completedUnrated?.length > 0 && (
+        <div>
+          <div className="font-bold text-gray-800 text-base mb-3 flex items-center gap-2">
+            ⭐ Rate Your Experience
+            <span className="text-xs font-normal text-gray-400">({completedUnrated.length} completed)</span>
+          </div>
+          <div className="space-y-3">
+            {completedUnrated.map(b => (
+              <div key={b.id} className="kn-card overflow-hidden">
+                <div className="px-4 py-3 flex items-center gap-2" style={{ background: "#f0fdf4" }}>
+                  <CheckCircle2 size={16} className="text-green-600 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-sm text-gray-800 truncate">{b.job_title}</div>
+                    <div className="text-xs text-gray-500">
+                      {b.worker_name} · {b.job_date} · ₹{b.daily_rate}/day
+                    </div>
+                  </div>
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700 flex-shrink-0">✅ Done</span>
+                </div>
+                <div className="px-4 py-3 flex items-center justify-between gap-3">
+                  <div className="text-sm text-gray-600">How was the work?</div>
+                  <button
+                    onClick={() => onRate(b)}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold"
+                    style={{ background: "#ff6b35", color: "white" }}
+                  >
+                    <Star size={14} /> Rate Worker
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
+  );
+}
+
+function JobStatusChip({ status }) {
+  const map = {
+    waiting:   { label: "🟡 Waiting",      bg: "#fef9c3", color: "#854d0e" },
+    confirmed: { label: "🟢 Worker Found",  bg: "#dcfce7", color: "#166534" },
+    completed: { label: "✅ Done",          bg: "#f0fdf4", color: "#15803d" },
+    cancelled: { label: "🔴 Cancelled",     bg: "#fee2e2", color: "#991b1b" },
+  };
+  const s = map[status] || map.waiting;
+  return (
+    <span className="text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap flex-shrink-0"
+      style={{ background: s.bg, color: s.color }}>{s.label}</span>
   );
 }
 
@@ -160,10 +524,19 @@ function StatCard({ label, value, icon: Icon, color }) {
 import StarRating from "@/components/StarRating";
 
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, refreshUser, logout } = useAuth();
+  const location = useLocation();
   const [jobs, setJobs] = useState([]);
   const [bookings, setBookings] = useState([]);
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState(
+    new URLSearchParams(location.search).get("tab") || "overview"
+  );
+
+  // Sync tab when URL changes (e.g. bell icon click from same page)
+  useEffect(() => {
+    const t = new URLSearchParams(location.search).get("tab");
+    if (t) setTab(t);
+  }, [location.search]);
   const [loading, setLoading] = useState(true);
   const [ratingBooking, setRatingBooking] = useState(null);
   const [ratingValue, setRatingValue] = useState(5);
@@ -264,6 +637,11 @@ export default function Dashboard() {
 
   const activeBookings = bookings.filter(b => b.status === "confirmed" || b.status === "pending");
   const pastBookings = bookings.filter(b => b.status === "completed" || b.status === "cancelled");
+
+  // Workers who applied to customer's jobs (customer must approve/reject)
+  const workerApplied = pendingEngagements.filter(e => e.source === "worker_interest");
+  // Direct hires customer sent — waiting for worker to accept
+  const directHirePending = pendingEngagements.filter(e => e.source === "customer_booking");
   const openJobs = jobs.filter(j => j.status === "open");
   
   const monthlySpend = bookings
@@ -280,12 +658,41 @@ export default function Dashboard() {
 
   return (
     <div data-testid="customer-dashboard" className="max-w-6xl mx-auto px-6 py-10">
-      <div className="flex flex-wrap items-end justify-between gap-6 mb-8">
-        <div>
-          <div className="kn-overline mb-1">Customer Dashboard</div>
-          <h1 className="font-display text-4xl tracking-tight">
-            Welcome back, <span className="text-[#3f37c9]">{user.name.split(" ")[0]}</span>
-          </h1>
+      <div className="flex flex-wrap items-center justify-between gap-6 mb-8">
+        <div className="flex items-center gap-4">
+          {/* Always-visible photo upload */}
+          <label className="relative cursor-pointer group shrink-0" title="Upload profile photo">
+            <input type="file" accept="image/*" capture="user" className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                const fd = new FormData();
+                fd.append("file", file);
+                try {
+                  await api.post("/auth/me/photo", fd, { headers: { "Content-Type": "multipart/form-data" } });
+                  await refreshUser();
+                  toast.success("Profile photo updated!");
+                } catch { toast.error("Failed to upload photo."); }
+              }}
+            />
+            {user.photo_url ? (
+              <img src={user.photo_url.startsWith("http") ? user.photo_url : `${BACKEND_URL}${user.photo_url}`} alt={user.name} className="w-14 h-14 rounded-full object-cover border-2 border-gray-100" />
+            ) : (
+              <div className="w-14 h-14 rounded-full bg-[#f0f0ff] flex items-center justify-center text-[#3f37c9] text-xl font-display border-2 border-dashed border-[#c7c4f0]">
+                {user.name?.[0]}
+              </div>
+            )}
+            <div className="absolute inset-0 rounded-full bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+              <Camera size={16} className="text-white" />
+            </div>
+          </label>
+          <div>
+            <div className="kn-overline mb-0.5">Customer Dashboard</div>
+            <h1 className="font-display text-3xl tracking-tight">
+              Welcome back, <span className="text-[#3f37c9]">{user.name.split(" ")[0]}</span>
+            </h1>
+            {!user.photo_url && <div className="text-xs text-gray-400 mt-0.5">Tap circle to add photo</div>}
+          </div>
         </div>
         <Link to="/post-job" className="btn-saffron flex items-center gap-2">
           <Plus size={18} /> Post a new job
@@ -299,25 +706,31 @@ export default function Dashboard() {
         <StatCard label="Open Jobs" value={openJobs.length} icon={Briefcase} color="#ff6b35" />
       </div>
 
-      <div className="flex gap-2 mb-8 border-b border-gray-200 pb-px overflow-x-auto">
+      {/* Mobile-first tabs — icon+label on mobile, scrollable */}
+      <div className="flex mb-6 border-b border-gray-200 overflow-x-auto no-scrollbar">
         {[
           { id: "overview", label: "Overview", icon: Calendar },
-          { id: "pending", label: `Pending${pendingEngagements.length ? ` (${pendingEngagements.length})` : ""}`, icon: Clock },
+          { id: "pending", label: "Pending", badge: workerApplied.length, icon: Clock },
           { id: "jobs", label: "My Jobs", icon: Briefcase },
           { id: "history", label: "History", icon: History },
-          { id: "notifications", label: `Alerts${notifications.filter(n=>!n.read).length ? ` (${notifications.filter(n=>!n.read).length})` : ""}`, icon: Star },
+          { id: "notifications", label: "Alerts", badge: notifications.filter(n=>!n.read).length, icon: Bell },
           { id: "profile", label: "Profile", icon: User },
         ].map(t => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`flex items-center gap-2 px-4 py-3 text-sm font-bold border-b-2 transition ${
-              tab === t.id
-                ? "border-[#3f37c9] text-[#3f37c9]"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-            }`}
+            className="relative flex-shrink-0 flex flex-col items-center gap-1 px-3 py-2.5 transition"
+            style={{ borderBottom: tab === t.id ? "2.5px solid #3f37c9" : "2.5px solid transparent" }}
           >
-            <t.icon size={16} /> {t.label}
+            <t.icon size={18} style={{ color: tab === t.id ? "#3f37c9" : "#9ca3af" }} />
+            <span className="text-[10px] font-bold whitespace-nowrap" style={{ color: tab === t.id ? "#3f37c9" : "#9ca3af" }}>
+              {t.label}
+            </span>
+            {t.badge > 0 && (
+              <span className="absolute top-1 right-1 min-w-[16px] h-4 px-1 rounded-full bg-[#ff6b35] text-white text-[9px] font-bold flex items-center justify-center">
+                {t.badge}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -327,124 +740,38 @@ export default function Dashboard() {
       ) : (
         <div className="fade-up">
           {tab === "overview" && (
-            <div className="grid lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-2 space-y-8">
-                {/* Active Hires */}
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-display text-xl">Active Hires</h3>
-                    <Link to="/marketplace" className="text-sm font-bold text-[#3f37c9] hover:underline">Find more workers →</Link>
-                  </div>
-                  {activeBookings.length === 0 ? (
-                    <div className="kn-card p-10 text-center text-gray-500 italic">No active bookings yet.</div>
-                  ) : (
-                    <div className="space-y-3">
-                      {activeBookings.map(b => (
-                        <div key={b.id} className="kn-card p-5 flex flex-wrap items-center justify-between gap-4">
-                          <div>
-                            <div className="font-display text-lg">{b.job_title}</div>
-                            <div className="text-sm text-gray-500 mt-1 flex items-center gap-3">
-                              <span className="flex items-center gap-1"><User size={12} /> {b.worker_name}</span>
-                              <span className="flex items-center gap-1"><Calendar size={12} /> {b.job_date}</span>
-                            </div>
-                          </div>
-                          <div className="flex flex-col items-end gap-2">
-                            <StatusBadge status={b.status} />
-                            {b.status === "confirmed" && (
-                              <>
-                                {b.worker_phone && (
-                                  <a href={`tel:${b.worker_phone}`} className="text-xs font-bold text-green-700 hover:underline">
-                                    📞 {b.worker_phone}
-                                  </a>
-                                )}
-                                <button onClick={() => complete(b.id)} className="btn-outline !py-2 !px-3 text-sm">Mark Done</button>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Recently Viewed */}
-                {recentlyViewed.length > 0 && (
-                  <div>
-                    <h3 className="font-display text-xl mb-4">Recently Viewed</h3>
-                    <div className="grid sm:grid-cols-2 gap-4">
-                      {recentlyViewed.map(w => (
-                        <Link to={`/worker/${w.id}`} key={w.id} className="kn-card p-4 flex items-center gap-3 hover:border-[#3f37c9] transition">
-                          <img src={w.photo_url || "https://images.pexels.com/photos/16476333/pexels-photo-16476333.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=100&w=100"} alt={w.name} className="w-10 h-10 rounded-lg object-cover" />
-                          <div>
-                            <div className="font-bold text-sm">{w.name}</div>
-                            <div className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">{w.skills?.[0] || "Worker"}</div>
-                          </div>
-                          <ChevronRight size={14} className="ml-auto text-gray-300" />
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-              
-              <div className="space-y-6">
-                {/* Spend Breakdown */}
-                {monthlySpend > 0 && (
-                  <div className="kn-card p-6">
-                    <h3 className="font-bold text-sm uppercase tracking-wider text-gray-500 mb-4">Spend Breakdown</h3>
-                    <div className="space-y-4">
-                      {Object.entries(spendByCat).map(([cat, amt]) => {
-                        const pct = Math.round((amt / monthlySpend) * 100);
-                        return (
-                          <div key={cat}>
-                            <div className="flex items-center justify-between text-sm mb-1.5">
-                              <span className="font-semibold text-gray-700 capitalize">{cat}</span>
-                              <span className="font-bold">₹{amt}</span>
-                            </div>
-                            <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                              <div className="h-full bg-[#3f37c9] rounded-full" style={{ width: `${pct}%` }} />
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* Recent Jobs */}
-                <div>
-                  <h3 className="font-display text-xl mb-4">Recent Jobs</h3>
-                  <div className="space-y-3">
-                    {openJobs.slice(0, 3).map(j => (
-                      <Link to={`/marketplace?job=${j.id}`} key={j.id} className="kn-card p-4 block hover:border-[#3f37c9] group transition">
-                        <div className="font-bold group-hover:text-[#3f37c9]">{j.title}</div>
-                        <div className="text-xs text-gray-500 mt-1">{j.village} · {j.job_date}</div>
-                        <div className="mt-3 flex items-center justify-between">
-                          <span className="text-[10px] font-bold uppercase text-gray-400">{j.workers_needed} workers needed</span>
-                          <ChevronRight size={14} className="text-gray-300 group-hover:text-[#3f37c9]" />
-                        </div>
-                      </Link>
-                    ))}
-                    {openJobs.length === 0 && (
-                      <div className="kn-card p-6 text-center text-sm text-gray-400">No open jobs.</div>
-                    )}
-                    <Link to="/post-job" className="w-full btn-outline flex items-center justify-center gap-2 text-sm">
-                      <Plus size={14} /> Post new job
-                    </Link>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <OverviewTab
+              user={user}
+              jobs={jobs}
+              bookings={bookings}
+              openJobs={openJobs}
+              activeBookings={activeBookings}
+              directHirePending={directHirePending}
+              completedUnrated={pastBookings.filter(b => b.status === "completed" && !b.rating)}
+              pendingEngagements={workerApplied}
+              complete={complete}
+              reload={reload}
+              setTab={setTab}
+              onRate={setRatingBooking}
+            />
           )}
 
           {tab === "jobs" && (
             <div className="space-y-4">
-              {jobs.length === 0 && <div className="kn-card p-12 text-center text-gray-500">You haven&apos;t posted any jobs yet.</div>}
-              {jobs.map(j => (
+              {jobs.filter(j => !["completed", "expired", "booked"].includes(j.status)).length === 0 && (
+                <div className="kn-card p-12 text-center text-gray-500">
+                  No open jobs.{" "}
+                  <Link to="/post-job" className="text-[#3f37c9] font-bold">Post one →</Link>
+                  {jobs.some(j => j.status === "booked") && (
+                    <p className="text-xs text-gray-400 mt-2">Booked jobs are visible in <button onClick={() => setTab("overview")} className="text-[#3f37c9] font-bold hover:underline">Overview</button> under Active Bookings.</p>
+                  )}
+                </div>
+              )}
+              {jobs.filter(j => !["completed", "expired", "booked"].includes(j.status)).map(j => (
                 <div key={j.id} className="kn-card p-6 flex flex-wrap items-center justify-between gap-4">
-                  <div>
+                  <div className="flex-1 min-w-0">
                     <div className="font-display text-xl">{j.title}</div>
-                    <p className="text-sm text-gray-600 mt-1">{j.description}</p>
+                    <p className="text-sm text-gray-600 mt-1 line-clamp-2">{j.description}</p>
                     <div className="mt-4 flex flex-wrap gap-4 text-xs font-bold uppercase tracking-wider text-gray-500">
                       <span className="flex items-center gap-1.5"><Calendar size={14} /> {j.job_date}</span>
                       <span className="flex items-center gap-1.5"><MapPin size={14} /> {j.village}</span>
@@ -452,10 +779,30 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <div className="flex flex-col gap-2">
-                    <Link to={`/marketplace?job=${j.id}`} className="btn-indigo !py-2 !px-4 text-sm text-center">Find Workers</Link>
-                    <div className={`text-center text-[10px] font-bold px-2 py-1 rounded ${j.status === "open" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
-                      {j.status.toUpperCase()}
+                    {j.status !== "booked" && (
+                      <Link to={`/marketplace?job=${j.id}`} className="btn-indigo !py-2 !px-4 text-sm text-center">Find Workers</Link>
+                    )}
+                    <div className={`text-center text-[10px] font-bold px-2 py-1 rounded ${
+                      j.status === "open" ? "bg-green-100 text-green-700" :
+                      j.status === "booked" ? "bg-blue-100 text-blue-700" :
+                      "bg-gray-100 text-gray-500"}`}>
+                      {j.status === "booked" ? "WORKER BOOKED" : j.status.toUpperCase()}
                     </div>
+                    {!["booked"].includes(j.status) && (
+                      <button
+                        onClick={async () => {
+                          if (!window.confirm("Delete this job? This cannot be undone.")) return;
+                          try {
+                            await api.delete(`/jobs/${j.id}`);
+                            toast.success("Job deleted.");
+                            reload();
+                          } catch (err) { toast.error(formatApiError(err)); }
+                        }}
+                        className="text-[10px] text-red-400 hover:text-red-600 font-semibold text-center hover:underline"
+                      >
+                        Delete
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -465,10 +812,10 @@ export default function Dashboard() {
           {tab === "pending" && (
             <div className="space-y-4">
               <p className="text-sm text-gray-500">Workers who expressed interest in your jobs. Approve to book them, or reject to keep the job open.</p>
-              {pendingEngagements.length === 0 && (
+              {workerApplied.length === 0 && (
                 <div className="kn-card p-12 text-center text-gray-500">No pending approvals right now.</div>
               )}
-              {pendingEngagements.map(e => (
+              {workerApplied.map(e => (
                 <div key={e.id} className="kn-card p-5 border-l-4 border-[#ff6b35]">
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
@@ -521,7 +868,8 @@ export default function Dashboard() {
                     )}
                     {b.rating && (
                       <div className="flex items-center gap-1 text-xs text-[#ff6b35] font-bold">
-                        <Star size={12} className="fill-[#ff6b35]" /> {b.rating}
+                        <Star size={12} className="fill-[#ff6b35]" />
+                        {typeof b.rating === "object" ? b.rating?.stars : b.rating}
                       </div>
                     )}
                   </div>

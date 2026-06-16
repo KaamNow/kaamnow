@@ -7,7 +7,8 @@ import KaamSaathi from "@/components/KaamSaathi";
 import Landing from "@/pages/Landing";
 import Strategy from "@/pages/Strategy";
 import Login from "@/pages/Login";
-import Signup from "@/pages/Signup";
+import PhoneSignup from "@/pages/PhoneSignup";
+import CustomerOnboarding from "@/pages/CustomerOnboarding";
 import Marketplace from "@/pages/Marketplace";
 import WorkerProfile from "@/pages/WorkerProfile";
 import WorkerSetup from "@/pages/WorkerSetup";
@@ -138,7 +139,15 @@ function App() {
             }
           />
           <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
+          <Route path="/signup" element={<PhoneSignup />} />
+          <Route
+            path="/customer-onboarding"
+            element={
+              <Protected>
+                <CustomerOnboarding />
+              </Protected>
+            }
+          />
           <Route
             path="/dashboard"
             element={
